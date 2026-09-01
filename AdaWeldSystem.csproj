@@ -1,0 +1,738 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <ProjectGuid>{0BCD0A17-E0A0-457B-9521-1BCCAD206123}</ProjectGuid>
+    <OutputType>WinExe</OutputType>
+    <RootNamespace>AdaWeldSystem</RootNamespace>
+    <AssemblyName>AdaWeldSystem</AssemblyName>
+    <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
+    <GenerateSatelliteAssemblies>false</GenerateSatelliteAssemblies>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <FileAlignment>512</FileAlignment>
+    <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
+    <Deterministic>true</Deterministic>
+    <PublishUrl>publish\</PublishUrl>
+    <Install>true</Install>
+    <InstallFrom>Disk</InstallFrom>
+    <UpdateEnabled>false</UpdateEnabled>
+    <UpdateMode>Foreground</UpdateMode>
+    <UpdateInterval>7</UpdateInterval>
+    <UpdateIntervalUnits>Days</UpdateIntervalUnits>
+    <UpdatePeriodically>false</UpdatePeriodically>
+    <UpdateRequired>false</UpdateRequired>
+    <MapFileExtensions>true</MapFileExtensions>
+    <ApplicationRevision>0</ApplicationRevision>
+    <ApplicationVersion>1.0.0.%2a</ApplicationVersion>
+    <IsWebBootstrapper>false</IsWebBootstrapper>
+    <UseApplicationTrust>false</UseApplicationTrust>
+    <BootstrapperEnabled>true</BootstrapperEnabled>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <PlatformTarget>x64</PlatformTarget>
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+    <OutputPath>bin\Debug\</OutputPath>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <CodeAnalysisRuleSet>
+    </CodeAnalysisRuleSet>
+    <CodeAnalysisIgnoreGeneratedCode>false</CodeAnalysisIgnoreGeneratedCode>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <PlatformTarget>x64</PlatformTarget>
+    <DebugType>pdbonly</DebugType>
+    <Optimize>true</Optimize>
+    <OutputPath>bin\Release\</OutputPath>
+    <DefineConstants>TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="HarfBuzzSharp">
+      <HintPath>3rdDepend\HarfBuzzSharp.dll</HintPath>
+    </Reference>
+    <Reference Include="Mv3dLpNet, Version=1.3.3.2, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>3rdDepend\Mv3dLpNet.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="PresentationCore" />
+    <Reference Include="PresentationFramework" />
+    <Reference Include="ScottPlot">
+      <HintPath>3rdDepend\ScottPlot.dll</HintPath>
+    </Reference>
+    <Reference Include="ScottPlot.WinForms">
+      <HintPath>3rdDepend\ScottPlot.WinForms.dll</HintPath>
+    </Reference>
+    <Reference Include="SRAPI_CSharp-x64">
+      <HintPath>3rdDepend\SRAPI_CSharp-x64.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="IntelligentLaser_CSharp">
+      <HintPath>3rdDepend\IntelligentLaser_CSharp.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="MvCameraControl.Net, Version=0.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>3rdDepend\MvCameraControl.Net.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="System" />
+    <Reference Include="System.Core" />
+    <Reference Include="System.Xml.Linq" />
+    <Reference Include="System.Data.DataSetExtensions" />
+    <Reference Include="Microsoft.CSharp" />
+    <Reference Include="System.Data" />
+    <Reference Include="System.Deployment" />
+    <Reference Include="System.Drawing" />
+    <Reference Include="System.Net.Http" />
+    <Reference Include="System.Numerics" />
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Xaml" />
+    <Reference Include="System.Xml" />
+    <Reference Include="WindowsBase" />
+    <Reference Include="WindowsFormsIntegration" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="Comm\Robot\KUKARobot\EKICommunication.cs" />
+    <Compile Include="Comm\Robot\KUKARobot\KUKADataTypes.cs" />
+    <Compile Include="Comm\Robot\KUKARobot\KUKARobotManager.cs" />
+    <Compile Include="Comm\Robot\KUKARobot\KUKAXMLConfig.cs" />
+    <Compile Include="Comm\Robot\KUKARobot\RSICommunication.cs" />
+    <Compile Include="EmguALG\Stages.cs" />
+    <Compile Include="EmguALG\ImageAlgorithm.cs" />
+    <Compile Include="EmguALG\EmguConfiger\AlgorithmJob.cs" />
+    <Compile Include="EmguALG\EmguConfiger\AlgorithmManager.cs" />
+    <Compile Include="EmguALG\EmguConfiger\JobManager.cs" />
+    <Compile Include="EmguALG\ImageRoiTools.cs" />
+    <Compile Include="EmguALG\Core\AlgorithmBase.cs" />
+    <Compile Include="EmguALG\Core\AlgorithmResult.cs" />
+    <Compile Include="EmguALG\Core\PreprocessConfig.cs" />
+    <Compile Include="EmguALG\Core\ProfileTransform.cs" />
+    <Compile Include="EmguALG\Core\UnitAttribute.cs" />
+    <Compile Include="EmguALG\Core\RangeAttribute.cs" />
+    <Compile Include="EmguALG\SeamRecognition\SeamModel.cs" />
+    <Compile Include="EmguALG\SeamRecognition\SeamRecognitionAlgorithm.cs" />
+    <Compile Include="EmguALG\RealtimeMonitor\RealtimeMonitorAlgorithm.cs" />
+    <Compile Include="PCLOperate\3DModel\Point3D.cs" />
+    <Compile Include="PCLOperate\3DModel\PointCloudData.cs" />
+    <Compile Include="PCLOperate\DataIO\PointCloudReader.cs" />
+    <Compile Include="PCLOperate\DataIO\PointCloudWriter.cs" />
+    <Compile Include="PCLOperate\Render\PointCloudViewer.cs" />
+    <Compile Include="PCLOperate\Render\RenderConfig.cs" />
+    <Compile Include="PCLOperate\Render\SurfaceTriangulator.cs" />
+    <Compile Include="Comm\CommunicationManager.cs" />
+    <Compile Include="Comm\CommBase\Profinet\GSDMLGenerator.cs" />
+    <Compile Include="Comm\PLC\Siemens\S7PLCCommunication.cs" />
+    <Compile Include="Comm\SystemComm.cs" />
+    <Compile Include="Comm\CommBase\Ethernet\TCPIPComm.cs" />
+    <Compile Include="Comm\CommBase\Modbus\ModbusTCPCommunication.cs" />
+    <Compile Include="Comm\IntelligentLaserModbus\ILModbusData.cs" />
+    <Compile Include="FileOperate\IniFile.cs" />
+    <Compile Include="FileOperate\Log.cs" />
+    <Compile Include="FileOperate\XMLfile.cs" />
+    <Compile Include="WeldParamControl\WeldDataManager.cs" />
+    <Compile Include="WeldParamControl\WeldProcess.cs" />
+    <Compile Include="ProductFileManager\FaultRecoveryManager.cs" />
+    <Compile Include="ProductFileManager\RecordFrame.cs" />
+    <Compile Include="ProductFileManager\RunRecordManager.cs" />
+    <Compile Include="ProductFileManager\SmartRayConverter.cs" />
+    <Compile Include="ProductFileManager\WeldActionRecord.cs" />
+    <Compile Include="MainDeviceControl\DeviceStateApiCore\CommandTable.cs" />
+    <Compile Include="MainDeviceControl\DeviceStateApiCore\DeviceStateBase.cs" />
+    <Compile Include="MainDeviceControl\DeviceStateApiCore\WorkflowStateBase.cs" />
+    <Compile Include="MainDeviceControl\DeviceWorkflow\LaserWeldHeadWorkflow.cs" />
+    <Compile Include="MainDeviceControl\DeviceWorkflow\LineLaserWorkflow.cs" />
+    <Compile Include="MainDeviceControl\DeviceWorkflow\MainDeviceWorkflow.cs" />
+    <Compile Include="MainDeviceControl\DeviceWorkflow\MonitorCameraWorkflow.cs" />
+    <Compile Include="MainDeviceControl\DeviceWorkflow\MotionControlWorkflow.cs" />
+    <Compile Include="MainDeviceControl\DeviceWorkflow\SafetyWorkflow.cs" />
+    <Compile Include="MainDeviceControl\DeviceWorkflow\WeldParamControlWorkflow.cs" />
+    <Compile Include="MainDeviceControl\DeviceStateApiCore\DeviceWorkflowBase.cs" />
+    <Compile Include="Program.cs" />
+    <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="LineLaserCam\SmartRayCam\ApiCore\PackagedImage.cs" />
+    <Compile Include="LineLaserCam\SmartRayCam\ApiCore\Sensor.cs" />
+    <Compile Include="LineLaserCam\SmartRayCam\ApiCore\SensorHelper.cs" />
+    <Compile Include="LineLaserCam\SmartRayCam\ApiCore\SensorImageData.cs" />
+    <Compile Include="LineLaserCam\SmartRayCam\ApiCore\SensorManager.cs" />
+    <Compile Include="LineLaserCam\SmartRayCam\ApiCore\SensorPointCloud.cs" />
+    <Compile Include="LineLaserCam\SmartRayCam\ApiCore\SensorPointCloudMSR.cs" />
+    <Compile Include="LineLaserCam\SmartRayCam\ApiCore\SensorState.cs" />
+    <Compile Include="LineLaserCam\SmartRayCam\CameraRun.cs" />
+    <Compile Include="LineLaserCam\Api\ICameraRun.cs" />
+    <Compile Include="LineLaserCam\SmartRayCam\CameraPresetManager.cs" />
+    <Compile Include="LineLaserCam\VirtualCam\VirtualCameraRun.cs" />
+    <Compile Include="LineLaserCam\Api\CameraSelector.cs" />
+    <Compile Include="MonitorCam\Api\IMonitorCameraApi.cs" />
+    <Compile Include="MonitorCam\Api\HikvisionCameraApi.cs" />
+    <Compile Include="MonitorCam\MonitorCameraRun.cs" />
+    <Compile Include="MonitorCam\MonitorAlgorithmManager.cs" />
+    <Compile Include="MotionControl\MoveControlData.cs" />
+    <Compile Include="MotionControl\API\IMotionController.cs" />
+    <Compile Include="MotionControl\API\MotionControllerBase.cs" />
+    <Compile Include="MotionControl\API\IAxis.cs" />
+    <Compile Include="MotionControl\API\IIO.cs" />
+    <Compile Include="MotionControl\MotionManager.cs" />
+    <Compile Include="MotionControl\MotionConfig.cs" />
+    <Compile Include="MotionControl\ZMotion\InterpolationEngine.cs" />
+    <Compile Include="MotionControl\ZMotion\ZMotionNative.cs" />
+    <Compile Include="MotionControl\ZMotion\ZMotionNativeLaser.cs" />
+    <Compile Include="MotionControl\ZMotion\ZMotionAxis.cs" />
+    <Compile Include="MotionControl\ZMotion\ZMotionGalvo.cs" />
+    <Compile Include="MotionControl\ZMotion\ZMotionIO.cs" />
+    <Compile Include="MotionControl\ZMotion\ZMotionController.cs" />
+    <Compile Include="MotionControl\ZMotion\RSIPositionBuffer.cs" />
+    <Compile Include="MotionControl\ZMotion\EncoderAxis.cs" />
+    <Compile Include="MotionControl\ZMotion\CamBoxTracker.cs" />
+    <Compile Include="LineLaserCam\HikRobotCam\ApiCore\HikCameraManager.cs" />
+    <Compile Include="LineLaserCam\HikRobotCam\ApiCore\HikCameraDevice.cs" />
+    <Compile Include="LineLaserCam\HikRobotCam\HikCameraRun.cs" />
+    <Compile Include="LineLaserCam\IntelligentLaserCam\IntelligentLaserCameraRun.cs" />
+    <Compile Include="SqlLiteDatabase\AuthManager.cs" />
+    <Compile Include="SqlLiteDatabase\FaultRecordManager.cs" />
+    <Compile Include="SqlLiteDatabase\AutoParamManager.cs" />
+    <Compile Include="SqlLiteDatabase\ConfigManager.cs" />
+    <Compile Include="SqlLiteDatabase\SqliteCore\DatabaseManagerBase.cs" />
+    <Compile Include="SqlLiteDatabase\ProductDatabaseManager.cs" />
+    <Compile Include="SqlLiteDatabase\SqliteCore\SQLiteDataBase.cs" />
+    <Compile Include="UIDesign\MainWindow\FormMain.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="UIDesign\MainWindow\FormMain.Designer.cs">
+      <DependentUpon>FormMain.cs</DependentUpon>
+    </Compile>
+    <Compile Include="UIDesign\ControlPage\DataReviewPage.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="UIDesign\ControlPage\DataReviewPage.Designer.cs">
+      <DependentUpon>DataReviewPage.cs</DependentUpon>
+    </Compile>
+    <Compile Include="UIDesign\TabPage\ILCamPage.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="UIDesign\TabPage\ILCamPage.Designer.cs">
+      <DependentUpon>ILCamPage.cs</DependentUpon>
+    </Compile>
+    <Compile Include="UIDesign\TabPage\MotionControlPage.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="UIDesign\TabPage\MotionControlPage.Designer.cs">
+      <DependentUpon>MotionControlPage.cs</DependentUpon>
+    </Compile>
+    <Compile Include="UIDesign\TabPage\MonitorCamPage.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="UIDesign\TabPage\MonitorCamPage.Designer.cs">
+      <DependentUpon>MonitorCamPage.cs</DependentUpon>
+    </Compile>
+    <EmbeddedResource Include="UIDesign\TabPage\CommPage.resx">
+      <DependentUpon>CommPage.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="UIDesign\TabPage\ILCamPage.resx">
+      <DependentUpon>ILCamPage.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="UIDesign\TabPage\MotionControlPage.resx">
+      <DependentUpon>MotionControlPage.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="UIDesign\SubView\ILAlgoPage.resx">
+      <DependentUpon>ILAlgoPage.cs</DependentUpon>
+    </EmbeddedResource>
+    <Compile Include="UIDesign\ControlPage\MainPage.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="UIDesign\ControlPage\MainPage.Designer.cs">
+      <DependentUpon>MainPage.cs</DependentUpon>
+    </Compile>
+    <Compile Include="UIDesign\ControlPage\NavPage.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="UIDesign\ControlPage\NavPage.Designer.cs">
+      <DependentUpon>NavPage.cs</DependentUpon>
+    </Compile>
+    <Compile Include="UIDesign\TabPage\ParamConfigPage.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="UIDesign\TabPage\ParamConfigPage.Designer.cs">
+      <DependentUpon>ParamConfigPage.cs</DependentUpon>
+    </Compile>
+    <Compile Include="UIDesign\TabPage\CommPage.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="UIDesign\TabPage\CommPage.Designer.cs">
+      <DependentUpon>CommPage.cs</DependentUpon>
+    </Compile>
+    <Compile Include="UIDesign\SubView\UserEdit.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="UIDesign\SubView\UserEdit.Designer.cs">
+      <DependentUpon>UserEdit.cs</DependentUpon>
+    </Compile>
+    <Compile Include="UIDesign\TabPage\FileEditorPage.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="UIDesign\TabPage\FileEditorPage.Designer.cs">
+      <DependentUpon>FileEditorPage.cs</DependentUpon>
+    </Compile>
+    <Compile Include="UIDesign\SubView\AutoParamForm.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="UIDesign\SubView\AutoParamForm.Designer.cs">
+      <DependentUpon>AutoParamForm.cs</DependentUpon>
+    </Compile>
+    <Compile Include="UIDesign\SubView\ConfigForm.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="UIDesign\SubView\ConfigForm.Designer.cs">
+      <DependentUpon>ConfigForm.cs</DependentUpon>
+    </Compile>
+    <Compile Include="UIDesign\SubView\AlgorithmEditForm.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="UIDesign\SubView\AlgorithmEditForm.Designer.cs">
+      <DependentUpon>AlgorithmEditForm.cs</DependentUpon>
+    </Compile>
+    <Compile Include="UIDesign\SubView\ILAlgoPage.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="UIDesign\SubView\ILAlgoPage.Designer.cs">
+      <DependentUpon>ILAlgoPage.cs</DependentUpon>
+    </Compile>
+    <Compile Include="UIDesign\SubView\FormLogin.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="UIDesign\SubView\FormLogin.Designer.cs">
+      <DependentUpon>FormLogin.cs</DependentUpon>
+    </Compile>
+    <Compile Include="UIDesign\SubView\FileTraceForm.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="UIDesign\SubView\FileTraceForm.Designer.cs">
+      <DependentUpon>FileTraceForm.cs</DependentUpon>
+    </Compile>
+    <Compile Include="UIDesign\SubView\ILScanDialog.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="UIDesign\SubView\ILScanDialog.Designer.cs">
+      <DependentUpon>ILScanDialog.cs</DependentUpon>
+    </Compile>
+    <Compile Include="UIDesign\SubView\ILParamPage.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="UIDesign\SubView\ILParamPage.Designer.cs">
+      <DependentUpon>ILParamPage.cs</DependentUpon>
+    </Compile>
+    <Compile Include="UIDesign\SubView\RecordConfigForm.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="UIDesign\SubView\RecordConfigForm.Designer.cs">
+      <DependentUpon>RecordConfigForm.cs</DependentUpon>
+    </Compile>
+    <Compile Include="UIDesign\SubView\RenderParamForm.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="UIDesign\SubView\RenderParamForm.Designer.cs">
+      <DependentUpon>RenderParamForm.cs</DependentUpon>
+    </Compile>
+    <Compile Include="UIDesign\SubView\HelixRenderForm.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="UIDesign\SubView\HelixRenderForm.Designer.cs">
+      <DependentUpon>HelixRenderForm.cs</DependentUpon>
+    </Compile>
+    <!-- 激光焊接头模块（含由 DataModels 迁入的 3 个数据类） -->
+    <Compile Include="LaserWeldHead\API\ILaserWeldHeadController.cs" />
+    <Compile Include="LaserWeldHead\LaserWeldHeadController.cs" />
+    <Compile Include="LaserWeldHead\LaserWeldHeadData.cs" />
+    <!-- 注：原 DeviceStateMachine/、DataModels/、Workflow\Safety\ 条目已随目录删除移除；
+         安全检查已合并为单文件 MainDeviceControl\DeviceWorkflow\SafetyWorkflow.cs（配置 SafetyFlow + 判定 SafetyInterlockChecker + 监控循环 三合一，2026-08-31），
+         FaultRecord/FaultCategory 与 FaultRecoveryManager 已于 2026-09-01 归口 ProductFileManager\FaultRecoveryManager.cs -->
+    <EmbeddedResource Include="UIDesign\SubView\RenderParamForm.resx">
+      <DependentUpon>RenderParamForm.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="UIDesign\SubView\HelixRenderForm.resx">
+      <DependentUpon>HelixRenderForm.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Properties\Resources.resx">
+      <Generator>ResXFileCodeGenerator</Generator>
+      <LastGenOutput>Resources.Designer.cs</LastGenOutput>
+      <SubType>Designer</SubType>
+    </EmbeddedResource>
+    <Compile Include="Properties\Resources.Designer.cs">
+      <AutoGen>True</AutoGen>
+      <DependentUpon>Resources.resx</DependentUpon>
+      <DesignTime>True</DesignTime>
+    </Compile>
+    <EmbeddedResource Include="UIDesign\MainWindow\FormMain.resx">
+      <DependentUpon>FormMain.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="UIDesign\ControlPage\DataReviewPage.resx">
+      <DependentUpon>DataReviewPage.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="UIDesign\ControlPage\MainPage.resx">
+      <DependentUpon>MainPage.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="UIDesign\ControlPage\NavPage.resx">
+      <DependentUpon>NavPage.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="UIDesign\TabPage\ParamConfigPage.resx">
+      <DependentUpon>ParamConfigPage.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="UIDesign\SubView\UserEdit.resx">
+      <DependentUpon>UserEdit.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="UIDesign\TabPage\FileEditorPage.resx">
+      <DependentUpon>FileEditorPage.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="UIDesign\SubView\AlgorithmEditForm.resx">
+      <DependentUpon>AlgorithmEditForm.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="UIDesign\SubView\AutoParamForm.resx">
+      <DependentUpon>AutoParamForm.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="UIDesign\SubView\ConfigForm.resx">
+      <DependentUpon>ConfigForm.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="UIDesign\SubView\FormLogin.resx">
+      <DependentUpon>FormLogin.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="UIDesign\SubView\FileTraceForm.resx">
+      <DependentUpon>FileTraceForm.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="UIDesign\SubView\ILScanDialog.resx">
+      <DependentUpon>ILScanDialog.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="UIDesign\SubView\ILParamPage.resx">
+      <DependentUpon>ILParamPage.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="UIDesign\SubView\RecordConfigForm.resx">
+      <DependentUpon>RecordConfigForm.cs</DependentUpon>
+    </EmbeddedResource>
+    <None Include="Properties\Settings.settings">
+      <Generator>SettingsSingleFileGenerator</Generator>
+      <LastGenOutput>Settings.Designer.cs</LastGenOutput>
+    </None>
+    <Compile Include="Properties\Settings.Designer.cs">
+      <AutoGen>True</AutoGen>
+      <DependentUpon>Settings.settings</DependentUpon>
+      <DesignTimeSharedInput>True</DesignTimeSharedInput>
+    </Compile>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="App.config" />
+  </ItemGroup>
+  <!-- 英莱(IntelligentLaser) 原生依赖：拷贝原生 DLL 到输出根目录（DllImport 需要）。
+       原生 DLL 经 DllImport("IntelligentLaser") 在程序目录/ PATH 搜索。 -->
+  <Target Name="CopyIntelligentLaserNative" AfterTargets="AfterBuild">
+    <ItemGroup>
+      <ILDll Include="Libs\IntelligentLaser\native\*.dll" />
+    </ItemGroup>
+    <Copy SourceFiles="@(ILDll)" DestinationFolder="$(TargetDir)" SkipUnchangedFiles="true" />
+  </Target>
+  <!-- ============================================================
+       NuGet 本地化（ADR-028）：所有 NuGet 包 DLL 从 3rdDepend 目录引用，
+       不再依赖 NuGet 源还原。DLL 文件统一存放于 3rdDepend\。
+       ============================================================ -->
+  <ItemGroup>
+    <!-- AntdUI (MIT) — UI 框架 (ADR-021) -->
+    <Reference Include="AntdUI">
+      <HintPath>3rdDepend\AntdUI.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <!-- CommunityToolkit (AntdUI 传递依赖) -->
+    <Reference Include="CommunityToolkit.Common">
+      <HintPath>3rdDepend\CommunityToolkit.Common.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="CommunityToolkit.Diagnostics">
+      <HintPath>3rdDepend\CommunityToolkit.Diagnostics.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="CommunityToolkit.Mvvm">
+      <HintPath>3rdDepend\CommunityToolkit.Mvvm.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <!-- Emgu.CV 图像算法 -->
+    <Reference Include="Emgu.CV">
+      <HintPath>3rdDepend\Emgu.CV.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="Emgu.CV.Bitmap">
+      <HintPath>3rdDepend\Emgu.CV.Bitmap.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="Emgu.CV.UI">
+      <HintPath>3rdDepend\Emgu.CV.UI.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <!-- EntityFramework (SQLite EF6 传递依赖) -->
+    <Reference Include="EntityFramework">
+      <HintPath>3rdDepend\EntityFramework.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="EntityFramework.SqlServer">
+      <HintPath>3rdDepend\EntityFramework.SqlServer.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <!-- HelixToolkit 3D 渲染 -->
+    <Reference Include="HelixToolkit">
+      <HintPath>3rdDepend\HelixToolkit.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="HelixToolkit.Geometry">
+      <HintPath>3rdDepend\HelixToolkit.Geometry.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="HelixToolkit.Maths">
+      <HintPath>3rdDepend\HelixToolkit.Maths.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="HelixToolkit.SharpDX">
+      <HintPath>3rdDepend\HelixToolkit.SharpDX.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="HelixToolkit.SharpDX.Assimp">
+      <HintPath>3rdDepend\HelixToolkit.SharpDX.Assimp.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="HelixToolkit.Wpf.SharpDX">
+      <HintPath>3rdDepend\HelixToolkit.Wpf.SharpDX.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <!-- Microsoft BCL / Extensions (传递依赖) -->
+    <Reference Include="Microsoft.Bcl.AsyncInterfaces">
+      <HintPath>3rdDepend\Microsoft.Bcl.AsyncInterfaces.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="Microsoft.Bcl.HashCode">
+      <HintPath>3rdDepend\Microsoft.Bcl.HashCode.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="Microsoft.CodeAnalysis">
+      <HintPath>3rdDepend\Microsoft.CodeAnalysis.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="Microsoft.CodeAnalysis.CSharp">
+      <HintPath>3rdDepend\Microsoft.CodeAnalysis.CSharp.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="Microsoft.Extensions.DependencyInjection.Abstractions">
+      <HintPath>3rdDepend\Microsoft.Extensions.DependencyInjection.Abstractions.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="Microsoft.Extensions.Logging.Abstractions">
+      <HintPath>3rdDepend\Microsoft.Extensions.Logging.Abstractions.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <!-- Newtonsoft.Json -->
+    <Reference Include="Newtonsoft.Json">
+      <HintPath>3rdDepend\Newtonsoft.Json.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <!-- SharpDX (HelixToolkit 传递依赖) -->
+    <Reference Include="SharpDX">
+      <HintPath>3rdDepend\SharpDX.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="SharpDX.D3DCompiler">
+      <HintPath>3rdDepend\SharpDX.D3DCompiler.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="SharpDX.DXGI">
+      <HintPath>3rdDepend\SharpDX.DXGI.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="SharpDX.Direct2D1">
+      <HintPath>3rdDepend\SharpDX.Direct2D1.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="SharpDX.Direct3D11">
+      <HintPath>3rdDepend\SharpDX.Direct3D11.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="SharpDX.Direct3D9">
+      <HintPath>3rdDepend\SharpDX.Direct3D9.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <!-- S7NetPlus — 西门子 PLC 通讯 -->
+    <Reference Include="S7.Net">
+      <HintPath>3rdDepend\S7.Net.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <!-- STTech.BytesIO — TCP 通讯 -->
+    <Reference Include="STTech.BytesIO.Core">
+      <HintPath>3rdDepend\STTech.BytesIO.Core.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="STTech.BytesIO.Tcp">
+      <HintPath>3rdDepend\STTech.BytesIO.Tcp.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="STTech.CodePlus">
+      <HintPath>3rdDepend\STTech.CodePlus.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <!-- System.Data.SQLite -->
+    <Reference Include="System.Data.SQLite">
+      <HintPath>3rdDepend\System.Data.SQLite.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="System.Data.SQLite.EF6">
+      <HintPath>3rdDepend\System.Data.SQLite.EF6.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="System.Data.SQLite.Linq">
+      <HintPath>3rdDepend\System.Data.SQLite.Linq.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <!-- System.* 传递依赖 -->
+    <Reference Include="System.Buffers">
+      <HintPath>3rdDepend\System.Buffers.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="System.Collections.Immutable">
+      <HintPath>3rdDepend\System.Collections.Immutable.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="System.ComponentModel.Annotations">
+      <HintPath>3rdDepend\System.ComponentModel.Annotations.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="System.Diagnostics.DiagnosticSource">
+      <HintPath>3rdDepend\System.Diagnostics.DiagnosticSource.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="System.Drawing.Common">
+      <HintPath>3rdDepend\System.Drawing.Common.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="System.Formats.Nrbf">
+      <HintPath>3rdDepend\System.Formats.Nrbf.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="System.IO.Pipelines">
+      <HintPath>3rdDepend\System.IO.Pipelines.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="System.Memory">
+      <HintPath>3rdDepend\System.Memory.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="System.Numerics.Vectors">
+      <HintPath>3rdDepend\System.Numerics.Vectors.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="System.Reflection.Metadata">
+      <HintPath>3rdDepend\System.Reflection.Metadata.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="System.Resources.Extensions">
+      <HintPath>3rdDepend\System.Resources.Extensions.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="System.Runtime.CompilerServices.Unsafe">
+      <HintPath>3rdDepend\System.Runtime.CompilerServices.Unsafe.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="System.Text.Encoding.CodePages">
+      <HintPath>3rdDepend\System.Text.Encoding.CodePages.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="System.Text.Encodings.Web">
+      <HintPath>3rdDepend\System.Text.Encodings.Web.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="System.Text.Json">
+      <HintPath>3rdDepend\System.Text.Json.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="System.Threading.Tasks.Extensions">
+      <HintPath>3rdDepend\System.Threading.Tasks.Extensions.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <!-- Cyotek.Drawing.BitmapFont (HelixToolkit 传递依赖) -->
+    <Reference Include="Cyotek.Drawing.BitmapFont">
+      <HintPath>3rdDepend\Cyotek.Drawing.BitmapFont.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <!-- SharpAssimp (HelixToolkit.SharpDX.Assimp 传递依赖) -->
+    <Reference Include="SharpAssimp">
+      <HintPath>3rdDepend\SharpAssimp.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <!-- PocoFoundation (S7NetPlus 传递依赖) -->
+  </ItemGroup>
+  <ItemGroup>
+    <BootstrapperPackage Include=".NETFramework,Version=v4.8">
+      <Visible>False</Visible>
+      <ProductName>Microsoft .NET Framework 4.8 %28x86 和 x64%29</ProductName>
+      <Install>true</Install>
+    </BootstrapperPackage>
+    <BootstrapperPackage Include="Microsoft.Net.Framework.3.5.SP1">
+      <Visible>False</Visible>
+      <ProductName>.NET Framework 3.5 SP1</ProductName>
+      <Install>false</Install>
+    </BootstrapperPackage>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Resources\adaweldsystem-icon.ico" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Resources\adaweldsystem-icon.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Resources\Tom.gif" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- ADR-028 本地化：Stateless 5.20.1 以本地 DLL 引用（离线构建），禁止 PackageReference -->
+    <Reference Include="Stateless">
+      <HintPath>3rdDepend\Stateless.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+  </ItemGroup>
+  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+  <!-- NuGet 本地化后原生 DLL 不再由 NuGet 自动部署，改为手动从 3rdDepend 拷贝到输出目录 -->
+  <Target Name="CopyNative3rdDependToOutput" AfterTargets="Build">
+    <ItemGroup>
+      <Native3rdDepend Include="3rdDepend\assimp.dll" />
+      <Native3rdDepend Include="3rdDepend\avcodec-58.dll" />
+      <Native3rdDepend Include="3rdDepend\avdevice-58.dll" />
+      <Native3rdDepend Include="3rdDepend\avfilter-7.dll" />
+      <Native3rdDepend Include="3rdDepend\avformat-58.dll" />
+      <Native3rdDepend Include="3rdDepend\avutil-56.dll" />
+      <Native3rdDepend Include="3rdDepend\concrt140.dll" />
+      <Native3rdDepend Include="3rdDepend\cvextern.dll" />
+      <Native3rdDepend Include="3rdDepend\gio-2-vs10.dll" />
+      <Native3rdDepend Include="3rdDepend\glib-2-vs10.dll" />
+      <Native3rdDepend Include="3rdDepend\gmodule-2-vs10.dll" />
+      <Native3rdDepend Include="3rdDepend\gobject-2-vs10.dll" />
+      <Native3rdDepend Include="3rdDepend\gthread-2-vs10.dll" />
+      <Native3rdDepend Include="3rdDepend\jsoncpp.dll" />
+      <Native3rdDepend Include="3rdDepend\libusb-1.0.dll" />
+      <Native3rdDepend Include="3rdDepend\msvcp140.dll" />
+      <Native3rdDepend Include="3rdDepend\msvcp140_1.dll" />
+      <Native3rdDepend Include="3rdDepend\msvcp140_2.dll" />
+      <Native3rdDepend Include="3rdDepend\msvcp140_atomic_wait.dll" />
+      <Native3rdDepend Include="3rdDepend\msvcp140_codecvt_ids.dll" />
+      <Native3rdDepend Include="3rdDepend\opencv_videoio_ffmpeg4130_64.dll" />
+      <Native3rdDepend Include="3rdDepend\SDL2.dll" />
+      <Native3rdDepend Include="3rdDepend\swresample-3.dll" />
+      <Native3rdDepend Include="3rdDepend\swscale-5.dll" />
+      <Native3rdDepend Include="3rdDepend\vcruntime140.dll" />
+      <Native3rdDepend Include="3rdDepend\vcruntime140_1.dll" />
+      <!-- 正运动(ZMotion) 原生依赖：板卡通讯库 + 激光振镜控制库 -->
+      <Native3rdDepend Include="3rdDepend\zauxdll.dll" />
+      <Native3rdDepend Include="3rdDepend\ZmotionScanLaser.dll" />
+    </ItemGroup>
+    <Copy SourceFiles="@(Native3rdDepend)" DestinationFolder="$(TargetDir)" SkipUnchangedFiles="true" />
+    <!-- SQLite.Interop.dll 需按架构部署到 x64/x86 子目录 -->
+    <Copy SourceFiles="3rdDepend\x64\SQLite.Interop.dll" DestinationFolder="$(TargetDir)x64" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="3rdDepend\x86\SQLite.Interop.dll" DestinationFolder="$(TargetDir)x86" SkipUnchangedFiles="true" />
+  </Target>
+</Project>
