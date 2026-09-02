@@ -1,10 +1,10 @@
 ﻿using System;
 using System.IO;
+using System.Threading;
 using System.Windows.Forms;
 using AdaWeldSystem.Comm;
 using AdaWeldSystem.Comm.Robot.KUKARobot;
 using AdaWeldSystem.MainDeviceControl.DeviceState;
-using AdaWeldSystem.MainDeviceControl.FlowState;
 using AdaWeldSystem.LaserWeldHead;
 using AdaWeldSystem.LineLaserCam.VirtualCam;
 using AdaWeldSystem.LineLaserCamApi;
@@ -14,31 +14,43 @@ using AdaWeldSystem.FileOperate;
 
 namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
 {
-    using DeviceState = AdaWeldSystem.MainDeviceControl.DeviceState.DeviceState;
+    /// <summary>主设备运行态变更事件参数。</summary>
+    public class MainDeviceStatusChangedEventArgs : EventArgs
+    {
+        /// <summary>切换前运行态。</summary>
+        public MainDeviceStatus OldStatus { get; set; }
+
+        /// <summary>切换后运行态。</summary>
+        public MainDeviceStatus NewStatus { get; set; }
+
+        /// <summary>切换原因。</summary>
+        public string Reason { get; set; }
+
+        /// <summary>变更时间。</summary>
+        public DateTime Timestamp { get; set; }
+    }
 
     /// <summary>
-    /// 主设备工作流（单例）：整机流程编排与机器人/PLC 信号交互。
+    /// 主设备运行管控（单例）：整机运行编排与机器人/PLC 信号交互（新主控设计，参考 PcomDeviceInterface.MachineControlWork）。
     ///
     /// 设计要点：
-    ///   1. 与 PLC/机器人的"连接"由顶层 Comm 通讯管理（CommunicationManager）管控，
-    ///      本类只做"信号交互"——接收 RobotPose、切换流程态、级联子设备 DeviceState、下发 DeviceCommand。
-    ///   2. 整机流程态（MainDeviceFlowState，机器人 Pose 驱动）为本类独有阶段态，定义于本文件；
-    ///      流程态机制（Step/SetStep/StateChanged/设备四态映射）与执行步机制（WorkStep/GoStep/监听线程）
-    ///      均由泛型基类承载（ADR-042 + ADR-047）。
-    ///   3. 步骤驱动：通讯回调只写命令变量（_pendingPose / _pendingCommand / _pendingAbort），
-    ///      业务一律在常驻监听线程的 ConsumeCommand + FlowProcess 中执行（ADR-047 红线 4）。
-    ///   4. 级联子设备统一走共用接口：Initialize=Connect / AutoRun=Work / ManualStop=Disconnect。
-    ///   5. 交互指令见 DeviceState.CommandTable（RobotPose / RobotCommand / DeviceCommand / InteractionTable）。
-    ///   6. 模拟模式控制器由原独立 SimulationWorkflow 归并至本单例（ADR-048，部分取代 ADR-017）：
-    ///      模拟仍是 MODE 不是线程，对外统一经 MainDeviceWorkflow.Instance 访问。
+    ///   1. 独立管控类，不继承 DeviceWorkflowBase（子设备流程基类）；对外状态为 MainDeviceStatus（6 态），
+    ///      原流程态 MainDeviceFlowState 不再存在，转为内部私有执行步常量。
+    ///   2. 与 PLC/机器人的"连接"由顶层 Comm 通讯管理（CommunicationManager）管控，
+    ///      本类只做"信号交互"——接收 RobotPose、切换运行态、级联子设备 ConnectOn/ConnectOff、下发 DeviceCommand。
+    ///   3. 命令变量三槽分存：_pendingAbort &gt; _pendingCommand &gt; _pendingPose
+    ///      （RobotPose.StartSafePose=1 与 RobotCommand.PreWeldRequest=1 编码重叠，单槽必丢指令）。
+    ///   4. 对外操作契约：StartMachine / StopMachine / ResetMachine / ClearAlarm / EStopMachine / EStopCancel；
+    ///      上电初始化级联 = InitializeMachine（焊接头 → 运动控制器 → 线激光 → 监控相机 → 机器人通讯）。
+    ///   5. 模拟模式控制器由原 SimulationWorkflow 归并至本单例（ADR-048）：模拟仍是 MODE 不是线程。
     ///
     /// 执行步段位：0 待机 · 10~19 焊前准备 · 20~29 焊前位跟踪 · 30~39 焊接中 · 40~49 停止 · 800 成功收尾 · 900 失败收尾。
     /// </summary>
-    public class MainDeviceWorkflow : DeviceWorkflowBase<MainDeviceFlowState>
+    public class DeviceControlWork
     {
         #region 常量
 
-        /// <summary>执行步 10：焊前准备-等待子设备 Connect 就绪。</summary>
+        /// <summary>执行步 10：焊前准备-等待子设备 Connected 就绪。</summary>
         private const int StepPreworkConnect = 10;
 
         /// <summary>执行步 11：焊前准备-等待机器人上报焊前位。</summary>
@@ -50,7 +62,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         /// <summary>执行步 21：等待机器人上报焊接起始位。</summary>
         private const int StepWaitWeldStart = 21;
 
-        /// <summary>执行步 30：进入焊接态并级联子设备 Work。</summary>
+        /// <summary>执行步 30：进入焊接态并启动子设备工作。</summary>
         private const int StepStartWelding = 30;
 
         /// <summary>执行步 31：焊接中-等待预停位或焊接停止位。</summary>
@@ -59,7 +71,16 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         /// <summary>执行步 40：停止-级联断开并下发回安全位。</summary>
         private const int StepStopping = 40;
 
-        /// <summary>子设备 Connect 级联超时（毫秒）。</summary>
+        /// <summary>通用执行步号：成功收尾。</summary>
+        private const int StepFinishOk = 800;
+
+        /// <summary>通用执行步号：失败收尾。</summary>
+        private const int StepFinishFail = 900;
+
+        /// <summary>通用执行步号：待机。</summary>
+        private const int StepIdle = 0;
+
+        /// <summary>子设备 Connected 级联等待超时（毫秒）。</summary>
         private const double CascadeConnectTimeoutMs = 10000;
 
         /// <summary>等待机器人到位 Pose 超时（毫秒）。</summary>
@@ -74,16 +95,37 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         /// <summary>命令变量空值：无待处理机器人主动指令（RobotCommand.None）。</summary>
         private const int NoPendingCommand = 0;
 
+        /// <summary>运行线程节拍（毫秒）。</summary>
+        private const int BeatMs = 10;
+
         #endregion
 
         #region 私有变量
 
-        private static readonly Lazy<MainDeviceWorkflow> _lazyInstance =
-            new Lazy<MainDeviceWorkflow>(() => new MainDeviceWorkflow());
+        private static readonly Lazy<DeviceControlWork> _lazyInstance =
+            new Lazy<DeviceControlWork>(() => new DeviceControlWork());
 
-        private readonly string _tag = "主设备工作流";
+        private readonly string _tag = "主设备运行管控";
 
-        /// <summary>命令变量：待处理的机器人 Pose（NoPendingPose = 无）。通讯回调只写，监听线程消费。</summary>
+        private MainDeviceStatus _status = MainDeviceStatus.Stop;
+        private readonly object _statusLock = new object();
+
+        private volatile bool _running;
+        private volatile bool _initializing;
+
+        private Thread _runLoopThread;
+        private volatile bool _runLoopClosing;
+
+        /// <summary>当前执行步号（内部游标）。</summary>
+        private volatile int _workStep;
+
+        /// <summary>当前步进入时间戳（Ticks）。</summary>
+        private long _workStartTicks;
+
+        private string _failReason = "";
+        private int _failStep;
+
+        /// <summary>命令变量：待处理的机器人 Pose（NoPendingPose = 无）。通讯回调只写，运行线程消费。</summary>
         private volatile int _pendingPose = NoPendingPose;
 
         /// <summary>命令变量：待处理的机器人主动指令（NoPendingCommand = 无）。</summary>
@@ -97,9 +139,6 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
 
         /// <summary>焊前请求标记（机器人 PreWeldRequest 与 StartSafePose 配合触发 Preworking）。</summary>
         private volatile bool _pendingPreWeldRequest;
-
-        private volatile bool _running;
-        private volatile bool _initializing;
 
         /// <summary>机器人通讯管理器（上电初始化第 5 步就绪后赋值，来自顶层 Comm）。</summary>
         private KUKARobotManager RobotManager { get; set; }
@@ -144,23 +183,36 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         private static readonly string _simLegacyConfigFile =
             Path.Combine(Application.StartupPath, "Config", "INI", "MotionControlWorkflow.ini");
 
+        /// <summary>线激光模拟启动挂起标记：ConnectOn 后台线程转 Connected 后再 Start。</summary>
+        private bool _simLineLaserPending;
+
         #endregion
 
         #region 公共变量
 
         /// <summary>单例实例。</summary>
-        public static MainDeviceWorkflow Instance => _lazyInstance.Value;
+        public static DeviceControlWork Instance { get { return _lazyInstance.Value; } }
 
-        public override string StateName => _tag;
+        /// <summary>主设备运行态（6 态，单控制源，经 SetStatus 变更并触发 StatusChanged 事件）。</summary>
+        public MainDeviceStatus Status
+        {
+            get { lock (_statusLock) { return _status; } }
+        }
 
-        /// <summary>整机流程态（即泛型基类 Step，本类独有语义：机器人 Pose 驱动）。</summary>
-        public MainDeviceFlowState FlowState => Step;
+        /// <summary>主设备运行态变更事件。</summary>
+        public event EventHandler<MainDeviceStatusChangedEventArgs> StatusChanged;
 
-        /// <summary>是否焊接中（流程态处于 Working）。</summary>
-        public bool IsWelding => FlowState == MainDeviceFlowState.Working;
+        /// <summary>当前执行步号。</summary>
+        public int WorkStep { get { return _workStep; } }
 
-        /// <summary>监听线程只在 Start 之后跑业务，Stop 后只刷新时间戳（防误判超时）。</summary>
-        protected override bool IsRunLoopActive { get { return _running; } }
+        /// <summary>当前执行步的中文名。</summary>
+        public string WorkStepName { get { return GetStepName(_workStep); } }
+
+        /// <summary>是否焊接中（运行态 Running 且执行步处于焊接段）。</summary>
+        public bool IsWelding
+        {
+            get { return _status == MainDeviceStatus.Running && _workStep >= StepStartWelding && _workStep <= StepWelding; }
+        }
 
         // ---- 模拟模式（归并自 SimulationWorkflow，ADR-048） ----
 
@@ -243,36 +295,111 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
 
         #region 构造函数
 
-        private MainDeviceWorkflow() : base(MainDeviceFlowState.Idle)
+        private DeviceControlWork()
         {
+            _workStartTicks = DateTime.Now.Ticks;
             // 订阅顶层 Comm 的通讯指令（机器人 Pose/Command 经此到达；回调只写命令变量，不做业务）
             GlobalCommData.CommunicationCommandReceived += OnCommunicationCommand;
-            GlobalCommData.ShowLog(_tag, "主设备工作流实例化", MessageLevel.Info);
+            GlobalCommData.ShowLog(_tag, "主设备运行管控实例化", MessageLevel.Info);
         }
 
         #endregion
 
         #region 私有函数
 
+        /// <summary>运行线程主体：按节拍消费命令变量并单步分派。</summary>
+        /// <remarks>单拍异常只记日志不退出，避免整条流程永久停摆。</remarks>
+        private void RunLoop()
+        {
+            while (!_runLoopClosing)
+            {
+                try
+                {
+                    if (_running)
+                    {
+                        ConsumeCommand();
+                        FlowProcess();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    GlobalCommData.ShowLog(_tag, "运行线程异常 " + ex.Message, MessageLevel.Error);
+                }
+                Thread.Sleep(BeatMs);
+            }
+        }
+
+        /// <summary>推进执行步（步号与时间成对刷新）。</summary>
+        /// <param name="step">目标执行步号</param>
+        private void GoStep(int step)
+        {
+            _workStep = step;
+            _workStartTicks = DateTime.Now.Ticks;
+        }
+
+        /// <summary>判断当前步停留是否超时。</summary>
+        /// <param name="timeoutMs">超时阈值（毫秒）</param>
+        /// <returns>停留超过阈值返回 true</returns>
+        private bool IsStepTimeout(double timeoutMs)
+        {
+            return (DateTime.Now - new DateTime(_workStartTicks)).TotalMilliseconds > timeoutMs;
+        }
+
+        /// <summary>转入失败收尾并跳 900 段。</summary>
+        /// <param name="reason">失败原因（纯文本）</param>
+        private void FailFlow(string reason)
+        {
+            _failStep = _workStep;
+            _failReason = reason;
+            GoStep(StepFinishFail);
+        }
+
+        /// <summary>切换主设备运行态（单控制源，触发 StatusChanged 事件并记日志）。</summary>
+        /// <param name="newStatus">目标运行态</param>
+        /// <param name="reason">切换原因</param>
+        private void SetStatus(MainDeviceStatus newStatus, string reason)
+        {
+            MainDeviceStatus old;
+            lock (_statusLock)
+            {
+                if (_status == newStatus) return;
+                old = _status;
+                _status = newStatus;
+            }
+            var handler = StatusChanged;
+            if (handler != null)
+            {
+                handler(this, new MainDeviceStatusChangedEventArgs
+                {
+                    OldStatus = old,
+                    NewStatus = newStatus,
+                    Reason = reason,
+                    Timestamp = DateTime.Now
+                });
+            }
+            GlobalCommData.ShowLog(_tag,
+                string.Format("运行态切换 {0} -> {1} 原因 {2}", old, newStatus, reason));
+        }
+
         /// <summary>执行步 0：待机。</summary>
-        /// <remarks>安全起始位；收到焊前请求才发起焊前准备。</remarks>
+        /// <remarks>就绪（Stop）且收到焊前请求才发起焊前准备。</remarks>
         private void DoIdle()
         {
-            if (_step != MainDeviceFlowState.SafePose || !_pendingPreWeldRequest) return;
+            if (_status != MainDeviceStatus.Stop || !_pendingPreWeldRequest) return;
             _pendingPreWeldRequest = false;
-            SetStep(MainDeviceFlowState.Preworking, "机器人请求焊前准备");
+            SetStatus(MainDeviceStatus.Running, "机器人请求焊前准备");
             CascadeConnect();
             GoStep(StepPreworkConnect);
         }
 
-        /// <summary>执行步 10：等子设备 Connect 就绪后下发去焊前位指令。</summary>
+        /// <summary>执行步 10：等子设备 Connected 就绪后下发去焊前位指令。</summary>
         /// <remarks>失败重试零代码：条件不满足即返回、步号不变，下一拍重入重试。</remarks>
         private void DoPreworkConnect()
         {
             if (!IsChildConnected(_lineLaser) || !IsChildConnected(_motion))
             {
                 if (IsStepTimeout(CascadeConnectTimeoutMs))
-                    FailFlow("子设备 Connect 级联超时");
+                    FailFlow("子设备连接级联超时");
                 return;
             }
             SendDeviceCommand(DeviceCommand.CmdGoPreWeld);
@@ -284,7 +411,6 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         {
             if (_lastPose == RobotPose.PreWeldPose)
             {
-                SetStep(MainDeviceFlowState.PreWeldPose, "机器人到达焊前位");
                 GoStep(StepYAxisTracking);
                 return;
             }
@@ -317,14 +443,13 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
                 FailFlow("等待机器人焊接起始位超时");
         }
 
-        /// <summary>步 30：进入焊接态，级联子设备 Work（线激光开激光采集）。</summary>
+        /// <summary>进入焊接态，启动子设备工作。</summary>
         private void DoStartWelding()
         {
-            SetStep(MainDeviceFlowState.Working, "机器人到达焊接起始位");
-            try { _lineLaser.AutoRun(); }
+            try { _lineLaser.Start(); }
             catch (Exception ex)
             {
-                Log("线激光进入 Working 异常 " + ex.Message, MessageLevel.Error);
+                Log("线激光进入工作异常 " + ex.Message, MessageLevel.Error);
             }
             GoStep(StepWelding);
         }
@@ -335,7 +460,6 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         {
             if (_lastPose == RobotPose.PreStopPose)
             {
-                SetStep(MainDeviceFlowState.Stopping, "机器人到达预停位");
                 SendDeviceCommand(DeviceCommand.CmdGoPreStop);
                 GoStep(StepStopping);
                 return;
@@ -356,24 +480,24 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             GoStep(StepFinishOk);
         }
 
-        /// <summary>步 800 成功收尾：置已停止并回待机。</summary>
+        /// <summary>步 800 成功收尾：置停止并回待机。</summary>
         private void DoFinishOk()
         {
-            SetStep(MainDeviceFlowState.Stopped, "焊接流程正常收尾");
+            SetStatus(MainDeviceStatus.Stop, "焊接流程正常收尾");
             _lastPose = RobotPose.Unknown;
             GoStep(StepIdle);
         }
 
         /// <summary>执行步 900：失败收尾。</summary>
-        /// <remarks>级联停机；为超时三步走的第三步。</remarks>
+        /// <remarks>级联停机并记故障；为超时三步走的第三步。</remarks>
         private void DoFinishFail()
         {
+            SetStatus(MainDeviceStatus.EStop, FailReason);
             EmergencyStop();
-            SetStep(MainDeviceFlowState.Alarm, FailReason);
             FaultRecoveryManager.Instance.RecordFault("MainDevice", new FaultRecord
             {
-                Device = StateName,
-                State = State,
+                Device = _tag,
+                State = SubDeviceWeldStatus.ErrorAborted,
                 Category = FaultCategory.System,
                 ErrorCode = "FLOW_TIMEOUT",
                 ParamSnapshot = string.Format("WorkStep={0} Reason={1}", FailStep, FailReason)
@@ -392,20 +516,20 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             switch (pose)
             {
                 case RobotPose.HomePose:
-                    SetStep(MainDeviceFlowState.Idle, "机器人归零位");
+                    SetStatus(MainDeviceStatus.Stop, "机器人归零位");
                     CascadeDisconnect();
                     SendDeviceCommand(DeviceCommand.CmdGoHome);
                     GoStep(StepIdle);
                     break;
                 case RobotPose.StopSafePose:
-                    SetStep(MainDeviceFlowState.Stopped, "机器人回到安全停止位");
+                    SetStatus(MainDeviceStatus.Stop, "机器人回到安全停止位");
                     CascadeDisconnect();
                     SendDeviceCommand(DeviceCommand.CmdGoStopSafe);
                     GoStep(StepIdle);
                     break;
                 case RobotPose.StartSafePose:
-                    if (_step != MainDeviceFlowState.SafePose)
-                        SetStep(MainDeviceFlowState.SafePose, "机器人进入安全起始位");
+                    if (_status != MainDeviceStatus.Running)
+                        SetStatus(MainDeviceStatus.Stop, "机器人进入安全起始位");
                     break;
             }
         }
@@ -415,45 +539,40 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         /// <returns>允许接受返回 true，安全监控已启动且互锁未通过返回 false</returns>
         private bool IsRobotPoseSafe(RobotPose pose)
         {
-            return SafetyWorkflow.Instance.IsSafe;
+            return DeviceStatusWork.Instance.IsSafe;
         }
 
+        /// <summary>触发急停（机器人主动 Abort 等场景）。</summary>
+        /// <param name="reason">急停原因（纯文本）</param>
         private void TriggerAbort(string reason)
         {
-            Log("触发急停 " + reason, MessageLevel.Error);
-            EmergencyStop();
-            SetStep(MainDeviceFlowState.Alarm, reason);
-            CascadeDisconnect();
-            SendDeviceCommand(DeviceCommand.CmdAbort);
-            GoStep(StepIdle);
+            EStopMachine(reason);
         }
 
-        /// <summary>级联子设备 Connect（共用接口 Initialize=Connect）。</summary>
+        /// <summary>级联各子设备连接。</summary>
         private void CascadeConnect()
         {
-            try { _lineLaser.Initialize(); }
-            catch (Exception ex) { Log("线激光 Connect 异常 " + ex.Message, MessageLevel.Error); }
-            try { _motion.Initialize(); }
-            catch (Exception ex) { Log("运控 Connect 异常 " + ex.Message, MessageLevel.Error); }
+            try { _lineLaser.ConnectOn(); }
+            catch (Exception ex) { Log("线激光连接异常 " + ex.Message, MessageLevel.Error); }
+            try { _motion.ConnectOn(); }
+            catch (Exception ex) { Log("运控连接异常 " + ex.Message, MessageLevel.Error); }
         }
 
-        /// <summary>级联子设备 Disconnect（共用接口 ManualStop=Disconnect）。</summary>
+        /// <summary>级联子设备断开。</summary>
         private void CascadeDisconnect()
         {
-            try { _lineLaser.ManualStop(); }
-            catch (Exception ex) { Log("线激光 Disconnect 异常 " + ex.Message, MessageLevel.Error); }
-            try { _motion.ManualStop(); }
-            catch (Exception ex) { Log("运控 Disconnect 异常 " + ex.Message, MessageLevel.Error); }
+            try { _lineLaser.ConnectOff(); }
+            catch (Exception ex) { Log("线激光断开异常 " + ex.Message, MessageLevel.Error); }
+            try { _motion.ConnectOff(); }
+            catch (Exception ex) { Log("运控断开异常 " + ex.Message, MessageLevel.Error); }
         }
 
         /// <summary>子设备是否已连接。</summary>
-        /// <remarks>Connect 与 Work 均属已连接；Disconnect/Alarm 计为未就绪。</remarks>
         /// <param name="child">子设备状态对象</param>
-        /// <returns>子设备处于 Connect 或 Work 返回 true</returns>
+        /// <returns>子设备处于 Connected 返回 true</returns>
         private bool IsChildConnected(DeviceStateBase child)
         {
-            DeviceState st = child.State;
-            return st == DeviceState.Connect || st == DeviceState.Work;
+            return child.State == SubDeviceState.Connected;
         }
 
         /// <summary>下发设备指令至机器人。</summary>
@@ -584,40 +703,15 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             }
         }
 
-        /// <summary>聚合判定初始化结果并切换整机流程态。</summary>
-        /// <remarks>判定口径：子设备 Connect 或 Work 视为正常，Disconnect 或 Alarm 计为未就绪。</remarks>
-        private void EvaluateInitializationResult()
-        {
-            int failCount = 0;
-            failCount += CountNotConnected(_weldHead, "焊接头");
-            failCount += CountNotConnected(_lineLaser, "线激光");
-            failCount += CountNotConnected(_monitorCam, "监控相机");
-            failCount += CountNotConnected(_motion, "运控");
-
-            if (failCount == 0)
-            {
-                SetStep(MainDeviceFlowState.SafePose);
-                _initializing = false;
-                Log("子设备初始化全部完成（整机进入安全起始位）");
-            }
-            else
-            {
-                SetStep(MainDeviceFlowState.Alarm);
-                _initializing = false;
-                Log(string.Format("子设备初始化失败 存在 {0} 个子设备未连接", failCount), MessageLevel.Error);
-            }
-        }
-
         /// <summary>统计未就绪的子设备数。</summary>
-        /// <remarks>Disconnect 与 Alarm 计为未就绪，Connect 与 Work 视为正常。</remarks>
+        /// <remarks>Connected 视为就绪，Disconnected 计为未就绪。</remarks>
         /// <param name="child">子设备状态对象</param>
         /// <param name="name">子设备中文名（用于日志）</param>
         /// <returns>未就绪返回 1，正常返回 0</returns>
         private int CountNotConnected(DeviceStateBase child, string name)
         {
-            DeviceState st = child.State;
-            if (st == DeviceState.Connect || st == DeviceState.Work) return 0;
-            Log(string.Format("子设备异常 {0} 当前设备态 {1}", name, st), MessageLevel.Warning);
+            if (child.State == SubDeviceState.Connected) return 0;
+            Log(string.Format("子设备异常 {0} 当前连接态 {1}", name, child.State), MessageLevel.Warning);
             return 1;
         }
 
@@ -629,122 +723,185 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             GlobalCommData.ShowLog(_tag, message, level);
         }
 
+        /// <summary>模拟挂起的线激光连接回调。</summary>
+        /// <param name="sender">事件源</param>
+        /// <param name="e">连接态变更参数</param>
+        private void OnSimLineLaserStateChanged(object sender, SubDeviceStateChangedEventArgs e)
+        {
+            if (e.NewState != SubDeviceState.Connected) return;
+            _lineLaser.StateSwitched -= OnSimLineLaserStateChanged;
+            _simLineLaserPending = false;
+            // 用户已在初始化期间关闭模拟：放弃启动，避免误进入流程
+            if (_currentMode == SimTestMode.None) return;
+            try { _lineLaser.Start(); }
+            catch (Exception ex) { Log("模拟-线激光启动失败 " + ex.Message, MessageLevel.Error); }
+        }
+
+        /// <summary>等待子设备连接完成（轮询 State，有界等待）。</summary>
+        /// <param name="child">子设备</param>
+        /// <param name="name">子设备中文名（日志用）</param>
+        private void WaitChildConnected(DeviceStateBase child, string name)
+        {
+            var deadline = DateTime.Now.AddMilliseconds(CascadeConnectTimeoutMs);
+            while (child.State != SubDeviceState.Connected && DateTime.Now < deadline)
+                Thread.Sleep(100);
+            if (child.State != SubDeviceState.Connected)
+                Log(string.Format("{0} 连接等待超时", name), MessageLevel.Warning);
+        }
+
+        /// <summary>聚合判定初始化结果并切换运行态。</summary>
+        /// <remarks>判定口径：子设备 Connected 视为就绪，Disconnected 计为未就绪。</remarks>
+        /// <returns>全部就绪返回 true</returns>
+        private bool EvaluateInitializationResult()
+        {
+            int failCount = 0;
+            failCount += CountNotConnected(_weldHead, "焊接头");
+            failCount += CountNotConnected(_lineLaser, "线激光");
+            failCount += CountNotConnected(_monitorCam, "监控相机");
+            failCount += CountNotConnected(_motion, "运控");
+
+            if (failCount == 0)
+            {
+                SetStatus(MainDeviceStatus.Stop, "子设备初始化全部完成（整机就绪）");
+                Log("子设备初始化全部完成（整机就绪）");
+                return true;
+            }
+
+            SetStatus(MainDeviceStatus.Alarm, "子设备初始化失败");
+            Log(string.Format("子设备初始化失败 存在 {0} 个子设备未连接", failCount), MessageLevel.Error);
+            return false;
+        }
+
+        /// <summary>判断机器人通讯在位（RSI 或 EKI 任一连接）。</summary>
+        /// <returns>在位返回 true；管理器未就绪视为不在位</returns>
+        private bool IsRobotReachable()
+        {
+            return RobotManager != null && (RobotManager.IsRSIConnected || RobotManager.IsEKIConnected);
+        }
+
+        /// <summary>级联子流程复位。</summary>
+        /// <remarks>单个流程失败记日志不中断后续，与级联连接容错口径一致。</remarks>
+        /// <returns>全部受理返回 true</returns>
+        private bool CascadeResetProcess()
+        {
+            var flows = new DeviceWorkflowBase[] { _weldHead, _lineLaser, _monitorCam, _motion, WeldParamControlWorkflow.Instance };
+            var names = new[] { "焊接头", "线激光", "监控相机", "运控", "焊接工艺" };
+            bool allAccepted = true;
+            for (int i = 0; i < flows.Length; i++)
+            {
+                try
+                {
+                    if (!flows[i].ResetProcess())
+                    {
+                        allAccepted = false;
+                        Log(string.Format("{0} 流程复位未受理", names[i]), MessageLevel.Warning);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    allAccepted = false;
+                    Log(string.Format("{0} 流程复位异常 {1}", names[i], ex.Message), MessageLevel.Error);
+                }
+            }
+            return allAccepted;
+        }
+
+        /// <summary>级联 5 个子流程清状态：清报警回就绪。</summary>
+        private void CascadeClearStatus()
+        {
+            var flows = new DeviceWorkflowBase[] { _weldHead, _lineLaser, _monitorCam, _motion, WeldParamControlWorkflow.Instance };
+            var names = new[] { "焊接头", "线激光", "监控相机", "运控", "焊接工艺" };
+            for (int i = 0; i < flows.Length; i++)
+            {
+                try { flows[i].ClearStatus(); }
+                catch (Exception ex) { Log(string.Format("{0} 清状态异常 {1}", names[i], ex.Message), MessageLevel.Warning); }
+            }
+        }
+
         #endregion
 
-        #region 公共函数
+        #region 命令变量消费与单步分派（运行线程内执行）
 
-        /// <summary>接收机器人 Pose（只写命令变量，业务由监听线程执行）。</summary>
-        /// <param name="pose">机器人上报的姿态</param>
-        public void ReceiveRobotPose(RobotPose pose)
+        /// <summary>按优先级消费命令变量。</summary>
+        /// <remarks>Pose 与 Command 必须分槽存放：二者 int 编码区间重叠（StartSafePose 与 PreWeldRequest 同为 1），单槽必丢指令。</remarks>
+        private void ConsumeCommand()
         {
-            _pendingPose = (int)pose;
+            int cmd = _pendingCommand;
+            if (cmd != NoPendingCommand)
+            {
+                _pendingCommand = NoPendingCommand;
+                if (cmd == (int)RobotCommand.Abort)
+                    _pendingAbort = true;
+                else if (cmd == (int)RobotCommand.PreWeldRequest)
+                    _pendingPreWeldRequest = true;
+            }
+
+            int poseCode = _pendingPose;
+            if (poseCode == NoPendingPose) return;
+            _pendingPose = NoPendingPose;
+
+            RobotPose pose = (RobotPose)poseCode;
+            if (!InteractionTable.IsValidPose(pose))
+            {
+                Log("收到非法 RobotPose " + pose, MessageLevel.Warning);
+                return;
+            }
+            if (!IsRobotPoseSafe(pose))
+            {
+                Log("RobotPose 安全校验未通过 " + pose, MessageLevel.Error);
+                return;
+            }
+
+            _lastPose = pose;
+            OnPoseArrived(pose);
         }
 
-        /// <summary>接收机器人主动指令（只写命令变量）。</summary>
-        /// <param name="cmd">机器人主动指令（如 PreWeldRequest / Abort）</param>
-        public void ReceiveRobotCommand(RobotCommand cmd)
+        /// <summary>按当前执行步分派单步动作。</summary>
+        /// <remarks>由运行线程按节拍反复调用，每个 case 必须可重入且不得阻塞。</remarks>
+        private void FlowProcess()
         {
-            _pendingCommand = (int)cmd;
+            if (_pendingAbort)
+            {
+                _pendingAbort = false;
+                TriggerAbort("机器人主动急停指令");
+                return;
+            }
+
+            switch (WorkStep)
+            {
+                case StepIdle: DoIdle(); break;
+                case StepPreworkConnect: DoPreworkConnect(); break;
+                case StepWaitPreWeldPose: DoWaitPreWeldPose(); break;
+                case StepYAxisTracking: DoYAxisTracking(); break;
+                case StepWaitWeldStart: DoWaitWeldStart(); break;
+                case StepStartWelding: DoStartWelding(); break;
+                case StepWelding: DoWelding(); break;
+                case StepStopping: DoStopping(); break;
+                case StepFinishOk: DoFinishOk(); break;
+                case StepFinishFail: DoFinishFail(); break;
+                default: GoStep(StepIdle); break;
+            }
         }
 
-        /// <summary>执行上电初始化编排。</summary>
-        /// <remarks>
-        /// 顺序：焊接头 → 运动控制器（含 CAMBOX 跟踪）→ 线激光相机 → 监控相机 → 机器人通讯。
-        /// 全部就绪置 SafePose，否则置 Alarm。机器人与 PLC 的连接由顶层 Comm 管控，此处只做编排。
-        /// </remarks>
-        public void PowerOnInitialize()
+        /// <summary>执行步号转中文名。</summary>
+        /// <remarks>新增步必须登记，否则该步不可观测。</remarks>
+        /// <param name="step">执行步号</param>
+        /// <returns>步号对应中文名；未登记的步返回「步骤 N」</returns>
+        private string GetStepName(int step)
         {
-            if (_initializing) return;
-            _initializing = true;
-            Log("子设备初始化开始");
-            Log("初始化顺序 焊接头 运动控制器 线激光相机 监控相机 机器人通讯");
-
-            // 1. 焊接头初始化（激光器握手 + 温度模块枚举 + IO 映射）
-            Log("[1/5] 焊接头初始化开始");
-            try
+            switch (step)
             {
-                LaserWeldHeadController.Instance.Initialize();
-                Log("[1/5] 焊接头初始化完成");
-            }
-            catch (Exception ex)
-            {
-                Log("[1/5] 焊接头初始化失败 原因是 " + ex.Message, MessageLevel.Warning);
-            }
-
-            // 2. 运动控制器初始化 + CAMBOX 跟踪工作流初始化
-            InitializeMotionControl();
-
-            // 3. 线激光相机初始化（同步执行，等待四步初始化全部完成后再继续）
-            Log("[3/5] 线激光相机初始化开始");
-            try
-            {
-                if (_lineLaser.Step == LineLaserWorkflowState.Uninitialized)
-                {
-                    bool ok = _lineLaser.InitializeSync();
-                    if (ok)
-                        Log("[3/5] 线激光相机初始化完成");
-                    else
-                        Log("[3/5] 线激光相机初始化失败", MessageLevel.Warning);
-                }
-                else
-                {
-                    Log("[3/5] 线激光相机已初始化，跳过");
-                }
-            }
-            catch (Exception ex)
-            {
-                Log("[3/5] 线激光相机初始化异常 " + ex.Message, MessageLevel.Warning);
-            }
-
-            // 4. 监控相机初始化
-            Log("[4/5] 监控相机初始化开始");
-            try
-            {
-                _monitorCam.Initialize();
-                Log("[4/5] 监控相机初始化完成");
-            }
-            catch (Exception ex)
-            {
-                Log("[4/5] 监控相机初始化失败 原因是 " + ex.Message, MessageLevel.Warning);
-            }
-
-            // 5. 机器人通讯初始化（仅启用时，RSI/EKI 二选一）
-            InitializeRobotComm();
-
-            // 聚合判定：全部子设备 Connect 才进安全起始位；否则告警
-            EvaluateInitializationResult();
-        }
-
-        /// <summary>启动：置运行标记并拉起常驻监听线程（ADR-047）。</summary>
-        public void Start()
-        {
-            _running = true;
-            StartRunLoop();
-            Log("主设备工作流启动，监听线程已就绪");
-        }
-
-        /// <summary>停止：停监听线程并级联子设备断开。</summary>
-        public void Stop()
-        {
-            _running = false;
-            StopRunLoop();
-            CascadeDisconnect();
-            Log("主设备工作流停止");
-        }
-
-        /// <summary>执行急停并下发中止指令。</summary>
-        public override void EmergencyStop()
-        {
-            base.EmergencyStop();
-            try
-            {
-                var comm = GlobalCommData.mCommunicationManager;
-                if (comm != null && comm.IsRobotEnabled && comm.RobotManager != null)
-                    comm.RobotManager.SendRobotData(new KUKARobotData { EStr = SignalCode.DCmdAbort.ToString() });
-            }
-            catch (Exception ex)
-            {
-                Log("急停下发异常 " + ex.Message, MessageLevel.Warning);
+                case StepIdle: return "待机-等待焊前请求";
+                case StepPreworkConnect: return "焊前准备-子设备连接";
+                case StepWaitPreWeldPose: return "焊前准备-等待机器人焊前位";
+                case StepYAxisTracking: return "焊前位-Y轴偏移跟踪";
+                case StepWaitWeldStart: return "焊前位-等待焊接起始位";
+                case StepStartWelding: return "焊接-启动子设备";
+                case StepWelding: return "焊接-进行中";
+                case StepStopping: return "停止-级联断开与回安全位";
+                case StepFinishOk: return "成功收尾";
+                case StepFinishFail: return "失败收尾";
+                default: return "步骤 " + step;
             }
         }
 
@@ -829,6 +986,40 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
                 _robotXSimEnabled = false;
             }
         }
+
+        #region 模拟流程编排（线激光是主设备级联子设备，模拟生命周期由本类统一编排；UI 页只经此方法触发并消费结果）
+
+        /// <summary>启动模拟用线激光流程。</summary>
+        /// <remarks>线激光是主设备级联子设备，模拟流程由本类统一编排；UI 页仅调用本方法触发，结果经 StateSwitched 事件消费，不得越权直驱线激光。</remarks>
+        public void StartSimulationLineLaser()
+        {
+            if (_lineLaser.State != SubDeviceState.Connected)
+            {
+                _simLineLaserPending = true;
+                _lineLaser.StateSwitched += OnSimLineLaserStateChanged;
+                _lineLaser.ConnectOn();
+            }
+            else if (_lineLaser.WeldStatus == SubDeviceWeldStatus.Standby)
+            {
+                _lineLaser.Start();
+            }
+        }
+
+        /// <summary>停止模拟用线激光流程（级联子设备停止）。</summary>
+        public void StopSimulationLineLaser()
+        {
+            try { _lineLaser.Stop(); }
+            catch (Exception ex) { Log("模拟-线激光停止失败 " + ex.Message, MessageLevel.Error); }
+        }
+
+        /// <summary>复位模拟用线激光流程到可启动态（Standby）。</summary>
+        public void ResetSimulationLineLaser()
+        {
+            try { _lineLaser.ResetProcess(); }
+            catch (Exception ex) { Log("模拟-线激光复位失败 " + ex.Message, MessageLevel.Error); }
+        }
+
+        #endregion
 
         /// <summary>获取当前有效机器人 X 坐标。</summary>
         /// <remarks>模拟开启时返回 起点 + 速度 × 流逝时间；未开启时返回 0（生产流程的 robotX 由调用方自行读取真实坐标）。线激光流程与运控流程统一通过此方法读取模拟坐标，保证一致。</remarks>
@@ -924,201 +1115,244 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
 
         #endregion
 
-        #region 流程态映射（MainDeviceFlowState 机器人 Pose 驱动，子设备无此概念）
+        #region 公共函数（设备操作契约）
 
-        /// <summary>整机流程态映射为设备四态（ADR-041）。</summary>
-        /// <remarks>Preworking/PreWeldPose/Working/Stopping → Work；Alarm → Alarm；Idle/SafePose/Stopped → Connect。</remarks>
-        /// <param name="step">整机流程态</param>
-        /// <returns>对应的设备四态</returns>
-        protected override DeviceState MapToDeviceState(MainDeviceFlowState step)
+        /// <summary>接收机器人 Pose（只写命令变量，业务由运行线程执行）。</summary>
+        /// <param name="pose">机器人上报的姿态</param>
+        public void ReceiveRobotPose(RobotPose pose)
         {
-            switch (step)
+            _pendingPose = (int)pose;
+        }
+
+        /// <summary>接收机器人主动指令（只写命令变量）。</summary>
+        /// <param name="cmd">机器人主动指令（如 PreWeldRequest / Abort）</param>
+        public void ReceiveRobotCommand(RobotCommand cmd)
+        {
+            _pendingCommand = (int)cmd;
+        }
+
+        /// <summary>上电初始化：执行 5 步子设备初始化级联（阻塞同步）。</summary>
+        /// <remarks>
+        /// 顺序：焊接头 → 运动控制器（含 CAMBOX 跟踪）→ 线激光相机 → 监控相机 → 机器人通讯。
+        /// 全部就绪置 Stop（可运行），否则置 Alarm。机器人与 PLC 的连接由顶层 Comm 管控，此处只做编排。
+        /// 线激光/监控相机经 ConnectOn 受理后轮询等待 Connected（受理式非阻塞约定的级联等待）。
+        /// </remarks>
+        /// <returns>初始化后整机就绪返回 true</returns>
+        public bool InitializeMachine()
+        {
+            if (_initializing) return false;
+            _initializing = true;
+            try
             {
-                case MainDeviceFlowState.Preworking:
-                case MainDeviceFlowState.PreWeldPose:
-                case MainDeviceFlowState.Working:
-                case MainDeviceFlowState.Stopping:
-                    return DeviceState.Work;
-                case MainDeviceFlowState.Alarm:
-                    return DeviceState.Alarm;
-                default:
-                    // Idle / SafePose / Stopped 均为"已连接就绪"语义
-                    return DeviceState.Connect;
+                Log("子设备初始化开始");
+                Log("初始化顺序 焊接头 运动控制器 线激光相机 监控相机 机器人通讯");
+
+                // 1. 焊接头初始化（激光器握手 + 温度模块枚举 + IO 映射）
+                Log("[1/5] 焊接头初始化开始");
+                try
+                {
+                    LaserWeldHeadController.Instance.Initialize();
+                    Log("[1/5] 焊接头初始化完成");
+                }
+                catch (Exception ex)
+                {
+                    Log("[1/5] 焊接头初始化失败 原因是 " + ex.Message, MessageLevel.Warning);
+                }
+
+                // 2. 运动控制器初始化 + CAMBOX 跟踪工作流初始化
+                InitializeMotionControl();
+
+                // 3. 线激光相机连接（受理式 + 等待 Connected）
+                Log("[3/5] 线激光相机初始化开始");
+                try
+                {
+                    if (_lineLaser.State != SubDeviceState.Connected)
+                    {
+                        _lineLaser.ConnectOn();
+                        WaitChildConnected(_lineLaser, "线激光相机");
+                    }
+                    else
+                    {
+                        Log("[3/5] 线激光相机已连接，跳过");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log("[3/5] 线激光相机初始化异常 " + ex.Message, MessageLevel.Warning);
+                }
+
+                // 4. 监控相机连接（受理式 + 等待 Connected）
+                Log("[4/5] 监控相机初始化开始");
+                try
+                {
+                    if (_monitorCam.State != SubDeviceState.Connected)
+                    {
+                        _monitorCam.ConnectOn();
+                        WaitChildConnected(_monitorCam, "监控相机");
+                    }
+                    else
+                    {
+                        Log("[4/5] 监控相机已连接，跳过");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log("[4/5] 监控相机初始化失败 原因是 " + ex.Message, MessageLevel.Warning);
+                }
+
+                // 5. 机器人通讯初始化（仅启用时，RSI/EKI 二选一）
+                InitializeRobotComm();
+
+                // 聚合判定：全部子设备 Connected 才置可运行；否则告警
+                return EvaluateInitializationResult();
+            }
+            finally
+            {
+                _initializing = false;
             }
         }
 
-        #endregion
-
-        #region 命令变量消费与单步分派（监听线程内执行）
-
-        /// <summary>消费命令变量：Abort 最优先，其次 Command，最后 Pose。</summary>
-        /// <remarks>Pose 与 Command 必须分槽存放：二者 int 编码区间重叠（StartSafePose 与 PreWeldRequest 同为 1），单槽必丢指令。</remarks>
-        protected override void ConsumeCommand()
+        /// <summary>启动机器：拉起运行线程并置就绪（幂等）。</summary>
+        /// <returns>受理返回 true</returns>
+        public bool StartMachine()
         {
-            int cmd = _pendingCommand;
-            if (cmd != NoPendingCommand)
+            if (_running) return true;
+            _running = true;
+            _runLoopClosing = false;
+            if (_runLoopThread == null || !_runLoopThread.IsAlive)
             {
-                _pendingCommand = NoPendingCommand;
-                if (cmd == (int)RobotCommand.Abort)
-                    _pendingAbort = true;
-                else if (cmd == (int)RobotCommand.PreWeldRequest)
-                    _pendingPreWeldRequest = true;
+                _runLoopThread = new Thread(RunLoop)
+                {
+                    Name = "DeviceControlWorkRunLoop",
+                    IsBackground = true
+                };
+                _runLoopThread.Start();
             }
-
-            int poseCode = _pendingPose;
-            if (poseCode == NoPendingPose) return;
-            _pendingPose = NoPendingPose;
-
-            RobotPose pose = (RobotPose)poseCode;
-            if (!InteractionTable.IsValidPose(pose))
-            {
-                Log("收到非法 RobotPose " + pose, MessageLevel.Warning);
-                return;
-            }
-            if (!IsRobotPoseSafe(pose))
-            {
-                Log("RobotPose 安全校验未通过 " + pose, MessageLevel.Error);
-                return;
-            }
-
-            _lastPose = pose;
-            OnPoseArrived(pose);
+            if (_status != MainDeviceStatus.EStop && _status != MainDeviceStatus.Alarm)
+                SetStatus(MainDeviceStatus.Stop, "机器启动");
+            DeviceStatusWork.Instance.StartWork();
+            Log("主设备运行管控启动，运行线程已就绪");
+            return true;
         }
 
-        /// <summary>按当前执行步分派单步动作。</summary>
-        /// <remarks>由监听线程按节拍反复调用，每个 case 必须可重入且不得阻塞。</remarks>
-        protected override void FlowProcess()
+        /// <summary>停机：停运行线程、清子流程状态并级联断开。</summary>
+        public void StopMachine()
         {
-            if (_pendingAbort)
+            _running = false;
+            _runLoopClosing = true;
+            if (_runLoopThread != null && _runLoopThread.IsAlive)
+                _runLoopThread.Join(1000);
+            _runLoopThread = null;
+            CascadeClearStatus();
+            CascadeDisconnect();
+            DeviceStatusWork.Instance.CloseWork();
+            if (_status == MainDeviceStatus.Running)
+                SetStatus(MainDeviceStatus.Stop, "机器停止");
+            Log("主设备运行管控停止");
+        }
+
+        /// <summary>复位机器到就绪态。</summary>
+        /// <returns>受理返回 true；运行中或机器人在位检测不通过返回 false</returns>
+        public bool ResetMachine()
+        {
+            if (_running && _status == MainDeviceStatus.Running) return false;
+            if (!IsRobotReachable())
             {
-                _pendingAbort = false;
-                TriggerAbort("机器人主动急停指令");
-                return;
+                SetStatus(MainDeviceStatus.Alarm, "机器人在位检测失败 复位阻断");
+                FaultRecoveryManager.Instance.RecordFault("MainDevice", new FaultRecord
+                {
+                    Device = _tag,
+                    State = SubDeviceWeldStatus.ErrorAborted,
+                    Category = FaultCategory.Communication,
+                    ErrorCode = "ROBOT_OFFLINE",
+                    ParamSnapshot = RobotManager == null
+                        ? "RobotManager 未就绪"
+                        : string.Format("RSI={0} EKI={1}", RobotManager.IsRSIConnected, RobotManager.IsEKIConnected)
+                });
+                Log("机器人在位检测失败 复位阻断", MessageLevel.Error);
+                return false;
             }
-
-            switch (WorkStep)
-            {
-                case StepIdle: DoIdle(); break;
-                case StepPreworkConnect: DoPreworkConnect(); break;
-                case StepWaitPreWeldPose: DoWaitPreWeldPose(); break;
-                case StepYAxisTracking: DoYAxisTracking(); break;
-                case StepWaitWeldStart: DoWaitWeldStart(); break;
-                case StepStartWelding: DoStartWelding(); break;
-                case StepWelding: DoWelding(); break;
-                case StepStopping: DoStopping(); break;
-                case StepFinishOk: DoFinishOk(); break;
-                case StepFinishFail: DoFinishFail(); break;
-                default: GoStep(StepIdle); break;
-            }
-        }
-
-        /// <summary>执行步号转中文名。</summary>
-        /// <remarks>新增步必须登记，否则该步不可观测。</remarks>
-        /// <param name="step">执行步号</param>
-        /// <returns>步号对应中文名；未登记的步返回「步骤 N」</returns>
-        protected override string GetStepName(int step)
-        {
-            switch (step)
-            {
-                case StepIdle: return "待机-等待焊前请求";
-                case StepPreworkConnect: return "焊前准备-子设备连接";
-                case StepWaitPreWeldPose: return "焊前准备-等待机器人焊前位";
-                case StepYAxisTracking: return "焊前位-Y轴偏移跟踪";
-                case StepWaitWeldStart: return "焊前位-等待焊接起始位";
-                case StepStartWelding: return "焊接-启动子设备";
-                case StepWelding: return "焊接-进行中";
-                case StepStopping: return "停止-级联断开与回安全位";
-                case StepFinishOk: return "成功收尾";
-                case StepFinishFail: return "失败收尾";
-                default: return "步骤 " + step;
-            }
-        }
-
-        #endregion
-
-        #region 抽象生命周期方法（上电初始化回归基类契约，自动/手动双流程 ADR-048）
-
-        /// <summary>初始化流程 = 执行 5 步上电初始化编排。</summary>
-        /// <remarks>焊接头 → 运动控制器 → 线激光相机 → 监控相机 → 机器人通讯；全部就绪（SafePose）视为成功。</remarks>
-        /// <returns>初始化后整机进入安全起始位返回 true</returns>
-        protected override bool InitializeFlow()
-        {
-            PowerOnInitialize();
-            return Step == MainDeviceFlowState.SafePose;
-        }
-
-        /// <summary>手动开 = 启动监听线程（非阻塞，界面 UI 入口）。</summary>
-        protected override void ManualOn()
-        {
-            Start();
-        }
-
-        /// <summary>手动关 = 停止监听线程并级联子设备断开。</summary>
-        protected override void ManualOff()
-        {
-            Stop();
-        }
-
-        /// <summary>自动运行 = 阻塞式执行完整焊接周期（ADR-048）。</summary>
-        /// <remarks>序列：未就绪先上电初始化 → 启动监听线程 → 阻塞等待一个完整周期（SafePose→Preworking→…→Stopped）
-        /// 或异常/中止。握手推进仍由监听线程 FlowProcess 按机器人 Pose 驱动，本序列只做编排与等待。</remarks>
-        protected override void AutoRunFlow()
-        {
-            if (Step != MainDeviceFlowState.SafePose && !InitializeFlow())
-            {
-                // 监听线程尚未 Start（900 收尾步不会被消费），前置失败只记日志（EvaluateInitializationResult 已置 Alarm）
-                Log("自动运行前置初始化未就绪", MessageLevel.Error);
-                return;
-            }
-            Start();
-            AutoWait(() => FlowState == MainDeviceFlowState.Stopped
-                || FlowState == MainDeviceFlowState.Alarm
-                || FlowState == MainDeviceFlowState.Idle, 0);
-            if (IsAutoAbortRequested)
-            {
-                EmergencyStop();
-                CascadeDisconnect();
-            }
-        }
-
-        /// <summary>流程复位：清命令变量与握手状态，回到待机。</summary>
-        protected override void ResetFlow()
-        {
             _pendingPose = NoPendingPose;
             _pendingCommand = NoPendingCommand;
             _pendingAbort = false;
             _pendingPreWeldRequest = false;
             _lastPose = RobotPose.Unknown;
-            SetStep(MainDeviceFlowState.Idle, "流程复位");
+            GoStep(StepIdle);
+            SetStatus(MainDeviceStatus.Reseting, "流程复位");
+            CascadeResetProcess();
+            SetStatus(MainDeviceStatus.Stop, "流程复位完成");
+            return true;
         }
 
-        #endregion
-
-        #region 释放（基类 Dispose 先停监听线程，再调本钩子）
-
-        /// <summary>释放钩子：停机并退订通讯与机器人数据事件。</summary>
-        protected override void DisposeManaged()
+        /// <summary>清除报警：仅清报警标志（与复位正交）。</summary>
+        /// <returns>存在报警并已清除返回 true</returns>
+        public bool ClearAlarm()
         {
-            Stop();
+            lock (_statusLock)
+            {
+                if (_status != MainDeviceStatus.Alarm) return false;
+            }
+            SetStatus(MainDeviceStatus.NoReset, "报警已清除 待复位");
+            return true;
+        }
+
+        /// <summary>急停：置急停态 + 设备级急停 + 级联断开 + 下发中止。</summary>
+        /// <param name="reason">急停原因</param>
+        public void EStopMachine(string reason)
+        {
+            SetStatus(MainDeviceStatus.EStop, reason);
+            EmergencyStop();
+            CascadeDisconnect();
+            SendDeviceCommand(DeviceCommand.CmdAbort);
+            _lastPose = RobotPose.Unknown;
+            GoStep(StepIdle);
+        }
+
+        /// <summary>取消急停并转未复位。</summary>
+        public void EStopCancel()
+        {
+            if (_status != MainDeviceStatus.EStop) return;
+            SetStatus(MainDeviceStatus.NoReset, "急停解除 待复位");
+        }
+
+        /// <summary>设备安全：急停（下发机器人 DCmdAbort）。</summary>
+        public void EmergencyStop()
+        {
+            try
+            {
+                var comm = GlobalCommData.mCommunicationManager;
+                if (comm != null && comm.IsRobotEnabled && comm.RobotManager != null)
+                    comm.RobotManager.SendRobotData(new KUKARobotData { EStr = SignalCode.DCmdAbort.ToString() });
+            }
+            catch (Exception ex)
+            {
+                Log("急停下发异常 " + ex.Message, MessageLevel.Warning);
+            }
+        }
+
+        /// <summary>安全互锁报警上报（由 DeviceStatusWork 调用）：置报警态。</summary>
+        /// <param name="reason">报警原因</param>
+        public void ReportAlarm(string reason)
+        {
+            SetStatus(MainDeviceStatus.Alarm, reason);
+        }
+
+        /// <summary>安全互锁恢复上报（由 DeviceStatusWork 调用）：转未复位。</summary>
+        public void ReportAlarmCleared()
+        {
+            if (_status == MainDeviceStatus.Alarm)
+                SetStatus(MainDeviceStatus.NoReset, "安全互锁恢复 待复位");
+        }
+
+        /// <summary>释放：停机并退订通讯事件。</summary>
+        public void Dispose()
+        {
+            StopMachine();
             GlobalCommData.CommunicationCommandReceived -= OnCommunicationCommand;
             if (RobotManager != null) RobotManager.DataReceived -= OnRobotDataReceived;
         }
 
         #endregion
-    }
-
-    /// <summary>整机流程态（机器人 Pose 握手驱动，MainDeviceWorkflow 独有，子设备无此概念）。</summary>
-    /// <remarks>· Idle        空闲（HomePose） · SafePose    安全起始位（StartSafePose） · Preworking  焊前准备（StartSafePose + 机器人 PreWeldRequest 触发） · PreWeldPose 焊前位（PreWeldPose 到位，执行 Y 轴偏移跟踪，OK 后通知机器人继续） · Working     焊接中（WeldStartPose 到位） · Stopping    停止中（PreStopPose/WeldStopPose） · Stopped     已停止（StopSafePose） · Alarm       安全/急停告警态</remarks>
-    public enum MainDeviceFlowState
-    {
-        Idle = 0,
-        SafePose = 1,
-        Preworking = 2,
-        PreWeldPose = 3,
-        Working = 4,
-        Stopping = 5,
-        Stopped = 6,
-        Alarm = 7
     }
 
     /// <summary>运控调整模拟测试模式（归并自 SimulationWorkflow，ADR-048）</summary>

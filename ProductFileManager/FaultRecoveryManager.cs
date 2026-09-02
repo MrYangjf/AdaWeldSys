@@ -6,7 +6,7 @@ using AdaWeldSystem.SqlLiteDatabase;
 
 namespace AdaWeldSystem.ProductFileManager
 {
-    using DeviceState = AdaWeldSystem.MainDeviceControl.DeviceState.DeviceState;
+    using SubDeviceWeldStatus = AdaWeldSystem.MainDeviceControl.DeviceState.SubDeviceWeldStatus;
 
     /// <summary>故障分类</summary>
     public enum FaultCategory
@@ -28,7 +28,7 @@ namespace AdaWeldSystem.ProductFileManager
     }
 
     /// <summary>故障记录数据载体</summary>
-    /// <remarks>覆盖「检测 → 停机 → 记录 → 确认 → 排除 → 复位 → 复位验证」闭环；设备态采用统一四态 <see cref="AdaWeldSystem.MainDeviceControl.DeviceState.DeviceState"/>。</remarks>
+    /// <remarks>覆盖「检测 → 停机 → 记录 → 确认 → 排除 → 复位 → 复位验证」闭环；焊接过程态采用统一七态 <see cref="AdaWeldSystem.MainDeviceControl.DeviceState.SubDeviceWeldStatus"/>。</remarks>
     public class FaultRecord
     {
         /// <summary>故障时间</summary>
@@ -37,8 +37,8 @@ namespace AdaWeldSystem.ProductFileManager
         /// <summary>设备名称</summary>
         public string Device { get; set; } = "未知设备";
 
-        /// <summary>故障时的设备状态（统一四态）</summary>
-        public DeviceState State { get; set; } = DeviceState.Disconnect;
+        /// <summary>故障时的焊接过程态（统一七态）</summary>
+        public SubDeviceWeldStatus State { get; set; } = SubDeviceWeldStatus.Standby;
 
         /// <summary>故障分类</summary>
         public FaultCategory Category { get; set; } = FaultCategory.Device;

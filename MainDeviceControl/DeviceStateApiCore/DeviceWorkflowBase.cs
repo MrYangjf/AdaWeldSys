@@ -1,52 +1,34 @@
 ﻿using System;
 using System.Threading;
 using AdaWeldSystem.Comm;
-using AdaWeldSystem.MainDeviceControl.DeviceState;
 
 namespace AdaWeldSystem.MainDeviceControl.FlowState
 {
-    using DeviceState = AdaWeldSystem.MainDeviceControl.DeviceState.DeviceState;
-
-    /// <summary>工作流运行模式：None 未运行 / Auto 自动（阻塞式序列线程） / Manual 手动（非阻塞执行步，外部驱动）。</summary>
-    /// <remarks>自动与手动共用同一套执行步引擎（FlowProcess），差异仅在推进驱动者：自动由 AutoRunFlow 阻塞脚本排程，手动由外部（主设备/UI）逐步驱动（ADR-048）。</remarks>
-    public enum WorkflowRunMode
-    {
-        /// <summary>未运行</summary>
-        None = 0,
-        /// <summary>自动运行：后台阻塞式序列（设备自动运行入口）</summary>
-        Auto = 1,
-        /// <summary>手动运行：后台非阻塞执行步，由外部驱动（界面 UI 入口）</summary>
-        Manual = 2
-    }
-
     /// <summary>
-    /// 统一工作流基类（泛型 TStep = 各工作流自有流程态枚举）。
-    /// 继承链：DeviceStateBase(设备态+设备安全) → WorkflowStateBase&lt;TStep&gt;(流程态+转换机制) → 本类(生命周期+执行步+监听线程)。
+    /// 运行基类（非泛型，新主控设计）：承载执行步 + 常驻监听线程 + 连接/焊接过程态联动。
+    /// 继承链：DeviceStateBase(连接态 State + 焊接过程态 WeldStatus + 设备安全) → 本类(生命周期 + 执行步 + 监听线程)。
+    /// 不再实现流程态枚举与状态转换表（原 WorkflowStateBase 已删除）；对外状态即 SubDeviceState / SubDeviceWeldStatus。
     ///
-    /// 三层状态模型（ADR-047，**三层并存不是替换**）：
-    ///   1. 设备四态 State        —— 经 MapToDeviceState 映射派生，禁止手工赋值（ADR-041）
-    ///   2. 阶段态   Step(TStep)  —— 对外名片，经基类 SetStep 变更（ADR-042/043）
-    ///   3. 执行步   WorkStep(int) + WorkStartTime —— 内部游标，经 GoStep 成对刷新，承载推进/超时/排故
-    /// 一个阶段态可横跨多个执行步；执行步推进到收尾段（800 成功 / 900 失败）时才触发 SetStep 换阶段态。
+    /// 抽象契约（6 项，新主控设计）：
+    ///   1. FlowProcess()     流程处理：switch(WorkStep) 单步分派，由监听线程按节拍反复调用
+    ///   2. ResetProcess()    复位流程：返回是否受理（受理式非阻塞，完成以 WeldStatus 信号化）
+    ///   3. ClearStatus()     状态清除：清命令变量/计数/报警标志（实现内必须调用 ResetWorkStep()）
+    ///   4. ResetWorkTime()   复位时间：重置工作时间（实现内必须调用 SetWorkTimeStart()）
+    ///   5. ConnectOn()       开启连接：受理式非阻塞，子类内部自起线程，完成以 State=Connected 信号化
+    ///   6. ConnectOff()      关闭连接：非阻塞，完成以 State=Disconnected 信号化
+    /// 状态联动约定：ConnectOn/ConnectOff 联动 State(SubDeviceState)；
+    /// FlowProcess/ResetProcess/ClearStatus/ResetWorkTime 联动 WeldStatus(SubDeviceWeldStatus)。
     ///
-    /// 步骤驱动三件套（ADR-047）：
+    /// 步骤驱动三件套（ADR-047 机制延续）：
     ///   1. 命令变量：通讯回调只写变量不做业务，子类重写 ConsumeCommand 在监听线程内消费
     ///   2. 常驻监听线程：StartRunLoop / StopRunLoop，固定节拍调用 FlowProcess
     ///   3. 执行步：GoStep(n) 唯一改步入口（步号与时间成对刷新）；非活跃态每拍 ResetStepTime 防误判超时
     ///
-    /// 自动/手动双流程（ADR-048）：
-    ///   1. 自动 = AutoRun 拉起后台阻塞线程执行 AutoRunFlow 完整序列，等待统一经 AutoWait（有界/可中止），
-    ///      中止统一经 IsAutoAbortRequested 探测；设备自动运行调用本入口
-    ///   2. 手动 = ManualStart 置 Manual 模式，流程态推进由外部（主设备级联/UI）逐调用驱动，不阻塞调用方；
-    ///      界面 UI 调用本入口
-    ///   3. 两种模式下 FlowProcess 都由监听线程按节拍驱动（FlowProcess 是执行器，自动线程是排程器，职责正交）
-    ///
     /// 红线：FlowProcess 单步内禁止无界阻塞等待（Thread.Sleep / while 轮询），等待靠「节拍重入 + 时间戳判超时」；
-    /// 自动序列线程内等待必须经 AutoWait（响应中止 + 可选超时），不得裸写 while(true) 轮询；
+    /// ConnectOn/ConnectOff 内部自起线程，不得阻塞 UI 线程；
     /// 新增执行步必须登记到子类 GetStepName 映射表，否则该步不可观测。
     /// </summary>
-    /// <typeparam name="TStep">工作流自有流程态枚举类型</typeparam>
-    public abstract class DeviceWorkflowBase<TStep> : WorkflowStateBase<TStep>, IDisposable where TStep : struct
+    public abstract class DeviceWorkflowBase : DeviceStateBase, IDisposable
     {
         #region 私有变量
 
@@ -59,22 +41,21 @@ namespace AdaWeldSystem.MainDeviceControl.FlowState
         /// <summary>当前步进入时间戳（Ticks，Interlocked 读写保证 64 位原子，避免 DateTime 撕裂）。</summary>
         private long _workStartTicks;
 
+        /// <summary>工作时间起点时间戳（Ticks，本流程累计工作计时用）。</summary>
+        private long _workElapsedTicks;
+
         private Thread _runLoopThread;
         private volatile bool _runLoopClosing;
         private volatile bool _disposed;
         private ThreadPriority _runLoopPriority = ThreadPriority.Normal;
 
-        /// <summary>自动流程线程（AutoRun 拉起，一次性；结束自动置空）。</summary>
-        private Thread _autoThread;
-
-        /// <summary>自动流程中止标记（volatile，跨线程探测；ManualStop/EmergencyStop/Dispose 置位）。</summary>
-        private volatile bool _autoAbortRequested;
-
-        /// <summary>当前运行模式（AutoRun 置 Auto，ManualStart 置 Manual，流程结束回 None）。</summary>
-        private volatile WorkflowRunMode _runMode = WorkflowRunMode.None;
-
         private string _failReason = "";
         private int _failStep;
+
+        private object _tag;
+        private bool _isEnable = true;
+        private int _workStepCount;
+        private double _timeoutMs;
 
         #endregion
 
@@ -89,6 +70,34 @@ namespace AdaWeldSystem.MainDeviceControl.FlowState
         /// <summary>通用执行步号：失败收尾（全流程一致，子类不得重复定义）。</summary>
         protected const int StepFinishFail = 900;
 
+        /// <summary>自定义标签（宿主/UI 关联用）。</summary>
+        public object Tag
+        {
+            get { return _tag; }
+            set { _tag = value; }
+        }
+
+        /// <summary>是否启用（禁用后监听线程不执行业务，仅刷新时间戳）。</summary>
+        public bool IsEnable
+        {
+            get { return _isEnable; }
+            set { _isEnable = value; }
+        }
+
+        /// <summary>工作步数：本流程总步骤数（子类构造时设定，供进度显示）。</summary>
+        public int WorkStepCount
+        {
+            get { return _workStepCount; }
+            set { _workStepCount = value; }
+        }
+
+        /// <summary>超时时间（毫秒）：单步默认超时阈值，0 表示不启用默认超时。</summary>
+        public double TimeoutMs
+        {
+            get { return _timeoutMs; }
+            set { _timeoutMs = value; }
+        }
+
         /// <summary>当前执行步号（内部游标，int 编号；段位规范见步骤驱动标准第五章）。</summary>
         public int WorkStep { get { return _workStep; } }
 
@@ -97,6 +106,12 @@ namespace AdaWeldSystem.MainDeviceControl.FlowState
 
         /// <summary>当前步已停留时长（毫秒）。</summary>
         public double StepElapsedMs { get { return (DateTime.Now - WorkStartTime).TotalMilliseconds; } }
+
+        /// <summary>工作时间起点（由 SetWorkTimeStart 刷新，本流程累计工作计时用）。</summary>
+        public DateTime WorkTime { get { return new DateTime(Interlocked.Read(ref _workElapsedTicks)); } }
+
+        /// <summary>本流程已工作时长（毫秒）。</summary>
+        public double WorkElapsedMs { get { return (DateTime.Now - WorkTime).TotalMilliseconds; } }
 
         /// <summary>当前执行步的中文名（取自子类 GetStepName 映射表）。</summary>
         public string WorkStepName { get { return GetStepName(_workStep); } }
@@ -140,27 +155,16 @@ namespace AdaWeldSystem.MainDeviceControl.FlowState
         /// <summary>触发失败的执行步号（由 FailFlow 记录，用于排故定位卡点）。</summary>
         protected int FailStep { get { return _failStep; } }
 
-        /// <summary>当前运行模式（None 未运行 / Auto 自动 / Manual 手动）。</summary>
-        public WorkflowRunMode RunMode { get { return _runMode; } }
-
-        /// <summary>自动流程线程是否正在运行。</summary>
-        public bool IsAutoRunning
-        {
-            get { return _runMode == WorkflowRunMode.Auto && _autoThread != null && _autoThread.IsAlive; }
-        }
-
-        /// <summary>自动流程中止标记（自动序列内经 AutoWait / 手动探测，置位后应尽快安全退出）。</summary>
-        protected bool IsAutoAbortRequested { get { return _autoAbortRequested; } }
-
         #endregion
 
         #region 构造函数
 
-        /// <summary>指定初始流程态构造（透传流程态基类，并初始化执行步时间戳）。</summary>
-        /// <param name="initialStep">初始流程态</param>
-        protected DeviceWorkflowBase(TStep initialStep) : base(initialStep)
+        /// <summary>构造：初始化执行步与工作时间时间戳。</summary>
+        protected DeviceWorkflowBase()
         {
-            _workStartTicks = DateTime.Now.Ticks;
+            long now = DateTime.Now.Ticks;
+            _workStartTicks = now;
+            _workElapsedTicks = now;
         }
 
         #endregion
@@ -175,7 +179,7 @@ namespace AdaWeldSystem.MainDeviceControl.FlowState
             {
                 try
                 {
-                    if (IsRunLoopActive)
+                    if (IsRunLoopActive && _isEnable)
                     {
                         ConsumeCommand();
                         FlowProcess();
@@ -192,27 +196,6 @@ namespace AdaWeldSystem.MainDeviceControl.FlowState
                     GlobalCommData.ShowLog(StateName, "监听线程异常 " + ex.Message, MessageLevel.Error);
                 }
                 Thread.Sleep(_beatMs);
-            }
-        }
-
-        /// <summary>自动流程线程主体：执行子类阻塞式 AutoRunFlow，异常记日志并转失败收尾，结束后回 None 模式。</summary>
-        private void AutoThreadBody()
-        {
-            try
-            {
-                GlobalCommData.ShowLog(StateName, "自动流程开始", MessageLevel.Info);
-                AutoRunFlow();
-                GlobalCommData.ShowLog(StateName, "自动流程结束", MessageLevel.Info);
-            }
-            catch (Exception ex)
-            {
-                GlobalCommData.ShowLog(StateName, "自动流程异常 " + ex.Message, MessageLevel.Error);
-                FailFlow("自动流程异常 " + ex.Message);
-            }
-            finally
-            {
-                _runMode = WorkflowRunMode.None;
-                _autoThread = null;
             }
         }
 
@@ -251,140 +234,47 @@ namespace AdaWeldSystem.MainDeviceControl.FlowState
             Interlocked.Exchange(ref _workStartTicks, DateTime.Now.Ticks);
         }
 
-        /// <summary>释放资源（标准 IDisposable.Dispose，ADR-034）：中止自动流程 + 停监听线程 + 调用子类释放钩子。</summary>
+        /// <summary>释放监听线程并调用子类释放钩子。</summary>
         public void Dispose()
         {
             if (_disposed) return;
             _disposed = true;
-            _autoAbortRequested = true;
-            if (_autoThread != null && _autoThread.IsAlive) _autoThread.Join(1000);
             StopRunLoop();
             DisposeManaged();
             GC.SuppressFinalize(this);
         }
 
-        /// <summary>初始化设备并同步设备四态。</summary>
-        /// <returns>初始化成功返回 true，失败置 Disconnect 并返回 false</returns>
-        public bool Initialize()
-        {
-            if (InitializeFlow())
-            {
-                State = DeviceState.Connect;
-                return true;
-            }
-            State = DeviceState.Disconnect;
-            return false;
-        }
-
-        /// <summary>手动开：置 Manual 模式，调用 ManualOn 并置 Connect（非阻塞，界面 UI 入口）。</summary>
-        public void ManualStart()
-        {
-            _runMode = WorkflowRunMode.Manual;
-            ManualOn();
-            State = DeviceState.Connect;
-        }
-
-        /// <summary>手动关：自动流程若在跑先请求中止并限时等待，再调用 ManualOff 并置 Disconnect。</summary>
-        public void ManualStop()
-        {
-            if (IsAutoRunning)
-            {
-                _autoAbortRequested = true;
-                if (_autoThread != null) _autoThread.Join(2000);
-            }
-            _runMode = WorkflowRunMode.None;
-            ManualOff();
-            State = DeviceState.Disconnect;
-        }
-
-        /// <summary>自动运行：拉起后台阻塞线程执行 AutoRunFlow 完整序列并置 Work（设备自动运行入口）。</summary>
-        /// <remarks>幂等：自动流程运行中重复调用直接返回。中止经 RequestAutoAbort，等待须用 AutoWait。</remarks>
-        public void AutoRun()
-        {
-            if (IsAutoRunning) return;
-            _autoAbortRequested = false;
-            _runMode = WorkflowRunMode.Auto;
-            State = DeviceState.Work;
-            StartRunLoop();
-            _autoThread = new Thread(AutoThreadBody)
-            {
-                Name = StateName + "AutoFlow",
-                IsBackground = true
-            };
-            _autoThread.Start();
-        }
-
-        /// <summary>请求中止自动流程（幂等）。自动序列内经 IsAutoAbortRequested / AutoWait 探测后安全退出。</summary>
-        public void RequestAutoAbort()
-        {
-            _autoAbortRequested = true;
-        }
-
-        /// <summary>自动流程有界等待：轮询条件直至满足、超时或中止。</summary>
-        /// <remarks>仅限自动序列线程（AutoRunFlow 内）调用；FlowProcess 单步内禁用（红线）。
-        /// 条件异常按不满足处理并记警告，不中断等待。</remarks>
-        /// <param name="condition">等待条件</param>
-        /// <param name="timeoutMs">超时阈值（毫秒），须来自常量；传 0 表示不设超时（仍响应中止）</param>
-        /// <returns>条件满足返回 true；超时或中止返回 false</returns>
-        protected bool AutoWait(Func<bool> condition, double timeoutMs)
-        {
-            DateTime start = DateTime.Now;
-            while (!_autoAbortRequested)
-            {
-                bool ok = false;
-                try
-                {
-                    ok = condition != null && condition();
-                }
-                catch (Exception ex)
-                {
-                    GlobalCommData.ShowLog(StateName, "自动流程等待条件异常 " + ex.Message, MessageLevel.Warning);
-                }
-                if (ok) return true;
-                if (timeoutMs > 0 && (DateTime.Now - start).TotalMilliseconds >= timeoutMs) return false;
-                Thread.Sleep(_beatMs);
-            }
-            return false;
-        }
-
-        /// <summary>流程复位（公共入口）：记日志后调用子类 ResetFlow。</summary>
-        public void Reset()
-        {
-            GlobalCommData.ShowLog(StateName, "流程复位开始", MessageLevel.Info);
-            ResetFlow();
-            GlobalCommData.ShowLog(StateName, "流程复位完成", MessageLevel.Info);
-        }
-
-        /// <summary>急停：先请求中止自动流程（自动序列在下一拍探测到后安全退出），再走设备级急停。</summary>
-        public override void EmergencyStop()
-        {
-            _autoAbortRequested = true;
-            base.EmergencyStop();
-        }
-
         #endregion
 
-        #region 抽象生命周期方法（子类必须实现）
+        #region 抽象契约（新主控设计 6 项，子类必须实现）
 
-        /// <summary>初始化流程（= 设备 Connect）。返回是否成功连接。</summary>
-        protected abstract bool InitializeFlow();
+        /// <summary>流程处理：switch(WorkStep) 单步分派，由监听线程按节拍反复调用，自动运行唯一执行器。</summary>
+        /// <remarks>红线：case 体内禁止 Thread.Sleep / while 轮询 / 无界同步等待，等待靠「节拍重入 + 时间戳判超时」；
+        /// 联动 WeldStatus（进入焊接过程段置 Working，收尾回 Standby）。</remarks>
+        public abstract void FlowProcess();
 
-        /// <summary>手动开（= 设备 Connect）。</summary>
-        protected abstract void ManualOn();
+        /// <summary>复位流程：清执行步与命令变量并回到可启动状态。</summary>
+        /// <remarks>受理式非阻塞，返回是否受理；复位完成以 WeldStatus 信号化（回 Standby）。</remarks>
+        /// <returns>受理返回 true，当前不可复位（如流程运行中）返回 false</returns>
+        public abstract bool ResetProcess();
 
-        /// <summary>手动关（= 设备 Disconnect）。</summary>
-        protected abstract void ManualOff();
+        /// <summary>状态清除：报警后停止的处理流程（仅清报警标志与状态残留，与复位正交）。</summary>
+        /// <remarks>实现内必须调用 ResetWorkStep() 清执行步；联动 WeldStatus（回 Standby）。</remarks>
+        public abstract void ClearStatus();
 
-        /// <summary>自动运行流程（= 设备 Work）。</summary>
-        /// <remarks>在自动流程线程内阻塞执行完整序列（ADR-048）；等待统一经 AutoWait，禁止裸 while 轮询。</remarks>
-        protected abstract void AutoRunFlow();
+        /// <summary>复位时间：重置本流程工作时间计时。</summary>
+        /// <remarks>实现内必须调用 SetWorkTimeStart()。</remarks>
+        public abstract void ResetWorkTime();
 
-        /// <summary>流程复位：清命令变量/计数/报警并回到可启动状态，由公共入口 Reset 调用。</summary>
-        protected abstract void ResetFlow();
+        /// <summary>开启连接：受理式非阻塞，立即返回。</summary>
+        /// <remarks>子类内部须自行拉起后台线程执行连接并置 State=Connected（信号化完成），本方法不得阻塞 UI 线程；
+        /// 连接失败/超时由子类自行反馈（Info），不置 Alarm；联动 State(SubDeviceState)。</remarks>
+        /// <returns>受理返回 true（已在连接中或已连接也视为受理），拒绝返回 false</returns>
+        public abstract bool ConnectOn();
 
-        /// <summary>单步分派（switch(WorkStep)），由监听线程按节拍反复调用。</summary>
-        /// <remarks>红线：case 体内禁止 Thread.Sleep / while 轮询 / 无界同步等待，等待靠「节拍重入 + 时间戳判超时」。</remarks>
-        protected abstract void FlowProcess();
+        /// <summary>关闭连接：非阻塞，立即返回。</summary>
+        /// <remarks>子类内部须自行拉起后台线程执行断开并置 State=Disconnected，本方法不得阻塞 UI 线程；联动 State(SubDeviceState)。</remarks>
+        public abstract void ConnectOff();
 
         /// <summary>执行步号 → 中文名映射（新增步必须登记，否则该步不可观测）。</summary>
         protected abstract string GetStepName(int step);
@@ -402,20 +292,33 @@ namespace AdaWeldSystem.MainDeviceControl.FlowState
             Interlocked.Exchange(ref _workStartTicks, DateTime.Now.Ticks);
         }
 
-        /// <summary>状态与执行步清零（含时间戳刷新）。</summary>
-        protected virtual void ClearStatus()
+        /// <summary>执行步清零并刷新时间戳。</summary>
+        protected void ResetWorkStep()
         {
             _workStep = 0;
             ResetStepTime();
         }
 
-        /// <summary>判断当前步停留是否超时。</summary>
+        /// <summary>刷新工作时间起点。</summary>
+        protected void SetWorkTimeStart()
+        {
+            Interlocked.Exchange(ref _workElapsedTicks, DateTime.Now.Ticks);
+        }
+
+        /// <summary>判断当前步停留是否超时（按显式阈值）。</summary>
         /// <remarks>统一超时判据入口，避免超时判断写法发散。</remarks>
         /// <param name="timeoutMs">超时阈值（毫秒），须来自常量</param>
         /// <returns>停留时长超过阈值返回 true</returns>
         protected bool IsStepTimeout(double timeoutMs)
         {
             return StepElapsedMs > timeoutMs;
+        }
+
+        /// <summary>判断当前步是否超时。</summary>
+        /// <returns>TimeoutMs 大于 0 且停留时长超过阈值返回 true</returns>
+        protected bool IsStepTimeout()
+        {
+            return _timeoutMs > 0 && StepElapsedMs > _timeoutMs;
         }
 
         /// <summary>转入失败收尾并跳 900 段。</summary>
@@ -438,15 +341,6 @@ namespace AdaWeldSystem.MainDeviceControl.FlowState
 
         /// <summary>释放钩子：子类把原 Dispose 内容搬到这里（避免重写 Dispose 破坏 ADR-001）。</summary>
         protected virtual void DisposeManaged() { }
-
-        #endregion
-
-        #region 机器人 Pose 入口（主设备级联，子设备空实现）
-
-        /// <summary>机器人 Pose 到达入口（子设备可空实现）。</summary>
-        /// <remarks>主设备据此切换流程态并下发 DeviceCommand、级联子设备 DeviceState。</remarks>
-        /// <param name="pose">机器人上报的姿态</param>
-        protected virtual void OnRobotPoseReceived(RobotPose pose) { }
 
         #endregion
     }

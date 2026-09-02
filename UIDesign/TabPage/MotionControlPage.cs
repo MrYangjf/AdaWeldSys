@@ -1,4 +1,4 @@
-using AdaWeldSystem.Comm;
+﻿using AdaWeldSystem.Comm;
 using AdaWeldSystem.LineLaserCam.VirtualCam;
 using AdaWeldSystem.MainDeviceControl.DeviceState;
 using AdaWeldSystem.MainDeviceControl.DeviceWorkflow;
@@ -32,10 +32,7 @@ namespace AdaWeldSystem.Sub2UI
             UnsubscribeLineLaserEvents();
         }
 
-        #region 模拟流程启动状态（挂起 + 事件驱动）
-
-        /// <summary>线激光初始化完成(转 Standby)后是否需自动 Start 的挂起标记</summary>
-        private bool _pendingSimStart;
+        #region 模拟流程启动状态（事件驱动）
 
         /// <summary>模拟流程是否处于异常终止态（按钮显示红色「清理异常」）</summary>
         private bool _simError;
@@ -85,7 +82,7 @@ namespace AdaWeldSystem.Sub2UI
             txtCenterY.Text = mc.CalibratedCenterY.ToString("F3");
             txtApproach.Text = mc.ApproachThreshold.ToString("F3");
 
-            var sc = MainDeviceWorkflow.Instance;
+            var sc = DeviceControlWork.Instance;
             txtStartX.Text = sc.SimStartX.ToString("F3");
             txtSpeed.Text = sc.SimSpeed.ToString("F3");
             txtTargetDist.Text = sc.SimTargetDistance.ToString("F3");
@@ -126,14 +123,14 @@ namespace AdaWeldSystem.Sub2UI
         private void BtnSaveSim_Click(object sender, EventArgs e)
         {
             SyncSimParamsToController();
-            MainDeviceWorkflow.Instance.SaveSimulation();
+            DeviceControlWork.Instance.SaveSimulation();
             AntdUI.Message.success(System.Windows.Forms.Form.ActiveForm, "模拟参数已保存");
         }
 
         /// <summary>将界面模拟参数同步到 MainDeviceWorkflow 模拟模式控制器（不含保存提示和持久化；模式由 EnableSimulation 设置）</summary>
         private void SyncSimParamsToController()
         {
-            var sc = MainDeviceWorkflow.Instance;
+            var sc = DeviceControlWork.Instance;
             sc.SimStartX = ParseDouble(txtStartX, sc.SimStartX);
             sc.SimSpeed = ParseDouble(txtSpeed, sc.SimSpeed);
             sc.SimTargetDistance = ParseDouble(txtTargetDist, sc.SimTargetDistance);
@@ -148,11 +145,11 @@ namespace AdaWeldSystem.Sub2UI
 
         private void BtnStartSim_Click(object sender, EventArgs e)
         {
-            var sc = MainDeviceWorkflow.Instance;
+            var sc = DeviceControlWork.Instance;
 
             // 异常清理态：点击「清理异常」→ 复位工作流与界面，回到「开启模拟流程」（不自动重开）
             // 兜底：即使 _simError 标志因异步事件错位而未置位，只要工作流处于异常终止态也进入清理分支
-            if (_simError || LineLaserWorkflow.Instance.Step == LineLaserWorkflowState.ErrorAborted)
+            if (_simError || LineLaserWorkflow.Instance.WeldStatus == SubDeviceWeldStatus.ErrorAborted)
             {
                 CleanupSimError();
                 return;
@@ -162,7 +159,6 @@ namespace AdaWeldSystem.Sub2UI
             {
                 // 关闭模拟：先退订事件避免 Stop 触发 StateChanged 异步回调二次进入停止路径
                 UnsubscribeLineLaserEvents();
-                ClearPendingSimStart(); // 取消可能挂起的初始化后再启动
                 StopSimulationFlows();
                 sc.DisableSimulation();
                 ShowSimStopMessage("用户停止指令");
@@ -192,11 +188,11 @@ namespace AdaWeldSystem.Sub2UI
             SubscribeLineLaserEvents();
 
             // 若工作流处于终止态（完成/异常/手动停止），先复位到可启动状态
-            var llState = LineLaserWorkflow.Instance.Step;
-            if (llState != LineLaserWorkflowState.Uninitialized
-                && llState != LineLaserWorkflowState.Standby)
+            // （线激光属主设备级联子设备，复位经 MainDeviceWorkflow 编排入口，本页只消费结果）
+            var llState = LineLaserWorkflow.Instance.WeldStatus;
+            if (llState != SubDeviceWeldStatus.Standby)
             {
-                try { LineLaserWorkflow.Instance.Reset(); } catch (Exception ex)
+                try { DeviceControlWork.Instance.ResetSimulationLineLaser(); } catch (Exception ex)
                 {
                     ShowSimErrorDialog("启动前复位工作流失败: " + ex.Message);
                 }
@@ -206,7 +202,12 @@ namespace AdaWeldSystem.Sub2UI
             // 线激光 Initialize 为后台线程异步：未初始化时订阅 StateChanged，待转 Standby 后再 Start，
             // 规避同步判断 Standby 误跳过 Start 导致首次点击停在待机的问题
             // 任一步骤异常已由 ShowSimErrorDialog 将按钮转红色「清理异常」，故以 _simError 短路后续启动步骤
-            if (!_simError) StartLineLaserWithPending();
+            if (!_simError)
+            {
+                // 线激光属主设备级联子设备，模拟启动由 MainDeviceWorkflow 统一编排；本页只触发并消费结果
+                try { DeviceControlWork.Instance.StartSimulationLineLaser(); }
+                catch (Exception ex) { ShowSimErrorDialog("线激光流程启动失败: " + ex.Message); }
+            }
 
             if (!_simError)
             {
@@ -224,103 +225,37 @@ namespace AdaWeldSystem.Sub2UI
         /// <summary>关闭模拟时反向停止三套流程（逐包 try/catch，忽略非运行态的异常）</summary>
         private void StopSimulationFlows()
         {
-            try { LineLaserWorkflow.Instance.Stop(); } catch { }
+            try { DeviceControlWork.Instance.StopSimulationLineLaser(); } catch { }
             try { MotionControlWorkflow.Instance.Stop(); } catch { }
             // 健康巡检已集成到 MonitorCameraWorkflow 中，无需单独停止
         }
 
         /// <summary>
-        /// 开启线激光流程（事件驱动，规避异步初始化竞争）：
-        ///   - 若线激光为 Uninitialized：订阅 StateChanged，置挂起标记，调用 Initialize（后台线程转 Standby）；
-        ///     待 StateChanged 上报 Standby 时回到 UI 线程调用 Start。
-        ///   - 若线激光已为 Standby：直接同步 Start（二次开启场景）。
+        /// 线激光状态变更回调（事件驱动，仅消费结果）：
+        ///   - 转 ErrorAborted：弹窗（需确认 Modal）+ 按钮转红色「清理异常」，等待用户清理；
+        ///   - 转 Stopping 且原因为「焊缝行程完成」：联动停止整段模拟并复位按钮。
+        /// （Standby→Start 的异步挂起启动已上收至 MainDeviceWorkflow.StartSimulationLineLaser，本页不再越权直驱线激光。）
         /// </summary>
-        private void StartLineLaserWithPending()
+        private void OnLineLaserStateChanged(object sender, WeldStatusChangedEventArgs e)
         {
-            var ll = LineLaserWorkflow.Instance;
-            try
+            if (e.NewStatus == SubDeviceWeldStatus.ErrorAborted)
             {
-                if (ll.Step == LineLaserWorkflowState.Uninitialized)
-                {
-                    _pendingSimStart = true;
-                    ll.Initialize();
-                }
-                else if (ll.Step == LineLaserWorkflowState.Standby)
-                {
-                    ll.Start();
-                }
-            }
-            catch (Exception ex)
-            {
-                ShowSimErrorDialog("线激光流程启动失败: " + ex.Message);
-                ClearPendingSimStart();
-            }
-        }
-
-        /// <summary>
-        /// 线激光状态变更回调（由后台初始化线程触发）：
-        ///   - 转 Standby 且存在挂起标记：回到 UI 线程启动工作流，并清理挂起标记/订阅；
-        ///   - 转 ErrorAborted：清理挂起标记/订阅，避免后台初始化完成误触发 Start。
-        /// </summary>
-        private void OnLineLaserStateChanged(object sender, WorkflowStepChangedEventArgs<LineLaserWorkflowState> e)
-        {
-            if (e.NewState == LineLaserWorkflowState.Standby)
-            {
-                if (_pendingSimStart)
-                {
-                    if (this.InvokeRequired)
-                        this.BeginInvoke(new Action(StartPendingLineLaser));
-                    else
-                        StartPendingLineLaser();
-                }
-            }
-            else if (e.NewState == LineLaserWorkflowState.ErrorAborted)
-            {
-                // 模拟流程中发生异常终止：清理挂起 + 弹窗（需确认 Modal）+ 按钮转红色「清理异常」，等待用户清理
-                ClearPendingSimStart();
+                // 模拟流程中发生异常终止：弹窗（需确认 Modal）+ 按钮转红色「清理异常」，等待用户清理
                 string errMsg = string.Format("模拟流程异常终止：{0}", string.IsNullOrEmpty(e.Reason) ? "未知原因" : e.Reason);
                 if (this.InvokeRequired)
                     this.BeginInvoke(new Action<string>(m => ShowSimErrorDialog(m)), errMsg);
                 else
                     ShowSimErrorDialog(errMsg);
             }
-            else if (e.NewState == LineLaserWorkflowState.Stopping
+            else if (e.NewStatus == SubDeviceWeldStatus.Stopping
                 && e.Reason != null && e.Reason.Contains("焊缝行程完成"))
             {
                 // 焊缝行程完成（正常停止）：联动停止整段模拟并复位按钮
-                ClearPendingSimStart();
                 if (this.InvokeRequired)
                     this.BeginInvoke(new Action(StopSimOnWeldComplete));
                 else
                     StopSimOnWeldComplete();
             }
-        }
-
-        /// <summary>回到 UI 线程启动线激光工作流（挂起场景），并清理挂起状态</summary>
-        private void StartPendingLineLaser()
-        {
-            try
-            {
-                // 守卫：用户可能在初始化期间点击停止（DisableSimulation），此时放弃启动避免误进入流程
-                if (!MainDeviceWorkflow.Instance.IsSimulationEnabled)
-                    return;
-                LineLaserWorkflow.Instance.Start();
-            }
-            catch (Exception ex)
-            {
-                ShowSimErrorDialog("线激光流程启动失败(挂起): " + ex.Message);
-            }
-            finally
-            {
-                ClearPendingSimStart();
-            }
-        }
-
-        /// <summary>清理挂起标记（不再在此退订 StateChanged：状态监听现已贯穿整个模拟流程生命周期，
-        /// 由 UnsubscribeLineLaserEvents 在停止/清理/焊缝完成时显式退订）</summary>
-        private void ClearPendingSimStart()
-        {
-            _pendingSimStart = false;
         }
 
         /// <summary>模拟异常统一提示（需用户确认）：记录日志 + 在 UI 线程弹出 Modal 错误对话框 + 按钮转红色「清理异常」。
@@ -357,10 +292,10 @@ namespace AdaWeldSystem.Sub2UI
         /// <summary>停止原因确认信息：汇总各流程/设备最终状态，给出「人话」式停止原因（区别于底层「状态迁移」调试日志）。</summary>
         private void LogSimStopSummary(string reason)
         {
-            var ll = LineLaserWorkflow.Instance.Step;
-            var v3 = MotionControlWorkflow.Instance.Step;
-            var mon = MonitorCameraWorkflow.Instance.Step;
-            var sim = MainDeviceWorkflow.Instance;
+            var ll = LineLaserWorkflow.Instance.WeldStatus;
+            var v3 = MotionControlWorkflow.Instance.WeldStatus;
+            var mon = MonitorCameraWorkflow.Instance.WeldStatus;
+            var sim = DeviceControlWork.Instance;
             string simState = sim.IsSimulationEnabled ? string.Format("运行中({0})", sim.CurrentMode) : "已关闭";
             string summary = string.Format(
                 "模拟测试已停止 | 原因：{0} | 线激光：{1} | V3跟踪：{2} | 监控：{3} | 模拟模式：{4}",
@@ -371,13 +306,13 @@ namespace AdaWeldSystem.Sub2UI
         /// <summary>订阅线激光状态变更（贯穿整个模拟流程生命周期）</summary>
         private void SubscribeLineLaserEvents()
         {
-            LineLaserWorkflow.Instance.StateChanged += OnLineLaserStateChanged;
+            LineLaserWorkflow.Instance.WeldStatusChanged += OnLineLaserStateChanged;
         }
 
         /// <summary>取消线激光状态变更订阅</summary>
         private void UnsubscribeLineLaserEvents()
         {
-            LineLaserWorkflow.Instance.StateChanged -= OnLineLaserStateChanged;
+            LineLaserWorkflow.Instance.WeldStatusChanged -= OnLineLaserStateChanged;
         }
 
         /// <summary>设置模拟流程按钮三态：开启 / 停止 / 清理异常（红色背景）。
@@ -419,12 +354,11 @@ namespace AdaWeldSystem.Sub2UI
         {
             UnsubscribeLineLaserEvents();
             StopSimulationFlows();
-            try { LineLaserWorkflow.Instance.Reset(); } catch (Exception ex)
+            try { DeviceControlWork.Instance.ResetSimulationLineLaser(); } catch (Exception ex)
             {
                 GlobalCommData.ShowLog("模拟流程", "焊缝完成后复位工作流失败: " + ex.Message, MessageLevel.Error);
             }
-            ClearPendingSimStart();
-            MainDeviceWorkflow.Instance.DisableSimulation();
+            DeviceControlWork.Instance.DisableSimulation();
             ShowSimStopMessage("焊缝行程完成");
             LogSimStopSummary("焊缝行程完成");
             SetSimButtonMode(SimButtonMode.Start);
@@ -436,7 +370,6 @@ namespace AdaWeldSystem.Sub2UI
         private void CleanupSimError()
         {
             UnsubscribeLineLaserEvents();
-            ClearPendingSimStart();
             try
             {
                 StopSimulationFlows();
@@ -447,7 +380,7 @@ namespace AdaWeldSystem.Sub2UI
             }
             try
             {
-                LineLaserWorkflow.Instance.Reset();
+                DeviceControlWork.Instance.ResetSimulationLineLaser();
             }
             catch (Exception ex)
             {
@@ -455,7 +388,7 @@ namespace AdaWeldSystem.Sub2UI
             }
             try
             {
-                MainDeviceWorkflow.Instance.DisableSimulation();
+                DeviceControlWork.Instance.DisableSimulation();
             }
             catch (Exception ex)
             {

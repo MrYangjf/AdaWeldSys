@@ -1,4 +1,4 @@
-﻿﻿using System;
+﻿using System;
 using System.Threading;
 using AdaWeldSystem.Comm;
 using AdaWeldSystem.MainDeviceControl.DeviceState;
@@ -9,10 +9,8 @@ using AdaWeldSystem.ProductFileManager;
 
 namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
 {
-    using DeviceState = AdaWeldSystem.MainDeviceControl.DeviceState.DeviceState;
-
     /// <summary>
-    /// 运动控制工作流（单例）：继承统一泛型基类 DeviceWorkflowBase&lt;LaserCamBoxWorkflowState&gt;。
+    /// 运动控制工作流（单例）：继承统一非泛型基类 DeviceWorkflowBase（新主控设计）。
     /// CAMBOX 跟踪归入运控，由本类统一承载。
     /// 硬件级实时焊缝跟踪：CAMBOX 电子凸轮由硬件总线完成，PC 侧仅做启停编排与轨迹规划。
     ///
@@ -33,7 +31,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
     /// 需要跟踪点/跟踪异常的订阅方直接订阅 Tracker 属性暴露的 CamBoxTracker。
     /// 非 UI 类，释放走基类 Dispose → 子类 DisposeManaged 钩子（ADR-001：非 UI 类不走 DisposeComponents）。
     /// </summary>
-    public class MotionControlWorkflow : DeviceWorkflowBase<LaserCamBoxWorkflowState>
+    public class MotionControlWorkflow : DeviceWorkflowBase
     {
         #region 常量
 
@@ -61,11 +59,17 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         private EncoderAxis _encoderAxis;
         private RSIPositionBuffer _positionBuffer;
 
-        // 流程态 _step 由泛型基类承载；本类仅持 Idle 两义区分标记
+        /// <summary>私有相位（取代旧基类 _step，仅驱动 FlowProcess 与可观测性）。</summary>
+        private LaserCamBoxWorkflowState _phase = LaserCamBoxWorkflowState.Idle;
+
+        // 本类仅持 Idle 两义区分标记
         /// <summary>是否已完成初始化（用于区分 Idle 是"未连接就绪"还是"已连接就绪"）。</summary>
         private volatile bool _initialized;
 
         private readonly object _lock = new object();
+
+        /// <summary>手动连接/断开线程是否进行中（防重入）。</summary>
+        private volatile bool _manualBusy;
 
         #endregion
 
@@ -96,8 +100,8 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         {
             get
             {
-                return _step == LaserCamBoxWorkflowState.Tracking
-                    || _step == LaserCamBoxWorkflowState.WaitingForMaster;
+                return _phase == LaserCamBoxWorkflowState.Tracking
+                    || _phase == LaserCamBoxWorkflowState.WaitingForMaster;
             }
         }
 
@@ -106,10 +110,10 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         {
             get
             {
-                return _step == LaserCamBoxWorkflowState.WaitingForMaster
-                    || _step == LaserCamBoxWorkflowState.Tracking
-                    || _step == LaserCamBoxWorkflowState.Paused
-                    || _step == LaserCamBoxWorkflowState.Stopping;
+                return _phase == LaserCamBoxWorkflowState.WaitingForMaster
+                    || _phase == LaserCamBoxWorkflowState.Tracking
+                    || _phase == LaserCamBoxWorkflowState.Paused
+                    || _phase == LaserCamBoxWorkflowState.Stopping;
             }
         }
 
@@ -117,7 +121,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
 
         #region 构造函数
 
-        private MotionControlWorkflow() : base(LaserCamBoxWorkflowState.Idle)
+        private MotionControlWorkflow()
         {
             _tracker = new CamBoxTracker();
             _encoderAxis = new EncoderAxis();
@@ -133,6 +137,51 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         #endregion
 
         #region 私有函数
+
+        /// <summary>相位 → 焊接过程态映射（取代旧基类 MapToDeviceState）。</summary>
+        /// <param name="step">运控流程态</param>
+        /// <returns>对应焊接过程态</returns>
+        private static SubDeviceWeldStatus MapWeldStatus(LaserCamBoxWorkflowState step)
+        {
+            switch (step)
+            {
+                case LaserCamBoxWorkflowState.Error:
+                    return SubDeviceWeldStatus.ErrorAborted;
+                case LaserCamBoxWorkflowState.Idle:
+                    return SubDeviceWeldStatus.Standby;
+                default:
+                    // Initializing / WaitingForMaster / Tracking / Paused / Stopping 均为进程态
+                    return SubDeviceWeldStatus.Working;
+            }
+        }
+
+        /// <summary>刷新相位并映射为对外焊接过程态。</summary>
+        /// <remarks>等价旧基类 SetStep + MapToDeviceState + OnStepChanged。</remarks>
+        /// <param name="step">目标相位</param>
+        /// <param name="reason">切换原因（纯文本，无符号）</param>
+        private void SetStep(LaserCamBoxWorkflowState step, string reason)
+        {
+            _phase = step;
+            SetWeldStatus(MapWeldStatus(step), reason);
+            switch (step)
+            {
+                case LaserCamBoxWorkflowState.WaitingForMaster:
+                    GoStep(StepResetEncoder);
+                    break;
+                case LaserCamBoxWorkflowState.Tracking:
+                    GoStep(StepTracking);
+                    break;
+                case LaserCamBoxWorkflowState.Paused:
+                    GoStep(StepPaused);
+                    break;
+                case LaserCamBoxWorkflowState.Stopping:
+                    GoStep(StepStopping);
+                    break;
+                default:
+                    GoStep(StepIdle);
+                    break;
+            }
+        }
 
         /// <summary>执行步 10：清零编码器轴（必须在 CAMBOX 启动前完成）。</summary>
         private void DoResetEncoder()
@@ -182,7 +231,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         }
 
         /// <summary>执行步 900：失败收尾三步走。</summary>
-        /// <remarks>置 Alarm 须经 SetStep 映射（禁手工赋值 State），再记日志与故障记录后回待机。</remarks>
+        /// <remarks>置 Alarm 须经 SetWeldStatus 映射（禁手工赋值 State），再记日志与故障记录后回待机。</remarks>
         private void DoFinishFail()
         {
             SetStep(LaserCamBoxWorkflowState.Error, FailReason);
@@ -191,7 +240,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             {
                 Time = DateTime.Now,
                 Device = Tag,
-                State = MapToDeviceState(_step),
+                State = MapWeldStatus(_phase),
                 Category = FaultCategory.Device,
                 ErrorCode = "MotionStepFail",
                 ParamSnapshot = string.Format("WorkStep={0} Reason={1}", FailStep, FailReason),
@@ -202,8 +251,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             GoStep(StepIdle);
         }
 
-        /// <summary>失败收尾统一入口：记录失败步号与原因后跳 900。</summary>
-        /// <summary>每拍刷新跟踪引擎与编码器状态，并把跟踪引擎状态同步为阶段态。</summary>
+        /// <summary>刷新跟踪引擎与编码器状态。</summary>
         /// <remarks>取代原独立监控线程 MonitorLoop（50Hz）。</remarks>
         private void UpdateTrackerStatus()
         {
@@ -220,21 +268,21 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             }
         }
 
-        /// <summary>将 CamBoxTracker 状态同步到工作流阶段态（执行步由 OnStepChanged 复位）。</summary>
+        /// <summary>将 CamBoxTracker 状态同步到工作流阶段态（执行步由 SetStep 复位）。</summary>
         private void SyncStateFromTracker()
         {
             switch (_tracker.State)
             {
                 case CamBoxTrackingState.Tracking:
-                    if (_step != LaserCamBoxWorkflowState.Tracking)
+                    if (_phase != LaserCamBoxWorkflowState.Tracking)
                         SetStep(LaserCamBoxWorkflowState.Tracking, "主轴开始运动");
                     break;
                 case CamBoxTrackingState.Paused:
-                    if (_step != LaserCamBoxWorkflowState.Paused)
+                    if (_phase != LaserCamBoxWorkflowState.Paused)
                         SetStep(LaserCamBoxWorkflowState.Paused, "激光丢帧暂停");
                     break;
                 case CamBoxTrackingState.Error:
-                    if (_step != LaserCamBoxWorkflowState.Error)
+                    if (_phase != LaserCamBoxWorkflowState.Error)
                         FailFlow("跟踪引擎异常");
                     break;
             }
@@ -262,7 +310,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         #region 公共函数
 
         /// <summary>初始化跟踪工作流。</summary>
-        /// <remarks>配置 CamBoxTracker、EncoderAxis、RSIPositionBuffer。 设备三态：成功置 Connect，失败置 Disconnect。</remarks>
+        /// <remarks>配置 CamBoxTracker、EncoderAxis、RSIPositionBuffer。成功置 State=Connected，失败置 State=Disconnected。</remarks>
         /// <param name="trackingConfig">CAMBOX 跟踪配置</param>
         /// <param name="encoderConfig">编码器轴配置</param>
         /// <param name="controllerHandle">正运动控制器句柄</param>
@@ -285,6 +333,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
                 {
                     Log("通讯编码器轴初始化失败", MessageLevel.Error);
                     SetStep(LaserCamBoxWorkflowState.Error, "编码器轴初始化失败");
+                    SetState(SubDeviceState.Disconnected, "编码器轴初始化失败");
                     return false;
                 }
 
@@ -293,6 +342,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
                 {
                     Log("CAMBOX 跟踪引擎初始化失败", MessageLevel.Error);
                     SetStep(LaserCamBoxWorkflowState.Error, "CAMBOX 初始化失败");
+                    SetState(SubDeviceState.Disconnected, "CAMBOX 初始化失败");
                     return false;
                 }
 
@@ -302,6 +352,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
                 Log("跟踪工作流初始化完成");
                 _initialized = true;
                 SetStep(LaserCamBoxWorkflowState.Idle, "初始化完成");
+                SetState(SubDeviceState.Connected, "运控初始化完成");
                 return true;
             }
         }
@@ -332,7 +383,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             lock (_lock)
             {
                 if (immediate && _tracker != null) _tracker.Stop(true);
-                if (_step == LaserCamBoxWorkflowState.Idle || _step == LaserCamBoxWorkflowState.Error) return;
+                if (_phase == LaserCamBoxWorkflowState.Idle || _phase == LaserCamBoxWorkflowState.Error) return;
                 SetStep(LaserCamBoxWorkflowState.Stopping, "停止指令受理");
             }
         }
@@ -347,7 +398,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             return _tracker.AddTrajectoryPointWithTimestamp(laserOffset, laserTimestamp, _positionBuffer);
         }
 
-        /// <summary>添加 RSI 位置采样（由 RSICommunication 每 4ms 调用）</summary>
+        /// <summary>添加 RSI 位置采样。</summary>
         /// <param name="timestamp">高精度时间戳（微秒）</param>
         /// <param name="position">ToolRelX 位置（mm）</param>
         /// <param name="velocity">瞬时速度（mm/s）</param>
@@ -357,8 +408,8 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         }
 
         /// <summary>流程复位：清空凸轮表、复位统计、状态回到 Idle。</summary>
-        /// <remarks>由基类公共入口 Reset 调用（ADR-048）。</remarks>
-        protected override void ResetFlow()
+        /// <returns>受理返回 true</returns>
+        public override bool ResetProcess()
         {
             lock (_lock)
             {
@@ -366,7 +417,22 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
                 _positionBuffer.Clear();
                 _encoderAxis.Reset();
                 SetStep(LaserCamBoxWorkflowState.Idle, "复位");
+                return true;
             }
+        }
+
+        /// <summary>清除报警态并回就绪。</summary>
+        public override void ClearStatus()
+        {
+            IsAlarm = false;
+            ResetWorkStep();
+            SetStep(LaserCamBoxWorkflowState.Idle, "状态清除");
+        }
+
+        /// <summary>复位时间：重置本流程工作时间计时。</summary>
+        public override void ResetWorkTime()
+        {
+            SetWorkTimeStart();
         }
 
         #endregion
@@ -380,62 +446,6 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         {
             // TODO 私有逻辑待实现：基于机器人 PreWeldPose 执行 Y 轴偏移跟踪并回报结果
             return true;
-        }
-
-        #endregion
-
-        #region 流程态 → 设备四态映射
-
-        /// <summary>流程态 → 设备四态映射。</summary>
-        /// <remarks>未初始化 Idle（未 Initialize 前）→ Disconnect 初始化中 Initializing          → Work（初始化进行中，属进程态） 就绪 Idle（初始化完成后）       → Connect 进程中 WaitingForMaster/Tracking/Paused/Stopping → Work 报警 Error                     → Alarm 注：Idle 一态两义（未连接就绪 / 已连接就绪），故按初始化标记 _initialized 区分。</remarks>
-        /// <param name="step">运控流程态</param>
-        /// <returns>对应的设备四态</returns>
-        protected override DeviceState MapToDeviceState(LaserCamBoxWorkflowState step)
-        {
-            switch (step)
-            {
-                case LaserCamBoxWorkflowState.Initializing:
-                case LaserCamBoxWorkflowState.WaitingForMaster:
-                case LaserCamBoxWorkflowState.Tracking:
-                case LaserCamBoxWorkflowState.Paused:
-                case LaserCamBoxWorkflowState.Stopping:
-                    return DeviceState.Work;
-                case LaserCamBoxWorkflowState.Error:
-                    return DeviceState.Alarm;
-                default:
-                    // Idle：初始化完成即为已连接就绪，否则为未连接
-                    return _initialized ? DeviceState.Connect : DeviceState.Disconnect;
-            }
-        }
-
-        #endregion
-
-        #region 阶段态变更钩子（阶段态切换时复位执行步到该阶段入口）
-
-        /// <summary>阶段态切换时把执行步复位到该阶段入口步。</summary>
-        /// <remarks>注意：本方法在 SetStep 同步路径内执行，调用处 SetStep 后须立即 return。</remarks>
-        /// <param name="e">流程态变更参数</param>
-        protected override void OnStepChanged(WorkflowStepChangedEventArgs<LaserCamBoxWorkflowState> e)
-        {
-            base.OnStepChanged(e);
-            switch (e.NewState)
-            {
-                case LaserCamBoxWorkflowState.WaitingForMaster:
-                    GoStep(StepResetEncoder);
-                    break;
-                case LaserCamBoxWorkflowState.Tracking:
-                    GoStep(StepTracking);
-                    break;
-                case LaserCamBoxWorkflowState.Paused:
-                    GoStep(StepPaused);
-                    break;
-                case LaserCamBoxWorkflowState.Stopping:
-                    GoStep(StepStopping);
-                    break;
-                default:
-                    GoStep(StepIdle);
-                    break;
-            }
         }
 
         #endregion
@@ -483,43 +493,23 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
 
         #endregion
 
-        #region 抽象生命周期方法（映射至既有公共方法）
+        #region 抽象生命周期方法（新主控设计 6 契约）
 
-        /// <summary>初始化流程。</summary>
-        /// <remarks>连接运控（正运动/PLC）；当前为骨架实现。</remarks>
-        /// <returns>初始化成功返回 true</returns>
-        protected override bool InitializeFlow()
+        /// <summary>开启连接（受理式）。</summary>
+        /// <returns>已初始化受理返回 true，未初始化返回 false</returns>
+        public override bool ConnectOn()
         {
-            // TODO 私有逻辑待实现：连接运动控制器并自检（含 CAMBOX 参数装配）
-            return false;
+            if (!_initialized) return false;
+            SetState(SubDeviceState.Connected, "运控已连接");
+            StartRunLoop();
+            return true;
         }
 
-        /// <summary>手动开 = 连接运控。骨架：私有逻辑待实现。</summary>
-        protected override void ManualOn()
-        {
-            // TODO 私有逻辑待实现：手动连接运控
-        }
-
-        /// <summary>手动关 = 断开运控。</summary>
-        protected override void ManualOff()
+        /// <summary>关闭连接：停止跟踪并置 Disconnected（非阻塞）。</summary>
+        public override void ConnectOff()
         {
             Stop(false);
-        }
-
-        /// <summary>自动运行 = 阻塞式执行跟踪序列（ADR-048）。</summary>
-        /// <remarks>序列：Start 受理 → 阻塞等待流程回 Idle/Error（ WaitingForMaster→Tracking→…→Stopping→Idle
-        /// 由监听线程 FlowProcess 按执行步推进）。中止时立即停 CAMBOX 并复位从轴。</remarks>
-        protected override void AutoRunFlow()
-        {
-            if (!Start())
-            {
-                // 监听线程在 Idle 不活跃（900 收尾步不会被消费），受理失败只记日志
-                Log("自动运行启动受理失败 未初始化", MessageLevel.Error);
-                return;
-            }
-            AutoWait(() => _step == LaserCamBoxWorkflowState.Idle
-                || _step == LaserCamBoxWorkflowState.Error, 0);
-            if (IsAutoAbortRequested) Stop(true);
+            SetState(SubDeviceState.Disconnected, "运控断开");
         }
 
         #endregion
@@ -543,6 +533,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
                 _encoderAxis = null;
                 _positionBuffer = null;
                 _initialized = false;
+                SetState(SubDeviceState.Disconnected, "运控释放");
                 SetStep(LaserCamBoxWorkflowState.Idle, "Dispose 释放资源");
             }
         }

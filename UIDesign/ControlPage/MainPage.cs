@@ -1,4 +1,5 @@
-using AdaWeldSystem.Comm;
+﻿using AdaWeldSystem.Comm;
+using AdaWeldSystem.MainDeviceControl.DeviceState;
 using AdaWeldSystem.MainDeviceControl.DeviceWorkflow;
 using AdaWeldSystem.WeldParamControl;
 using AdaWeldSystem.LineLaserCamApi;
@@ -409,50 +410,41 @@ namespace AdaWeldSystem.Sub1UI
         }
 
         /// <summary>
-        /// 线激光是否运行中
+        /// 线激光是否已连接（用于快捷开关徽标绿勾/红叉）
         /// </summary>
-        /// <remarks>依据工作流实例状态判断，不读 CameraSelector.ConnectionState（初始化已连 socket 但激光关闭，避免误判为已连接）；开机默认 Standby（激光/传感器关闭）→ 关闭。</remarks>
-        /// <returns>运行中返回 true</returns>
+        /// <remarks>基于设备连接态 SubDeviceState：Connected 视为已连接（绿勾白底），Disconnected 视为未连接（红叉灰底）。
+        /// 与开关按钮的连接语义一致，不再依据焊接过程态 PreWork/Working 判断。</remarks>
+        /// <returns>已连接返回 true</returns>
         private bool IsLineLaserRunning()
         {
-            var st = LineLaserWorkflow.Instance.Step;
-            return st == LineLaserWorkflowState.Starting || st == LineLaserWorkflowState.Working;
+            var st = LineLaserWorkflow.Instance.State;
+            return st == SubDeviceState.Connected;
         }
 
         /// <summary>
-        /// 切换线激光运行态
+        /// 切换线激光连接态（设备开关语义：只关心连接/断开，与流程状态无关）
         /// </summary>
-        /// <remarks>仅向原工作流实例发起 Start/Stop/Reset，实际连接/开激光在实例自身后台线程执行，不阻塞 UI 线程。</remarks>
+        /// <remarks>基于设备连接态 SubDeviceState 判断：Disconnected → ConnectOn 连接；Connected → ConnectOff 断开；报警态 → 提示复位（IsAlarm）。
+        /// 走 LineLaserWorkflow 的 public ConnectOn/ConnectOff 契约入口（内部自起后台线程，非阻塞），不越权直驱子类 Start/Stop/Reset。</remarks>
         private void ToggleLineLaserConnection()
         {
             var wf = LineLaserWorkflow.Instance;
-            var st = wf.Step;
             try
             {
-                if (st == LineLaserWorkflowState.Standby)
+                if (wf.IsAlarm)
                 {
-                    // 关机态→请求启动：实例后台线程执行 PreWork/Starting（开传感器+激光），不阻塞 UI
-                    wf.Start();
-                }
-                else if (st == LineLaserWorkflowState.PreWork
-                      || st == LineLaserWorkflowState.Starting
-                      || st == LineLaserWorkflowState.Working
-                      || st == LineLaserWorkflowState.Stopping)
-                {
-                    // 运行态→请求停机：实例后台线程安全关闭激光/传感器，不阻塞 UI
-                    wf.Stop();
-                }
-                else if (st == LineLaserWorkflowState.ManualStopped
-                      || st == LineLaserWorkflowState.ErrorAborted)
-                {
-                    // 已停机/异常→重新初始化（实例后台线程），回到 Standby 后方可再次启动
-                    wf.Reset();
-                }
-                else
-                {
+                    // 报警态 → 提示复位（报警清除/复位由 ClearStatus 契约落地）
                     AntdUI.Message.info(this.FindForm() ?? System.Windows.Forms.Form.ActiveForm,
-                        "线激光未就绪，无法切换（当前状态：" + st + "）");
+                        "线激光处于报警态，请先复位");
+                    return;
                 }
+
+                if (wf.State == SubDeviceState.Connected)
+                    // 已连接 → 断开（后台线程执行，回 Standby → State=Disconnected），不阻塞 UI
+                    wf.ConnectOff();
+                else
+                    // 未连接 → 连接（后台线程执行，置 Standby → State=Connected），不阻塞 UI
+                    wf.ConnectOn();
             }
             catch (Exception ex)
             {

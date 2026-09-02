@@ -1,4 +1,4 @@
-using AdaWeldSystem.Comm;
+﻿using AdaWeldSystem.Comm;
 using AdaWeldSystem.MainDeviceControl.DeviceWorkflow;
 using AdaWeldSystem.MainDeviceControl.DeviceState;
 using AdaWeldSystem.EmguALG;
@@ -40,8 +40,8 @@ namespace AdaWeldSystem.Sub2UI
             btnParamEdit.Click += btnParamEdit_Click;
             swDisplay.CheckedChanged += swDisplay_CheckedChanged;
 
-            // 订阅线激光工作流状态机（StateChanged），用状态机 State 判断自动/空闲，不新增 bool
-            LineLaserWorkflow.Instance.StateChanged += OnWorkflowStateChanged;
+            // 订阅线激光工作流焊接过程态（WeldStatusChanged），用 WeldStatus 判断自动/空闲，不新增 bool
+            LineLaserWorkflow.Instance.WeldStatusChanged += OnWorkflowStateChanged;
 
             // 切换到英莱相机并获取实例（不持久化，仅当前会话生效）
             CameraSelector.SelectIntelligentLaser();
@@ -121,7 +121,7 @@ namespace AdaWeldSystem.Sub2UI
 
             // 仅手动/空闲模式下在本页绘制 Mat 和结果表；
             // 自动模式下轮廓数据和结果通过 ContourDataReady 事件外传（ScottPlot + 自动调整）。
-            if (IsWorkflowRunning(LineLaserWorkflow.Instance.Step)) return;
+            if (IsWorkflowRunning(LineLaserWorkflow.Instance.WeldStatus)) return;
 
             // 手动模式下 swDisplay 控制是否绘制 Mat（允许只看结果表不看画面）
             if (swDisplay.Checked)
@@ -187,13 +187,13 @@ namespace AdaWeldSystem.Sub2UI
         private void btnConnect_Click(object sender, EventArgs e)
         {
             if (_ilCamera == null) return;
-            // ADR-035 + ADR-041：手动连接/断开同步驱动「线激光」工作流（英莱是线激光的厂商实例），
-            // 不在此维护连接布尔；设备三态由 LineLaserWorkflow 的 ManualStart/ManualStop 承载。
+            // ADR-035 + ADR-041：手动连接/断开驱动「线激光」工作流（英莱是线激光的厂商实例），
+            // 不在此维护连接布尔；连接态由 LineLaserWorkflow 的 ConnectOn/ConnectOff 承载（内部自起后台线程，非阻塞）。
             if (_ilCamera.IsConnected)
             {
                 _ilCamera.DisconnectManual();
                 // 线激光设备态 → Disconnect（手动断开）
-                LineLaserWorkflow.Instance.ManualStop();
+                LineLaserWorkflow.Instance.ConnectOff();
             }
             else
             {
@@ -206,9 +206,9 @@ namespace AdaWeldSystem.Sub2UI
                 bool ok = _ilCamera.ConnectManual(ip);
                 // 连接结果 → Connect(连接就绪) / Disconnect(连接失败)
                 if (ok)
-                    LineLaserWorkflow.Instance.ManualStart();
+                    LineLaserWorkflow.Instance.ConnectOn();
                 else
-                    LineLaserWorkflow.Instance.ManualStop();
+                    LineLaserWorkflow.Instance.ConnectOff();
 
                 if (ok)
                 {
@@ -473,21 +473,21 @@ namespace AdaWeldSystem.Sub2UI
 
         #region UI 状态
 
-        private static bool IsWorkflowRunning(LineLaserWorkflowState state)
+        private static bool IsWorkflowRunning(SubDeviceWeldStatus state)
         {
             switch (state)
             {
-                case LineLaserWorkflowState.PreWork:
-                case LineLaserWorkflowState.Starting:
-                case LineLaserWorkflowState.Working:
-                case LineLaserWorkflowState.Stopping:
+                case SubDeviceWeldStatus.PreWork:
+                case SubDeviceWeldStatus.Starting:
+                case SubDeviceWeldStatus.Working:
+                case SubDeviceWeldStatus.Stopping:
                     return true;
                 default:
                     return false;
             }
         }
 
-        private void OnWorkflowStateChanged(object sender, WorkflowStepChangedEventArgs<LineLaserWorkflowState> e)
+        private void OnWorkflowStateChanged(object sender, WeldStatusChangedEventArgs e)
         {
             if (IsDisposed || Disposing) return;
             if (InvokeRequired)
@@ -506,7 +506,7 @@ namespace AdaWeldSystem.Sub2UI
 
         private void UpdateModeUiCore()
         {
-            bool running = IsWorkflowRunning(LineLaserWorkflow.Instance.Step);
+            bool running = IsWorkflowRunning(LineLaserWorkflow.Instance.WeldStatus);
 
             // 设置回调模式：自动运行时关闭 Mat 生成和 UI 事件，节省 CPU/GPU；
             // 空闲/手动模式下开启 Mat 生成和 UI 刷新，供调试页面显示。
@@ -582,7 +582,7 @@ namespace AdaWeldSystem.Sub2UI
             btnCaptureCamera.ExtraMouseDown = sensorOn;
         }
 
-        private void OnIlStateChanged(object sender, DeviceStateChangedEventArgs e)
+        private void OnIlStateChanged(object sender, SubDeviceStateChangedEventArgs e)
         {
             if (IsDisposed || Disposing) return;
             if (InvokeRequired)
@@ -595,8 +595,8 @@ namespace AdaWeldSystem.Sub2UI
 
             // 初始化完成（从 Disconnect 进入 Connect）时，完整同步硬件状态到 UI
             // （Job 列表、帧率选择、激光/相机开关状态等），解决「初始化完 UI 仍不同步」问题
-            if (e.OldState == DeviceState.Disconnect
-                && e.NewState == DeviceState.Connect)
+            if (e.OldState == SubDeviceState.Disconnected
+                && e.NewState == SubDeviceState.Connected)
             {
                 RefreshUi(RefreshUiScope.Hardware);
             }
@@ -617,7 +617,7 @@ namespace AdaWeldSystem.Sub2UI
         {
             // 取消订阅（避免事件源持有已销毁页面引用）
             swDisplay.CheckedChanged -= swDisplay_CheckedChanged;
-            LineLaserWorkflow.Instance.StateChanged -= OnWorkflowStateChanged;
+            LineLaserWorkflow.Instance.WeldStatusChanged -= OnWorkflowStateChanged;
             LineLaserWorkflow.Instance.StateSwitched -= OnIlStateChanged;
             if (_ilCamera != null)
             {
@@ -636,10 +636,10 @@ namespace AdaWeldSystem.Sub2UI
             if (_ilCamera != null && _ilCamera.IsConnected)
             {
                 _ilCamera.DisconnectManual();
-                DeviceState st = LineLaserWorkflow.Instance.State;
-                if (st == DeviceState.Connect || st == DeviceState.Work)
+                SubDeviceState st = LineLaserWorkflow.Instance.State;
+                if (st == SubDeviceState.Connected)
                 {
-                    LineLaserWorkflow.Instance.ManualStop();
+                    LineLaserWorkflow.Instance.ConnectOff();
                 }
             }
         }

@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Threading;
 using AdaWeldSystem.Comm;
 using AdaWeldSystem.MainDeviceControl.DeviceState;
 using AdaWeldSystem.MainDeviceControl.FlowState;
@@ -8,10 +9,8 @@ using AdaWeldSystem.ProductFileManager;
 
 namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
 {
-    using DeviceState = AdaWeldSystem.MainDeviceControl.DeviceState.DeviceState;
-
     /// <summary>焊接工艺控制流程状态（业务工作态）：随焊接工艺业务变化。</summary>
-    /// <remarks>· Uninitialized 未初始化（尚未载入工艺参数） · Initializing  初始化中（载入工艺参数/查找表） · Standby       待机（工艺参数就绪，等待焊接开始） · Computing     计算中（根据机器人信息 + 线激光结果计算工艺参数） · Outputting    下发中（计算结果下发至机器人/激光器） · Holding       保持中（连续失败超阈值，暂停调整） · ErrorAborted  异常终止</remarks>
+    /// <remarks>· Uninitialized 未初始化（尚未载入工艺参数） · Initializing 初始化中（载入工艺参数/查找表） · Standby 待机（工艺参数就绪，等待焊接开始） · Computing 计算中（根据机器人信息 + 线激光结果计算工艺参数） · Outputting 下发中（计算结果下发至机器人/激光器） · Holding 保持中（连续失败超阈值，暂停调整） · ErrorAborted 异常终止</remarks>
     public enum WeldParamControlWorkflowState
     {
         Uninitialized = 0,
@@ -52,7 +51,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
     }
 
     /// <summary>
-    /// 焊接工艺控制工作流（单例）：继承统一泛型基类 DeviceWorkflowBase&lt;WeldParamControlWorkflowState&gt;。
+    /// 焊接工艺控制工作流（单例）：继承统一非泛型基类 DeviceWorkflowBase（新主控设计）。
     ///
     /// 定位：本工作流**不是有连接动作的设备**，而是设备内部的一个「控制焊接工艺的流程」。
     /// 核心作用：接收机器人信息（RobotX 坐标等）+ 线激光结果信息（焊缝宽度/焊缝特征），
@@ -66,20 +65,16 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
     ///   4. 本工作流调用 WeldProcess.TriggerAdjustment()（无参，用上一步暂存值）
     ///      完成滑动平滑 + 查找表匹配 + 灵敏度判定
     ///   5. 输出 WeldParamOutput（功率/送丝/速度/摆幅）→ 下发机器人
-    /// 注：英莱回调本就含特征点与宽度，本工作流补的是「计算后下发到机器人」这一环。
     ///
-    /// 设备态映射（四态）——本流程无连接动作，按业务进度映射：
-    ///   Uninitialized → Disconnect（工艺参数未就绪）
-    ///   Standby       → Connect（工艺参数就绪）
-    ///   Initializing/Computing/Outputting/Holding → Work（业务进程中）
-    ///   ErrorAborted  → Alarm
+    /// 新主控设计：原设备四态映射取消，对外焊接过程态统一经 SetWeldStatus(SubDeviceWeldStatus) 承载；
+    /// 连接态经 ConnectOn/ConnectOff 联动 State（本流程无物理连接，Connect 表示工艺参数就绪）。
     ///
     /// 步骤驱动（ADR-047）：本流程是「被外部逐帧触发的一次性计算 + 下发」，不是自推进流程，
     /// 故采用命令变量模式 —— ComputeAndOutput 只置 _pendingCompute，业务由监听线程按
     /// 执行步 10 计算 → 20 下发 → 800 成功收尾 / 900 失败收尾 完成。
     /// 上一轮未完成时新触发会被丢弃，天然实现高频调用下的节流。
     /// </summary>
-    public class WeldParamControlWorkflow : DeviceWorkflowBase<WeldParamControlWorkflowState>
+    public class WeldParamControlWorkflow : DeviceWorkflowBase
     {
         #region 常量
 
@@ -95,6 +90,12 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         #region 私有变量
 
         private readonly string _tag = "焊接工艺控制工作流";
+
+        /// <summary>私有相位（取代旧基类 _step，仅驱动 FlowProcess 与可观测性）。</summary>
+        private WeldParamControlWorkflowState _phase = WeldParamControlWorkflowState.Uninitialized;
+
+        /// <summary>手动连接/断开线程是否进行中（防重入）。</summary>
+        private volatile bool _manualBusy;
 
         /// <summary>命令变量：外部触发一次工艺计算与下发（只置位，业务由监听线程消费）。</summary>
         private volatile bool _pendingCompute;
@@ -118,7 +119,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         public override string StateName => _tag;
 
         /// <summary>工艺参数是否已就绪（等价于设备态 Connect）。</summary>
-        public bool IsParamReady => _step == WeldParamControlWorkflowState.Standby;
+        public bool IsParamReady => _phase == WeldParamControlWorkflowState.Standby;
 
         /// <summary>连续失败次数（直通 WeldProcess）。</summary>
         public int ConsecutiveFailureCount => WeldProcess.Instance.ConsecutiveFailureCount;
@@ -130,7 +131,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
 
         #region 构造函数
 
-        private WeldParamControlWorkflow() : base(WeldParamControlWorkflowState.Uninitialized) { }
+        private WeldParamControlWorkflow() { }
 
         #endregion
 
@@ -188,6 +189,46 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             }
         }
 
+        /// <summary>相位 → 焊接过程态映射（取代旧基类 MapToDeviceState）。</summary>
+        /// <param name="step">相位</param>
+        /// <returns>对应焊接过程态</returns>
+        private static SubDeviceWeldStatus MapWeldStatus(WeldParamControlWorkflowState step)
+        {
+            switch (step)
+            {
+                case WeldParamControlWorkflowState.Standby:
+                case WeldParamControlWorkflowState.Uninitialized:
+                    return SubDeviceWeldStatus.Standby;
+                case WeldParamControlWorkflowState.ErrorAborted:
+                    return SubDeviceWeldStatus.ErrorAborted;
+                default:
+                    // Initializing / Computing / Outputting / Holding 均为业务进程中
+                    return SubDeviceWeldStatus.Working;
+            }
+        }
+
+        /// <summary>刷新相位并映射为对外焊接过程态。</summary>
+        /// <remarks>等价旧基类 SetStep + MapToDeviceState + OnStepChanged：Computing→StepCompute，Outputting→StepOutput，其余→StepIdle。</remarks>
+        /// <param name="step">目标相位</param>
+        /// <param name="reason">切换原因（纯文本，无符号）</param>
+        private void SetStep(WeldParamControlWorkflowState step, string reason)
+        {
+            _phase = step;
+            SetWeldStatus(MapWeldStatus(step), reason);
+            switch (step)
+            {
+                case WeldParamControlWorkflowState.Computing:
+                    GoStep(StepCompute);
+                    break;
+                case WeldParamControlWorkflowState.Outputting:
+                    GoStep(StepOutput);
+                    break;
+                default:
+                    GoStep(StepIdle);
+                    break;
+            }
+        }
+
         /// <summary>执行步 10：工艺参数计算。</summary>
         /// <remarks>输入机器人 RobotX 与线激光焊缝特征，输出功率/送丝速度/焊接速度/摆幅。</remarks>
         private void DoCompute()
@@ -235,7 +276,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         }
 
         /// <summary>执行步 900：失败收尾三步走。</summary>
-        /// <remarks>置 Alarm 须经 SetStep 映射（禁手工赋值 State），再记日志与故障记录后回待机。</remarks>
+        /// <remarks>置 Alarm 须经 SetWeldStatus 映射（禁手工赋值 State），再记日志与故障记录后回待机。</remarks>
         private void DoFinishFail()
         {
             SetStep(WeldParamControlWorkflowState.ErrorAborted, FailReason);
@@ -244,7 +285,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             {
                 Time = DateTime.Now,
                 Device = _tag,
-                State = MapToDeviceState(_step),
+                State = MapWeldStatus(_phase),
                 Category = FaultCategory.Process,
                 ErrorCode = "WeldParamStepFail",
                 ParamSnapshot = string.Format("WorkStep={0} Reason={1}", WorkStep, FailReason),
@@ -259,7 +300,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
 
         #region 公共方法
 
-        /// <summary>载入工艺参数并进入待机（对应设备态 Connect）。</summary>
+        /// <summary>载入工艺参数并进入待机（对应焊接过程态 Standby）。</summary>
         /// <remarks>由主设备上电初始化或工艺参数切换时调用。</remarks>
         /// <returns>载入成功返回 true</returns>
         public bool LoadParameters()
@@ -297,7 +338,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         }
 
         /// <summary>
-        /// 本轮焊接结束，回到待机（对应设备态 Connect）。
+        /// 本轮焊接结束，回到待机（对应焊接过程态 Standby）。
         /// </summary>
         public void Complete()
         {
@@ -323,57 +364,9 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
 
         #endregion
 
-        #region 流程态 → 设备四态映射
-
-        /// <summary>阶段态转设备四态。</summary>
-        /// <remarks>本流程无连接动作，按业务进度映射。</remarks>
-        /// <param name="step">阶段态</param>
-        /// <returns>该阶段态对应的设备四态</returns>
-        protected override DeviceState MapToDeviceState(WeldParamControlWorkflowState step)
-        {
-            switch (step)
-            {
-                case WeldParamControlWorkflowState.Uninitialized:
-                    return DeviceState.Disconnect;
-                case WeldParamControlWorkflowState.Standby:
-                    return DeviceState.Connect;
-                case WeldParamControlWorkflowState.ErrorAborted:
-                    return DeviceState.Alarm;
-                default:
-                    // Initializing / Computing / Outputting / Holding 均为业务进程态
-                    return DeviceState.Work;
-            }
-        }
-
-        #endregion
-
-        #region 阶段态变更钩子（阶段态切换时复位执行步到该阶段入口）
-
-        /// <summary>阶段态切换时把执行步复位到该阶段入口步。</summary>
-        /// <remarks>注意：本方法在 SetStep 同步路径内执行，调用处 SetStep 后须立即 return。</remarks>
-        /// <param name="e">流程态变更参数</param>
-        protected override void OnStepChanged(WorkflowStepChangedEventArgs<WeldParamControlWorkflowState> e)
-        {
-            base.OnStepChanged(e);
-            switch (e.NewState)
-            {
-                case WeldParamControlWorkflowState.Computing:
-                    GoStep(StepCompute);
-                    break;
-                case WeldParamControlWorkflowState.Outputting:
-                    GoStep(StepOutput);
-                    break;
-                default:
-                    GoStep(StepIdle);
-                    break;
-            }
-        }
-
-        #endregion
-
         #region 执行步分派
 
-        /// <summary>单步分派（switch(WorkStep)），由监听线程按 10ms 节拍反复调用。</summary>
+        /// <summary>单步分派，由监听线程节拍驱动。</summary>
         /// <remarks>全部 case 无 Thread.Sleep / while 轮询。</remarks>
         protected override void FlowProcess()
         {
@@ -408,42 +401,94 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
 
         #endregion
 
-        #region 抽象生命周期方法
+        #region 抽象生命周期方法（新主控设计 6 契约）
 
-        /// <summary>初始化流程 = 载入工艺参数（对应设备态 Connect）。</summary>
-        /// <returns>初始化成功返回 true</returns>
-        protected override bool InitializeFlow()
+        /// <summary>开启连接并载入工艺参数。</summary>
+        /// <returns>受理返回 true，忙线返回 false</returns>
+        public override bool ConnectOn()
         {
-            return LoadParameters();
+            if (_manualBusy) return false;
+            _manualBusy = true;
+            var t = new Thread(() =>
+            {
+                try
+                {
+                    GlobalCommData.ShowLog(_tag, "手动连接开始", MessageLevel.Info);
+                    bool ok = LoadParameters();
+                    SetState(ok ? SubDeviceState.Connected : SubDeviceState.Disconnected,
+                        ok ? "工艺参数就绪" : "工艺参数载入失败");
+                    GlobalCommData.ShowLog(_tag, "手动连接完成", MessageLevel.Info);
+                }
+                catch (Exception ex)
+                {
+                    GlobalCommData.ShowLog(_tag, "手动连接异常 " + ex.Message, MessageLevel.Info);
+                }
+                finally
+                {
+                    _manualBusy = false;
+                }
+            })
+            {
+                Name = "WeldParamManualConnect",
+                IsBackground = true
+            };
+            t.Start();
+            return true;
         }
 
-        /// <summary>手动开 = 重新载入工艺参数。</summary>
-        protected override void ManualOn()
+        /// <summary>关闭连接：停止工艺计算并回待机（非阻塞）。</summary>
+        public override void ConnectOff()
         {
-            LoadParameters();
+            if (_manualBusy) return;
+            _manualBusy = true;
+            var t = new Thread(() =>
+            {
+                try
+                {
+                    GlobalCommData.ShowLog(_tag, "手动断开开始", MessageLevel.Info);
+                    SetStep(WeldParamControlWorkflowState.Standby, "手动停止焊接工艺控制");
+                    SetState(SubDeviceState.Disconnected, "焊接工艺控制断开");
+                    GlobalCommData.ShowLog(_tag, "手动断开完成", MessageLevel.Info);
+                }
+                catch (Exception ex)
+                {
+                    GlobalCommData.ShowLog(_tag, "手动断开异常 " + ex.Message, MessageLevel.Info);
+                }
+                finally
+                {
+                    _manualBusy = false;
+                }
+            })
+            {
+                Name = "WeldParamManualDisconnect",
+                IsBackground = true
+            };
+            t.Start();
         }
 
-        /// <summary>手动关 = 停止工艺计算，回到待机就绪。</summary>
-        protected override void ManualOff()
-        {
-            SetStep(WeldParamControlWorkflowState.Standby, "手动停止焊接工艺控制");
-        }
-
-        /// <summary>自动运行流程 = 阻塞式触发一轮计算与下发并等待完成（ADR-048）。</summary>
-        /// <remarks>计算与下发仍由监听线程按执行步 10→20→800/900 推进，本序列只做排程与有界等待。</remarks>
-        protected override void AutoRunFlow()
-        {
-            ComputeAndOutput();
-            AutoWait(() => WorkStep == StepIdle, AutoFinishTimeoutMs);
-        }
-
-        /// <summary>流程复位：清触发标记与失败计数，回到待机（由基类公共入口 Reset 调用，ADR-048）。</summary>
-        protected override void ResetFlow()
+        /// <summary>流程复位：清触发标记与失败计数，回到待机。</summary>
+        /// <returns>受理返回 true</returns>
+        public override bool ResetProcess()
         {
             _pendingCompute = false;
             IsAlarm = false;
-            GoStep(StepIdle);
+            ResetWorkStep();
             SetStep(WeldParamControlWorkflowState.Standby, "流程复位");
+            return true;
+        }
+
+        /// <summary>清除报警态并回就绪。</summary>
+        public override void ClearStatus()
+        {
+            IsAlarm = false;
+            ResetWorkStep();
+            SetStep(WeldParamControlWorkflowState.Standby, "状态清除");
+        }
+
+        /// <summary>复位时间：重置本流程工作时间计时。</summary>
+        public override void ResetWorkTime()
+        {
+            SetWorkTimeStart();
         }
 
         #endregion

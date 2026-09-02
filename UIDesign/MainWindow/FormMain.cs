@@ -49,7 +49,7 @@ namespace AdaWeldSystem
 
             // ── 配置加载 ──
             MoveControlData.Instance.Load();          // 运控标定参数
-            MainDeviceWorkflow.Instance.LoadSimulation();     // 模拟模式参数
+            DeviceControlWork.Instance.LoadSimulation();     // 模拟模式参数
             MonitorAlgorithmManager.Instance.Load();  // 监控相机算法参数
 
             // ── 全局 UI 配置（AntdUI 主题 + 文本渲染） ──
@@ -77,8 +77,8 @@ namespace AdaWeldSystem
             LoadNavAndPages();
 
             // ── 事件订阅 ──
-            LineLaserWorkflow.Instance.StateChanged += OnWorkflowStateChanged;
-            UpdateStatusLabel(LineLaserWorkflow.Instance.Step);
+            LineLaserWorkflow.Instance.WeldStatusChanged += OnWorkflowStateChanged;
+            UpdateStatusLabel(LineLaserWorkflow.Instance.WeldStatus);
 
             // V3：动态添加整机状态标签到状态栏
             InitializeSystemStatusLabel();
@@ -86,11 +86,11 @@ namespace AdaWeldSystem
             // 关闭前询问
             this.FormClosing += FormMain_FormClosing;
 
-            // ── 设备初始化 ──
-            // 子设备初始化
-            MainDeviceWorkflow.Instance.PowerOnInitialize();
-            // 主线程启动，待机监听
-            MainDeviceWorkflow.Instance.Start();
+            // ── 设备初始化（新主控设计：主设备独立管控类，ADR-049）──
+            // 上电初始化：InitializeMachine() 级联子设备连接并置主设备态 Running
+            DeviceControlWork.Instance.InitializeMachine();
+            // 启动入口：StartMachine() 内部启动主设备监听线程并级联子设备（非阻塞）
+            DeviceControlWork.Instance.StartMachine();
 
             GlobalCommData.ShowLog("FormMain", "初始化完成");
         }
@@ -104,7 +104,7 @@ namespace AdaWeldSystem
         /// <param name="e">关闭事件参数</param>
         private void FormMain_FormClosing(object sender, FormClosingEventArgs e)
         {
-            bool isRunning = MainDeviceWorkflow.Instance.IsWelding;
+            bool isRunning = DeviceControlWork.Instance.IsWelding;
             string title = isRunning ? "设备运行中" : "确认关闭";
             string message = isRunning
                 ? "设备正在运行中，确认强制关闭？"
@@ -215,8 +215,8 @@ namespace AdaWeldSystem
             toolStrip1.Items.Insert(0, lbl_SystemStatus);
 
             // 订阅整机流程态切换（ADR-042 R3：统一走基类 StateChanged）
-            MainDeviceWorkflow.Instance.StateChanged += OnMainDeviceStepChanged;
-            UpdateSystemStatusLabel(MainDeviceWorkflow.Instance.FlowState);
+            DeviceControlWork.Instance.StatusChanged += OnMainDeviceStatusChanged;
+            UpdateSystemStatusLabel(DeviceControlWork.Instance.Status);
         }
 
         /// <summary>
@@ -224,57 +224,49 @@ namespace AdaWeldSystem
         /// </summary>
         /// <param name="sender">事件源</param>
         /// <param name="e">流程态变更参数</param>
-        private void OnMainDeviceStepChanged(object sender, WorkflowStepChangedEventArgs<MainDeviceFlowState> e)
+        private void OnMainDeviceStatusChanged(object sender, MainDeviceStatusChangedEventArgs e)
         {
             if (InvokeRequired)
             {
-                BeginInvoke(new Action(() => OnMainDeviceStepChanged(sender, e)));
+                BeginInvoke(new Action(() => OnMainDeviceStatusChanged(sender, e)));
                 return;
             }
-            UpdateSystemStatusLabel(e.NewState);
+            UpdateSystemStatusLabel(e.NewStatus);
         }
 
         /// <summary>
         /// 更新整机状态标签（展示整机流程态 MainDeviceFlowState）
         /// </summary>
         /// <param name="state">整机流程态</param>
-        private void UpdateSystemStatusLabel(MainDeviceFlowState state)
+        private void UpdateSystemStatusLabel(MainDeviceStatus state)
         {
             string text;
             System.Drawing.Color color;
             switch (state)
             {
-                case MainDeviceFlowState.Idle:
-                    text = "整机：空闲";
-                    color = System.Drawing.Color.Gray;
-                    break;
-                case MainDeviceFlowState.SafePose:
-                    text = "整机：安全起始位";
+                case MainDeviceStatus.Running:
+                    text = "整机：运行中";
                     color = System.Drawing.Color.Green;
                     break;
-                case MainDeviceFlowState.Preworking:
-                    text = "整机：焊前准备";
-                    color = System.Drawing.Color.Orange;
+                case MainDeviceStatus.Alarm:
+                    text = "整机：报警";
+                    color = System.Drawing.Color.Red;
                     break;
-                case MainDeviceFlowState.PreWeldPose:
-                    text = "整机：焊前位";
-                    color = System.Drawing.Color.Orange;
+                case MainDeviceStatus.EStop:
+                    text = "整机：急停";
+                    color = System.Drawing.Color.Red;
                     break;
-                case MainDeviceFlowState.Working:
-                    text = "整机：焊接中";
-                    color = System.Drawing.Color.Green;
-                    break;
-                case MainDeviceFlowState.Stopping:
-                    text = "整机：停止中";
-                    color = System.Drawing.Color.Orange;
-                    break;
-                case MainDeviceFlowState.Stopped:
+                case MainDeviceStatus.Stop:
                     text = "整机：已停止";
                     color = System.Drawing.Color.Gray;
                     break;
-                case MainDeviceFlowState.Alarm:
-                    text = "整机：报警";
-                    color = System.Drawing.Color.Red;
+                case MainDeviceStatus.NoReset:
+                    text = "整机：未复位";
+                    color = System.Drawing.Color.Orange;
+                    break;
+                case MainDeviceStatus.Reseting:
+                    text = "整机：复位中";
+                    color = System.Drawing.Color.Orange;
                     break;
                 default:
                     text = "整机：" + state.ToString();
@@ -290,36 +282,34 @@ namespace AdaWeldSystem
         /// </summary>
         /// <param name="sender">事件源</param>
         /// <param name="e">状态变更参数</param>
-        private void OnWorkflowStateChanged(object sender, WorkflowStepChangedEventArgs<LineLaserWorkflowState> e)
+        private void OnWorkflowStateChanged(object sender, WeldStatusChangedEventArgs e)
         {
             if (InvokeRequired)
             {
                 BeginInvoke(new Action(() => OnWorkflowStateChanged(sender, e)));
                 return;
             }
-            UpdateStatusLabel(e.NewState);
+            UpdateStatusLabel(e.NewStatus);
         }
 
         /// <summary>
         /// 更新线激光状态文本
         /// </summary>
         /// <param name="state">线激光工作流状态</param>
-        private void UpdateStatusLabel(LineLaserWorkflowState state)
+        private void UpdateStatusLabel(SubDeviceWeldStatus state)
         {
             string statusText;
             switch (state)
             {
-                case LineLaserWorkflowState.Uninitialized: statusText = "未初始化"; break;
-                case LineLaserWorkflowState.Initializing: statusText = "初始化中"; break;
-                case LineLaserWorkflowState.Standby: statusText = "待机"; break;
+                case SubDeviceWeldStatus.Standby: statusText = "待机"; break;
                 // 进入工作流程后，只要未手动停止/异常终止，均视为「工作流程中」
-                case LineLaserWorkflowState.PreWork:
-                case LineLaserWorkflowState.Starting:
-                case LineLaserWorkflowState.Working:
-                case LineLaserWorkflowState.Stopping:
+                case SubDeviceWeldStatus.PreWork:
+                case SubDeviceWeldStatus.Starting:
+                case SubDeviceWeldStatus.Working:
+                case SubDeviceWeldStatus.Stopping:
                     statusText = "工作流程中"; break;
-                case LineLaserWorkflowState.ErrorAborted: statusText = "异常终止"; break;
-                case LineLaserWorkflowState.ManualStopped: statusText = "手动停止"; break;
+                case SubDeviceWeldStatus.ErrorAborted: statusText = "异常终止"; break;
+                case SubDeviceWeldStatus.ManualStopped: statusText = "手动停止"; break;
                 default: statusText = "未知"; break;
             }
             lbl_Status.Text = statusText;
@@ -380,11 +370,11 @@ namespace AdaWeldSystem
         private void FormMain_FormClosed(object sender, FormClosedEventArgs e)
         {
             // 退订工作流状态事件（设计器 Dispose(bool) 不覆盖静态/单例事件订阅，须显式退订）
-            LineLaserWorkflow.Instance.StateChanged -= OnWorkflowStateChanged;
+            LineLaserWorkflow.Instance.WeldStatusChanged -= OnWorkflowStateChanged;
 
-            MainDeviceWorkflow.Instance.StateChanged -= OnMainDeviceStepChanged;
+            DeviceControlWork.Instance.StatusChanged -= OnMainDeviceStatusChanged;
 
-            MainDeviceWorkflow.Instance.Dispose();
+            DeviceControlWork.Instance.Dispose();
 
             // 释放英莱相机（LineLaserWorkflow.Dispose 不会被外部调用，此处显式释放）
             try { LineLaserWorkflow.Instance.Dispose(); } catch { }

@@ -1,4 +1,4 @@
-using AdaWeldSystem.Comm;
+﻿using AdaWeldSystem.Comm;
 using AdaWeldSystem.MainDeviceControl.DeviceState;
 using AdaWeldSystem.MainDeviceControl.DeviceWorkflow;
 using AdaWeldSystem.MonitorCam;
@@ -21,6 +21,7 @@ namespace AdaWeldSystem.Sub2UI
     {
         private Timer _statusTimer;
         private bool _isMonitoring = false;
+        private bool _userStopPending = false;
 
         public MonitorCamPage()
         {
@@ -76,14 +77,14 @@ namespace AdaWeldSystem.Sub2UI
             // 图像由监控相机自身输出（ADR-042 R1），流程态由基类统一通知（R3）
             MonitorCameraRun.FrameCompletedEvent += MonitorCameraRun_FrameCompletedEvent;
             MonitorCameraRun.Instance.StatusChanged += MonitorCameraRun_StatusChanged;
-            MonitorCameraWorkflow.Instance.StateChanged += Workflow_StateChanged;
+            MonitorCameraWorkflow.Instance.WeldStatusChanged += Workflow_StateChanged;
         }
 
         private void UnsubscribeEvents()
         {
             MonitorCameraRun.FrameCompletedEvent -= MonitorCameraRun_FrameCompletedEvent;
             MonitorCameraRun.Instance.StatusChanged -= MonitorCameraRun_StatusChanged;
-            MonitorCameraWorkflow.Instance.StateChanged -= Workflow_StateChanged;
+            MonitorCameraWorkflow.Instance.WeldStatusChanged -= Workflow_StateChanged;
         }
 
         private void StartStatusTimer()
@@ -125,16 +126,21 @@ namespace AdaWeldSystem.Sub2UI
 
             lblStatus.Text = string.Format("相机: {0}", camState);
 
-            MonitorWorkflowState ws = MonitorCameraWorkflow.Instance.Step;
-            if (ws == MonitorWorkflowState.Standby)
+            SubDeviceWeldStatus ws = MonitorCameraWorkflow.Instance.WeldStatus;
+            if (ws == SubDeviceWeldStatus.Standby)
                 uiLightStatus.Value = 1;            // 绿灯亮 (On)
-            else if (ws == MonitorWorkflowState.ErrorAborted)
+            else if (ws == SubDeviceWeldStatus.ErrorAborted)
                 uiLightStatus.Value = 5;            // 灭 (Off)
             else
             {
                 uiLightStatus.Value = 1;
                 uiLightStatus.Loading = true;       // 闪烁 (Blink)
             }
+
+            // 连续监测（btnStartMonitor 以 continuous=true 启动）焊接过程态恒为 Working，
+            // 完成信号不再经 WeldStatusChanged 透出，故此处按 500ms 节拍拉取最新结果刷新界面
+            if (_isMonitoring)
+                ShowResult();
         }
 
         #endregion
@@ -143,9 +149,9 @@ namespace AdaWeldSystem.Sub2UI
 
         private bool EnsureReady()
         {
-            if (MonitorCameraWorkflow.Instance.Step == MonitorWorkflowState.Uninitialized)
-                MonitorCameraWorkflow.Instance.Initialize();
-            return MonitorCameraWorkflow.Instance.Step == MonitorWorkflowState.Standby;
+            if (MonitorCameraWorkflow.Instance.State == SubDeviceState.Disconnected)
+                MonitorCameraWorkflow.Instance.ConnectOn();
+            return MonitorCameraWorkflow.Instance.WeldStatus == SubDeviceWeldStatus.Standby;
         }
 
         private void btnSingleCheck_Click(object sender, EventArgs e)
@@ -172,6 +178,7 @@ namespace AdaWeldSystem.Sub2UI
         private void btnStopMonitor_Click(object sender, EventArgs e)
         {
             MonitorCameraWorkflow.Instance.Stop();
+            _userStopPending = true;
             _isMonitoring = false;
         }
 
@@ -265,29 +272,33 @@ namespace AdaWeldSystem.Sub2UI
         /// 流程态变更：统一入口（ADR-042 R3/R4）。
         /// 状态文本直接取流程态；结果数据由本页在 Completed 后向流程拉取只读属性。
         /// </summary>
-        private void Workflow_StateChanged(object sender, WorkflowStepChangedEventArgs<MonitorWorkflowState> e)
+        private void Workflow_StateChanged(object sender, WeldStatusChangedEventArgs e)
         {
             if (InvokeRequired)
             {
-                Invoke(new Action<object, WorkflowStepChangedEventArgs<MonitorWorkflowState>>(Workflow_StateChanged), sender, e);
+                Invoke(new Action<object, WeldStatusChangedEventArgs>(Workflow_StateChanged), sender, e);
                 return;
             }
 
-            lblStatus.Text = GetStateText(e.NewState);
+            lblStatus.Text = GetStateText(e.NewStatus);
 
-            switch (e.NewState)
+            switch (e.NewStatus)
             {
-                case MonitorWorkflowState.Completed:
-                    ShowResult();
+                case SubDeviceWeldStatus.Standby:
+                    // 单轮检测完成（Working → Standby）显示结果；手动停止由 _userStopPending 区分
+                    if (_userStopPending)
+                    {
+                        txtResult.Text = "已停止";
+                        _userStopPending = false;
+                    }
+                    else
+                    {
+                        ShowResult();
+                    }
                     break;
 
-                case MonitorWorkflowState.ErrorAborted:
+                case SubDeviceWeldStatus.ErrorAborted:
                     txtResult.Text = string.Format("异常: {0}", e.Reason);
-                    _isMonitoring = false;
-                    break;
-
-                case MonitorWorkflowState.ManualStopped:
-                    txtResult.Text = "已停止";
                     _isMonitoring = false;
                     break;
             }
@@ -316,17 +327,17 @@ namespace AdaWeldSystem.Sub2UI
             }
         }
 
-        private string GetStateText(MonitorWorkflowState state)
+        private string GetStateText(SubDeviceWeldStatus state)
         {
             switch (state)
             {
-                case MonitorWorkflowState.Uninitialized: return "未初始化";
-                case MonitorWorkflowState.Standby: return "待机";
-                case MonitorWorkflowState.Acquiring: return "采集图像";
-                case MonitorWorkflowState.Analyzing: return "分析中";
-                case MonitorWorkflowState.Completed: return "完成";
-                case MonitorWorkflowState.ErrorAborted: return "异常终止";
-                case MonitorWorkflowState.ManualStopped: return "手动停止";
+                case SubDeviceWeldStatus.Standby: return "待机";
+                case SubDeviceWeldStatus.PreWork: return "焊接前准备";
+                case SubDeviceWeldStatus.Starting: return "启动中";
+                case SubDeviceWeldStatus.Working: return "工作中";
+                case SubDeviceWeldStatus.Stopping: return "停止中";
+                case SubDeviceWeldStatus.ErrorAborted: return "异常终止";
+                case SubDeviceWeldStatus.ManualStopped: return "手动停止";
                 default: return "未知";
             }
         }

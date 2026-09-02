@@ -122,7 +122,7 @@ namespace AdaWeldSystem.LineLaserCam.SmartRayCam
             numberofProfile = 10;
 
 
-            // OpenSensor 由工作流后台线程（LineLaserWorkflow.InitializeWorker）调用，
+            // OpenSensor 由工作流后台线程（LineLaserWorkflow 初始化流程）调用，
             // 任何失败均以错误日志记录并返回（IniCameraSucceed 保持 false），
             // 严禁弹出模态 MessageBox —— 否则会阻塞后台线程，无人监控时程序卡死。
             _sensor = _sensorManager.CreateSensor(sensorname, numofsensor, sensorIp, portnum);

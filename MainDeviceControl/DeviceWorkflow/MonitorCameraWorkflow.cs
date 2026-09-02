@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Threading;
 using AdaWeldSystem.Comm;
 using AdaWeldSystem.MainDeviceControl.DeviceState;
 using AdaWeldSystem.MainDeviceControl.FlowState;
@@ -10,19 +11,20 @@ using Emgu.CV;
 
 namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
 {
-    using DeviceState = AdaWeldSystem.MainDeviceControl.DeviceState.DeviceState;
-
     /// <summary>
     /// 监控相机工作流：只负责「触发采集 → 调用算法 → 读取结果 → 推进流程态」的编排。
-    /// 不产出设备数据与算法结果：图像由 [[api/MonitorCameraRun]] 的 FrameCompletedEvent 输出，
+    /// 不产出设备数据与算法结果：图像由 MonitorCameraRun 的 FrameCompletedEvent 输出，
     /// 健康巡检由 MonitorCameraRun 自身维护，流程不越俎代庖（ADR-042）。
-    /// 检测结果以只读属性 LastResult / LastOverlay 暴露，订阅方在基类 StateChanged 转 Completed 后拉取。
+    /// 检测结果以只读属性 LastResult / LastOverlay 暴露，订阅方在流程态转 Completed 后拉取。
     ///
     /// 步骤驱动（ADR-047）：执行步段位 10 触发采集 → 20 等采集完成信号 → 30 分析
     /// → 800 成功收尾（连续模式回到 10） / 900 失败收尾（置 Alarm + 记故障）。
     /// 采集等待不再用 WaitOne(5000) 阻塞，改为「WaitOne(0) 非阻塞探测 + 节拍重入 + IsStepTimeout 判超时」。
+    ///
+    /// 新主控设计：基类改为非泛型 DeviceWorkflowBase，原流程态枚举降为私有 _flowState 仅驱动 FlowProcess；
+    /// 对外焊接过程态经 SetWeldStatus(SubDeviceWeldStatus) 承载，连接态经 ConnectOn/ConnectOff 联动 State。
     /// </summary>
-    public class MonitorCameraWorkflow : DeviceWorkflowBase<MonitorWorkflowState>
+    public class MonitorCameraWorkflow : DeviceWorkflowBase
     {
         #region 常量
 
@@ -40,8 +42,15 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         #region 私有变量
 
         private readonly string _tag = "监控相机工作流";
+
+        /// <summary>私有流程态（取代旧基类 _step，仅驱动 FlowProcess 与可观测性）。</summary>
+        private MonitorWorkflowState _flowState = MonitorWorkflowState.Uninitialized;
+
         private volatile bool _continuous;
         private volatile MonitorCameraPhase _phase = MonitorCameraPhase.PreWeldAlignment;
+
+        /// <summary>手动连接/断开线程是否进行中（防重入）。</summary>
+        private volatile bool _manualBusy;
 
         private readonly object _resultLock = new object();
         private Mat _lastMat;
@@ -61,12 +70,8 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
 
         #region 公共变量
 
+        /// <summary>对外名片名（日志与监听线程命名用）。</summary>
         public override string StateName => _tag;
-
-        public MonitorCameraPhase CurrentPhase
-        {
-            get { return _phase; }
-        }
 
         /// <summary>最近一轮检测结果（只读快照，供 UI 在流程态转 Completed 后拉取）</summary>
         public MonitorResult LastResult
@@ -102,9 +107,9 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         {
             get
             {
-                return _step == MonitorWorkflowState.Acquiring
-                    || _step == MonitorWorkflowState.Analyzing
-                    || _step == MonitorWorkflowState.Completed;
+                return _flowState == MonitorWorkflowState.Acquiring
+                    || _flowState == MonitorWorkflowState.Analyzing
+                    || _flowState == MonitorWorkflowState.Completed;
             }
         }
 
@@ -112,7 +117,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
 
         #region 构造函数
 
-        private MonitorCameraWorkflow() : base(MonitorWorkflowState.Uninitialized) { }
+        private MonitorCameraWorkflow() { }
 
         #endregion
 
@@ -120,10 +125,10 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
 
         private void RequireStandby(string method)
         {
-            if (_step != MonitorWorkflowState.Standby)
+            if (_flowState != MonitorWorkflowState.Standby)
             {
                 throw new InvalidOperationException(string.Format(
-                    "{0} 要求当前状态为 Standby，实际为 {1}", method, _step));
+                    "{0} 要求当前状态为 Standby，实际为 {1}", method, _flowState));
             }
         }
 
@@ -136,6 +141,50 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             string ip = cam.Config != null ? cam.Config.IpAddress : DefaultIp;
             string port = cam.Config != null ? cam.Config.Port : DefaultPort;
             cam.OpenSensor(ip, port);
+        }
+
+        /// <summary>相位 → 焊接过程态映射（取代旧基类 MapToDeviceState）。</summary>
+        /// <param name="step">流程态</param>
+        /// <returns>对应焊接过程态</returns>
+        private static SubDeviceWeldStatus MapWeldStatus(MonitorWorkflowState step)
+        {
+            switch (step)
+            {
+                case MonitorWorkflowState.ErrorAborted:
+                    return SubDeviceWeldStatus.ErrorAborted;
+                case MonitorWorkflowState.Uninitialized:
+                case MonitorWorkflowState.Standby:
+                case MonitorWorkflowState.ManualStopped:
+                    return SubDeviceWeldStatus.Standby;
+                default:
+                    // Acquiring / Analyzing / Completed 均为进程态
+                    return SubDeviceWeldStatus.Working;
+            }
+        }
+
+        /// <summary>刷新流程相位并映射为对外焊接过程态。</summary>
+        /// <remarks>等价旧基类 SetStep + MapToDeviceState + OnStepChanged。</remarks>
+        /// <param name="step">目标流程态</param>
+        /// <param name="reason">切换原因（纯文本，无符号）</param>
+        private void SetStep(MonitorWorkflowState step, string reason)
+        {
+            _flowState = step;
+            SetWeldStatus(MapWeldStatus(step), reason);
+            switch (step)
+            {
+                case MonitorWorkflowState.Acquiring:
+                    GoStep(StepAcquireTrigger);
+                    break;
+                case MonitorWorkflowState.Analyzing:
+                    GoStep(StepAnalyze);
+                    break;
+                case MonitorWorkflowState.Completed:
+                    GoStep(StepFinishOk);
+                    break;
+                default:
+                    GoStep(StepIdle);
+                    break;
+            }
         }
 
         /// <summary>执行步 10：下发检测阶段并触发一次采集。</summary>
@@ -193,7 +242,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             SetStep(MonitorWorkflowState.Standby, "检测完成");
         }
 
-        /// <summary>执行步 900：失败收尾三步走 —— 置 Alarm（经 SetStep 映射，禁手工赋值 State）</summary>
+        /// <summary>执行步 900：失败收尾三步走 —— 置 Alarm（经 SetWeldStatus 映射，禁手工赋值 State）</summary>
         /// <remarks>→ 记日志与故障记录 → 回待机执行步。</remarks>
         private void DoFinishFail()
         {
@@ -203,7 +252,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             {
                 Time = DateTime.Now,
                 Device = _tag,
-                State = MapToDeviceState(_step),
+                State = MapWeldStatus(_flowState),
                 Category = FaultCategory.Device,
                 ErrorCode = "MonitorStepFail",
                 ParamSnapshot = string.Format("WorkStep={0} Phase={1} Reason={2}", FailStep, _phase, FailReason),
@@ -214,7 +263,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             GoStep(StepIdle);
         }
 
-        /// <summary>执行当前帧的图像分析并把结果写入 LastResult。</summary>
+        /// <summary>执行当前帧图像分析并暂存结果。</summary>
         /// <returns>分析成功返回 true</returns>
         private bool AnalyzeImage()
         {
@@ -311,106 +360,15 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         public void Stop()
         {
             MonitorCameraRun.Instance.StopSupervision();
-            if (_step != MonitorWorkflowState.ManualStopped)
+            if (_flowState != MonitorWorkflowState.ManualStopped)
                 SetStep(MonitorWorkflowState.ManualStopped, "用户停止");
-        }
-
-        #endregion
-
-        #region 状态转换
-
-        /// <summary>流程态转换合法性校验（重写基类钩子）</summary>
-        /// <remarks>Uninitialized → Standby → Acquiring → Analyzing → Completed → Standby/Acquiring 任何状态均可经 Stop() 转 ManualStopped，经失败收尾转 ErrorAborted</remarks>
-        /// <param name="from">源阶段态</param>
-        /// <param name="to">目标阶段态</param>
-        /// <returns>允许转换返回 true</returns>
-        protected override bool ValidateTransition(MonitorWorkflowState from, MonitorWorkflowState to)
-        {
-            switch (from)
-            {
-                case MonitorWorkflowState.Uninitialized:
-                    return to == MonitorWorkflowState.Standby;
-
-                case MonitorWorkflowState.Standby:
-                    return to == MonitorWorkflowState.Acquiring
-                        || to == MonitorWorkflowState.ManualStopped
-                        || to == MonitorWorkflowState.ErrorAborted;
-
-                case MonitorWorkflowState.Acquiring:
-                    return to == MonitorWorkflowState.Analyzing
-                        || to == MonitorWorkflowState.ErrorAborted
-                        || to == MonitorWorkflowState.ManualStopped;
-
-                case MonitorWorkflowState.Analyzing:
-                    return to == MonitorWorkflowState.Completed
-                        || to == MonitorWorkflowState.ErrorAborted
-                        || to == MonitorWorkflowState.ManualStopped;
-
-                case MonitorWorkflowState.Completed:
-                    return to == MonitorWorkflowState.Standby
-                        || to == MonitorWorkflowState.Acquiring
-                        || to == MonitorWorkflowState.ErrorAborted;
-
-                case MonitorWorkflowState.ErrorAborted:
-                    return to == MonitorWorkflowState.Standby;
-
-                case MonitorWorkflowState.ManualStopped:
-                    return to == MonitorWorkflowState.Standby;
-
-                default:
-                    return false;
-            }
-        }
-
-        /// <summary>流程态 → 设备四态映射。</summary>
-        /// <remarks>未初始化 Uninitialized        → Disconnect 待机 Standby                  → Connect 进程中 Acquiring/Analyzing/Completed → Work 报警 ErrorAborted             → Alarm 手动停止 ManualStopped        → Connect（已连接但流程已停，回到待机就绪）</remarks>
-        /// <param name="step">阶段态</param>
-        /// <returns>该阶段态对应的设备四态</returns>
-        protected override DeviceState MapToDeviceState(MonitorWorkflowState step)
-        {
-            switch (step)
-            {
-                case MonitorWorkflowState.Uninitialized:
-                    return DeviceState.Disconnect;
-                case MonitorWorkflowState.Standby:
-                case MonitorWorkflowState.ManualStopped:
-                    return DeviceState.Connect;
-                case MonitorWorkflowState.ErrorAborted:
-                    return DeviceState.Alarm;
-                default:
-                    // Acquiring / Analyzing / Completed 均为进程态
-                    return DeviceState.Work;
-            }
-        }
-
-        /// <summary>阶段态切换时把执行步复位到该阶段入口步。</summary>
-        /// <remarks>注意：本方法在 SetStep 同步路径内执行，调用处 SetStep 后须立即 return。</remarks>
-        /// <param name="e">流程态变更参数</param>
-        protected override void OnStepChanged(WorkflowStepChangedEventArgs<MonitorWorkflowState> e)
-        {
-            base.OnStepChanged(e);
-            switch (e.NewState)
-            {
-                case MonitorWorkflowState.Acquiring:
-                    GoStep(StepAcquireTrigger);
-                    break;
-                case MonitorWorkflowState.Analyzing:
-                    GoStep(StepAnalyze);
-                    break;
-                case MonitorWorkflowState.Completed:
-                    GoStep(StepFinishOk);
-                    break;
-                default:
-                    GoStep(StepIdle);
-                    break;
-            }
         }
 
         #endregion
 
         #region 执行步分派
 
-        /// <summary>单步分派（switch(WorkStep)），由监听线程按 10ms 节拍反复调用。</summary>
+        /// <summary>单步分派，由监听线程节拍驱动。</summary>
         /// <remarks>全部 case 无 Thread.Sleep / while 轮询 / 阻塞 WaitOne。</remarks>
         protected override void FlowProcess()
         {
@@ -447,64 +405,80 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
 
         #endregion
 
-        #region 抽象生命周期方法（映射至既有公共方法）
+        #region 抽象生命周期方法（新主控设计 6 契约）
 
-        /// <summary>初始化流程 = 连接监控相机。</summary>
-        /// <remarks>确保相机已连接，经 Initializing 转到 Standby；设备四态由基类 Initialize() 依据本返回值置 Connect/Disconnect。</remarks>
-        /// <returns>相机就绪返回 true</returns>
-        protected override bool InitializeFlow()
+        /// <summary>开启连接（受理式）。</summary>
+        /// <returns>受理返回 true，忙线返回 false</returns>
+        public override bool ConnectOn()
         {
-            EnsureConnected();
-            bool ok = MonitorCameraRun.Instance.ConnectionState == MonitorCameraConnectionState.Connected;
-            if (ok)
-                SetStep(MonitorWorkflowState.Standby, "监控相机就绪");
-            else
-                SetStep(MonitorWorkflowState.Uninitialized, "监控相机未连接");
-            return ok;
+            if (_manualBusy) return false;
+            _manualBusy = true;
+            var t = new Thread(() =>
+            {
+                try
+                {
+                    GlobalCommData.ShowLog(_tag, "手动连接开始", MessageLevel.Info);
+                    EnsureConnected();
+                    bool ok = MonitorCameraRun.Instance.ConnectionState == MonitorCameraConnectionState.Connected;
+                    SetState(ok ? SubDeviceState.Connected : SubDeviceState.Disconnected,
+                        ok ? "监控相机连接完成" : "监控相机连接失败");
+                    SetStep(ok ? MonitorWorkflowState.Standby : MonitorWorkflowState.Uninitialized,
+                        ok ? "监控相机就绪" : "监控相机未连接");
+                    GlobalCommData.ShowLog(_tag, ok ? "手动连接完成" : "手动连接失败", MessageLevel.Info);
+                }
+                catch (Exception ex)
+                {
+                    GlobalCommData.ShowLog(_tag, "手动连接异常 " + ex.Message, MessageLevel.Info);
+                }
+                finally
+                {
+                    _manualBusy = false;
+                }
+            })
+            {
+                Name = "MonitorCamManualConnect",
+                IsBackground = true
+            };
+            t.Start();
+            return true;
         }
 
-        /// <summary>手动开 = 连接监控相机。</summary>
-        protected override void ManualOn()
-        {
-            InitializeFlow();
-        }
-
-        /// <summary>手动关 = 断开监控相机。</summary>
-        protected override void ManualOff()
+        /// <summary>关闭连接：停止检测并置 Disconnected（非阻塞）。</summary>
+        public override void ConnectOff()
         {
             Stop();
-        }
-
-        /// <summary>自动运行 = 阻塞式连续检测直到中止或异常终止（ADR-048）。</summary>
-        /// <remarks>采集→分析循环由监听线程 FlowProcess 按执行步推进，本序列只做排程与兜底停机。</remarks>
-        protected override void AutoRunFlow()
-        {
-            Start(_phase, true);
-            AutoWait(() => _step == MonitorWorkflowState.Standby
-                || _step == MonitorWorkflowState.ErrorAborted
-                || _step == MonitorWorkflowState.ManualStopped, 0);
-            if (IsAutoAbortRequested) Stop();
+            SetState(SubDeviceState.Disconnected, "监控相机断开");
         }
 
         /// <summary>流程复位：停止检测并回到待机。</summary>
-        /// <remarks>由基类公共入口 Reset 调用（ADR-048）；ValidateTransition 严格，中间态（Acquiring/Analyzing）
-        /// 直转 Standby 会被拒绝，拒绝时保持现状并记警告，由人工经 UI 重新初始化。</remarks>
-        protected override void ResetFlow()
+        /// <returns>受理返回 true</returns>
+        public override bool ResetProcess()
         {
             Stop();
-            if (_step != MonitorWorkflowState.Standby
-                && !SetStep(MonitorWorkflowState.Standby, "流程复位"))
-            {
-                GlobalCommData.ShowLog(_tag, string.Format(
-                    "流程复位未完成 当前 {0} 转换被拒绝", _step), MessageLevel.Warning);
-            }
+            if (_flowState != MonitorWorkflowState.Standby)
+                SetStep(MonitorWorkflowState.Standby, "流程复位");
+            return true;
+        }
+
+        /// <summary>清除报警态并回就绪。</summary>
+        public override void ClearStatus()
+        {
+            IsAlarm = false;
+            ResetWorkStep();
+            SetStep(MonitorWorkflowState.Standby, "状态清除");
+        }
+
+        /// <summary>复位时间：重置本流程工作时间计时。</summary>
+        public override void ResetWorkTime()
+        {
+            SetWorkTimeStart();
         }
 
         #endregion
 
         #region 监听线程钩子与释放
 
-        /// <summary>释放钩子（基类 Dispose 调用，ADR-034）：停巡检并释放 Mat 图像资源。</summary>
+        /// <summary>停巡检并释放图像资源。</summary>
         protected override void DisposeManaged()
         {
             try { MonitorCameraRun.Instance.StopSupervision(); } catch { }
