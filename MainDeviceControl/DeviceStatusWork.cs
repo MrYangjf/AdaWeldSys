@@ -94,6 +94,14 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
 
         #region 私有函数
 
+        /// <summary>统一日志出口（固定使用本类标签）。</summary>
+        /// <param name="message">日志内容（纯文本，无符号）</param>
+        /// <param name="level">日志级别</param>
+        private void Log(string message, MessageLevel level = MessageLevel.Info)
+        {
+            DeviceLog.Write(_tag, message, level);
+        }
+
         /// <summary>IO 轮询线程主体：互锁检查与设备态监控。</summary>
         /// <remarks>对应 PDF 架构图 DeviceStatusWork 泳道的 IO 轮询与设备态（Connect/Comm）监控。
         /// 急停由 EMGWork 专责，避免与互锁报警态相互翻转。</remarks>
@@ -123,7 +131,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
                 }
                 catch (Exception ex)
                 {
-                    GlobalCommData.ShowLog(_tag, "安全互锁异常 " + ex.Message, MessageLevel.Error);
+                    Log("安全互锁异常 " + ex.Message, MessageLevel.Error);
                 }
                 Thread.Sleep(IoPollIntervalMs);
             }
@@ -149,7 +157,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
                     {
                         emgShown = true;
                         DeviceControlWork.Instance.EStopMachine("急停按钮按下");
-                        GlobalCommData.ShowLog(_tag, "急停按钮按下", MessageLevel.Error);
+                        Log("急停按钮按下", MessageLevel.Error);
                     }
                     else if (!pressed && emgShown)
                     {
@@ -163,7 +171,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
                 }
                 catch (Exception ex)
                 {
-                    GlobalCommData.ShowLog(_tag, "急停轮询异常 " + ex.Message, MessageLevel.Error);
+                    Log("急停轮询异常 " + ex.Message, MessageLevel.Error);
                 }
                 Thread.Sleep(EmgPollIntervalMs);
             }
@@ -183,12 +191,12 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
                     {
                         last = status;
                         DriveTricolorLamp(status);
-                        GlobalCommData.ShowLog(_tag, "状态反射 " + status, MessageLevel.Info);
+                        Log("状态反射 " + status, MessageLevel.Info);
                     }
                 }
                 catch (Exception ex)
                 {
-                    GlobalCommData.ShowLog(_tag, "状态反射异常 " + ex.Message, MessageLevel.Error);
+                    Log("状态反射异常 " + ex.Message, MessageLevel.Error);
                 }
                 Thread.Sleep(StatusPollIntervalMs);
             }
@@ -232,7 +240,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             }
             catch (Exception ex)
             {
-                GlobalCommData.ShowLog(_tag, "三色灯输出异常 " + ex.Message, MessageLevel.Error);
+                Log("三色灯输出异常 " + ex.Message, MessageLevel.Error);
             }
         }
 
@@ -293,7 +301,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             };
             _thStatusWork.Start();
 
-            GlobalCommData.ShowLog(_tag, "安全/IO/状态监控启动", MessageLevel.Info);
+            Log("安全/IO/状态监控启动", MessageLevel.Info);
         }
 
         /// <summary>停止三个监控线程。</summary>
@@ -308,7 +316,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             _thEMGWork = null;
             _thStatusWork = null;
             _alarmActive = false;
-            GlobalCommData.ShowLog(_tag, "安全/IO/状态监控停止", MessageLevel.Info);
+            Log("安全/IO/状态监控停止", MessageLevel.Info);
         }
 
         /// <summary>执行一次安全互锁检查。</summary>

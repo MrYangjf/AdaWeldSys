@@ -35,8 +35,6 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
     {
         #region 常量
 
-        private const string Tag = "运动控制工作流";
-
         // 执行步段位（0 待机 / 900 失败收尾 由基类提供，子类不重复定义）
         private const int StepResetEncoder = 10;
         private const int StepStartCamBox = 20;
@@ -123,6 +121,8 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
 
         private MotionControlWorkflow()
         {
+            Tag = "运动控制工作流";
+
             _tracker = new CamBoxTracker();
             _encoderAxis = new EncoderAxis();
             _positionBuffer = new RSIPositionBuffer();
@@ -247,7 +247,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
                 AutoRecovered = false,
                 RecoveryAction = "停止 CAMBOX 并复位，等待人工复位"
             });
-            GlobalCommData.ShowLog(Tag, string.Format("运控流程异常终止 原因 {0}", FailReason), MessageLevel.Error);
+            Log(string.Format("运控流程异常终止 原因 {0}", FailReason), MessageLevel.Error);
             GoStep(StepIdle);
         }
 
@@ -295,14 +295,6 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         private void OnTrackerError(object sender, string message)
         {
             Log("跟踪错误 " + message, MessageLevel.Error);
-        }
-
-        /// <summary>统一日志出口（固定使用本类标签）</summary>
-        /// <param name="message">日志内容（纯文本，无符号）</param>
-        /// <param name="level">日志级别</param>
-        private void Log(string message, MessageLevel level = MessageLevel.Info)
-        {
-            GlobalCommData.ShowLog(Tag, message, level);
         }
 
         #endregion
@@ -454,7 +446,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
 
         /// <summary>执行步分派。</summary>
         /// <remarks>每拍先刷新跟踪引擎状态（取代独立监控线程），再按 WorkStep 分派。</remarks>
-        protected override void FlowProcess()
+        public  override void FlowProcess()
         {
             UpdateTrackerStatus();
             switch (WorkStep)

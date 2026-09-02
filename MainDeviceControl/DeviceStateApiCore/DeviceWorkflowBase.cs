@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Threading;
 using AdaWeldSystem.Comm;
+using AdaWeldSystem.MainDeviceControl.DeviceState;
 
 namespace AdaWeldSystem.MainDeviceControl.FlowState
 {
@@ -52,7 +53,6 @@ namespace AdaWeldSystem.MainDeviceControl.FlowState
         private string _failReason = "";
         private int _failStep;
 
-        private object _tag;
         private bool _isEnable = true;
         private int _workStepCount;
         private double _timeoutMs;
@@ -70,12 +70,8 @@ namespace AdaWeldSystem.MainDeviceControl.FlowState
         /// <summary>通用执行步号：失败收尾（全流程一致，子类不得重复定义）。</summary>
         protected const int StepFinishFail = 900;
 
-        /// <summary>自定义标签（宿主/UI 关联用）。</summary>
-        public object Tag
-        {
-            get { return _tag; }
-            set { _tag = value; }
-        }
+        /// <summary>日志标签（流程名）：子类构造函数内赋值，禁止子类再自造 _tag 常量遮蔽本属性。</summary>
+        public string Tag { get; protected set; }
 
         /// <summary>是否启用（禁用后监听线程不执行业务，仅刷新时间戳）。</summary>
         public bool IsEnable
@@ -193,7 +189,7 @@ namespace AdaWeldSystem.MainDeviceControl.FlowState
                 }
                 catch (Exception ex)
                 {
-                    GlobalCommData.ShowLog(StateName, "监听线程异常 " + ex.Message, MessageLevel.Error);
+                    Log("监听线程异常 " + ex.Message, MessageLevel.Error);
                 }
                 Thread.Sleep(_beatMs);
             }
@@ -215,7 +211,7 @@ namespace AdaWeldSystem.MainDeviceControl.FlowState
                 Priority = _runLoopPriority
             };
             _runLoopThread.Start();
-            GlobalCommData.ShowLog(StateName, "监听线程已启动", MessageLevel.Info);
+            Log("监听线程已启动", MessageLevel.Info);
         }
 
         /// <summary>停止常驻监听线程（Join 上限 1000ms，超时放弃等待）。</summary>
@@ -242,6 +238,14 @@ namespace AdaWeldSystem.MainDeviceControl.FlowState
             StopRunLoop();
             DisposeManaged();
             GC.SuppressFinalize(this);
+        }
+
+        /// <summary>统一日志出口：固定使用本流程 Tag 作为标签。</summary>
+        /// <param name="message">日志内容（纯文本，无符号）</param>
+        /// <param name="level">日志级别</param>
+        protected void Log(string message, MessageLevel level = MessageLevel.Info)
+        {
+            DeviceLog.Write(Tag, message, level);
         }
 
         #endregion

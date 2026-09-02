@@ -41,8 +41,6 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
 
         #region 私有变量
 
-        private readonly string _tag = "线激光工作流";
-
         /// <summary>公共方法互斥锁（ADR-038 ④-3：禁止 lock(this)，用私有锁对象）。</summary>
         private readonly object _syncRoot = new object();
 
@@ -84,7 +82,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         #region 公共变量
 
         /// <summary>对外名片名（日志与监听线程命名用）。</summary>
-        public override string StateName { get { return _tag; } }
+        public override string StateName { get { return Tag; } }
 
         /// <summary>PreWork 是否完成（主设备轮询判断，完成后可进入 Starting）。</summary>
         public bool IsPreWorkDone { get { return _preWorkDone; } }
@@ -111,6 +109,8 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
 
         private LineLaserWorkflow()
         {
+            Tag = "线激光工作流";
+
             GlobalCommData.CommunicationCommandReceived += OnCommunicationCommandReceived;
         }
 
@@ -153,12 +153,12 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
                         verifyHardwareStatus: () => true);
                 }
 
-                GlobalCommData.ShowLog(_tag, "线激光相机未正确选择/未连接，初始化失败", MessageLevel.Error);
+                Log("线激光相机未正确选择/未连接，初始化失败", MessageLevel.Error);
                 return false;
             }
             catch (Exception ex)
             {
-                GlobalCommData.ShowLog(_tag, "相机初始化失败 原因是 " + ex.Message, MessageLevel.Error);
+                Log("相机初始化失败 原因是 " + ex.Message, MessageLevel.Error);
                 return false;
             }
         }
@@ -171,11 +171,11 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         private bool RunInitializeSteps(
             Func<bool> connect, Func<bool> readConfiguration, Func<bool> verifyHardwareStatus)
         {
-            GlobalCommData.ShowLog(_tag, "初始化步骤 1/3 连接设备", MessageLevel.Info);
+            Log("初始化步骤 1/3 连接设备", MessageLevel.Info);
             if (!RunStep(connect, "连接设备", "连接失败")) return false;
-            GlobalCommData.ShowLog(_tag, "初始化步骤 2/3 读取配置", MessageLevel.Info);
+            Log("初始化步骤 2/3 读取配置", MessageLevel.Info);
             if (!RunStep(readConfiguration, "读取配置", "配置读取失败")) return false;
-            GlobalCommData.ShowLog(_tag, "初始化步骤 3/3 状态信号校验", MessageLevel.Info);
+            Log("初始化步骤 3/3 状态信号校验", MessageLevel.Info);
             if (!RunStep(verifyHardwareStatus, "状态信号校验", "状态信号异常")) return false;
             return true;
         }
@@ -184,7 +184,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         {
             if (step == null)
             {
-                GlobalCommData.ShowLog(_tag, string.Format("[{0}] 跳过（未提供）", stepName), MessageLevel.Info);
+                Log(string.Format("[{0}] 跳过（未提供）", stepName), MessageLevel.Info);
                 return true;
             }
             try
@@ -193,9 +193,9 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             }
             catch (Exception ex)
             {
-                GlobalCommData.ShowLog(_tag, string.Format("[{0}] 异常 原因 {1}", stepName, ex.Message), MessageLevel.Error);
+                Log(string.Format("[{0}] 异常 原因 {1}", stepName, ex.Message), MessageLevel.Error);
             }
-            GlobalCommData.ShowLog(_tag, string.Format("[{0}] 失败 原因是 {1}", stepName, failureReason), MessageLevel.Error);
+            Log(string.Format("[{0}] 失败 原因是 {1}", stepName, failureReason), MessageLevel.Error);
             return false;
         }
 
@@ -235,7 +235,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             SafeShutdownPeripherals();
 
             _preWorkDone = true;
-            GlobalCommData.ShowLog(_tag, "PreWork 完成，等待主设备通知进入 Starting", MessageLevel.Info);
+            Log("PreWork 完成，等待主设备通知进入 Starting", MessageLevel.Info);
             GoStep(StepPreWorkWait);
         }
 
@@ -259,14 +259,14 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             if (_ilCamera == null)
             {
                 _dataStable = true;
-                GlobalCommData.ShowLog(_tag, "虚拟相机 Starting 数据稳定默认通过", MessageLevel.Info);
+                Log("虚拟相机 Starting 数据稳定默认通过", MessageLevel.Info);
                 GoStep(StepStartingWaitWork);
                 return;
             }
             if (!_ilCamera.IsCameraOn()) _ilCamera.SetSensor(true);
             if (!_ilCamera.IsLaserOn()) _ilCamera.SetLaser(true);
             _startingValidFrameCount = 0;
-            GlobalCommData.ShowLog(_tag, "Starting 激光与传感器已开启，等待数据稳定", MessageLevel.Info);
+            Log("Starting 激光与传感器已开启，等待数据稳定", MessageLevel.Info);
             GoStep(StepStartingStable);
         }
 
@@ -276,7 +276,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         {
             if (_dataStable)
             {
-                GlobalCommData.ShowLog(_tag, "Starting 数据已稳定，等待主设备通知进入 Working", MessageLevel.Info);
+                Log("Starting 数据已稳定，等待主设备通知进入 Working", MessageLevel.Info);
                 GoStep(StepStartingWaitWork);
                 return;
             }
@@ -338,7 +338,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         /// <summary>执行步 700：停止清料，关闭激光与传感器。</summary>
         private void DoStopping()
         {
-            GlobalCommData.ShowLog(_tag, "Stopping 关闭激光与传感器", MessageLevel.Info);
+            Log("Stopping 关闭激光与传感器", MessageLevel.Info);
             SafeShutdownPeripherals();
             GoStep(StepFinishOk);
         }
@@ -357,10 +357,10 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         {
             SetWeldStatus(SubDeviceWeldStatus.ErrorAborted, FailReason);
             IsAlarm = true;
-            FaultRecoveryManager.Instance.RecordFault(_tag, new FaultRecord
+            FaultRecoveryManager.Instance.RecordFault(Tag, new FaultRecord
             {
                 Time = DateTime.Now,
-                Device = _tag,
+                Device = Tag,
                 State = WeldStatus,
                 Category = FaultCategory.Process,
                 ErrorCode = "LineLaserStepFail",
@@ -368,7 +368,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
                 AutoRecovered = false,
                 RecoveryAction = "回到待机，等待人工复位"
             });
-            GlobalCommData.ShowLog(_tag, string.Format("工作流异常终止 原因 {0}", FailReason), MessageLevel.Error);
+            Log(string.Format("工作流异常终止 原因 {0}", FailReason), MessageLevel.Error);
             GoStep(StepIdle);
         }
 
@@ -460,7 +460,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             }
             catch (Exception ex)
             {
-                GlobalCommData.ShowLog(_tag, string.Format("调用智能焊接调整算法失败 原因是 {0}", ex.Message), MessageLevel.Error);
+                Log(string.Format("调用智能焊接调整算法失败 原因是 {0}", ex.Message), MessageLevel.Error);
                 _lastAdjustSuccess = false;
             }
         }
@@ -473,7 +473,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
 
         private void OnCommunicationCommandReceived(object sender, string message)
         {
-            GlobalCommData.ShowCommunicationLog(_tag, message);
+            GlobalCommData.ShowCommunicationLog(Tag, message);
         }
 
         /// <summary>记录一次失败。</summary>
@@ -514,7 +514,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             }
             catch (Exception ex)
             {
-                GlobalCommData.ShowLog(_tag, "读取机器人X坐标异常 " + ex.Message, MessageLevel.Warning);
+                Log("读取机器人X坐标异常 " + ex.Message, MessageLevel.Warning);
                 return 0.0;
             }
         }
@@ -524,24 +524,24 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         {
             try
             {
-                GlobalCommData.ShowLog(_tag, "连接开始", MessageLevel.Info);
+                Log("连接开始", MessageLevel.Info);
                 bool ok = InitializeInternal();
                 if (ok)
                 {
                     SetState(SubDeviceState.Connected, "线激光连接完成");
                     StartRunLoop();
-                    GlobalCommData.ShowLog(_tag, "连接完成", MessageLevel.Info);
+                    Log("连接完成", MessageLevel.Info);
                 }
                 else
                 {
                     SetWeldStatus(SubDeviceWeldStatus.ErrorAborted, "线激光连接失败");
-                    GlobalCommData.ShowLog(_tag, "连接失败", MessageLevel.Info);
+                    Log("连接失败", MessageLevel.Info);
                 }
             }
             catch (Exception ex)
             {
                 SetWeldStatus(SubDeviceWeldStatus.ErrorAborted, "连接异常 " + ex.Message);
-                GlobalCommData.ShowLog(_tag, "连接异常 " + ex.Message, MessageLevel.Info);
+                Log("连接异常 " + ex.Message, MessageLevel.Info);
             }
             finally
             {
@@ -554,7 +554,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         {
             try
             {
-                GlobalCommData.ShowLog(_tag, "断开开始", MessageLevel.Info);
+                Log("断开开始", MessageLevel.Info);
                 var camera = CameraSelector.Active;
                 if (camera is IntelligentLaserCameraRun)
                 {
@@ -565,11 +565,11 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
                 SafeShutdownPeripherals();
                 ReleaseCameraBinding();
                 SetState(SubDeviceState.Disconnected, "线激光断开");
-                GlobalCommData.ShowLog(_tag, "断开完成", MessageLevel.Info);
+                Log("断开完成", MessageLevel.Info);
             }
             catch (Exception ex)
             {
-                GlobalCommData.ShowLog(_tag, "断开异常 " + ex.Message, MessageLevel.Info);
+                Log("断开异常 " + ex.Message, MessageLevel.Info);
             }
             finally
             {
@@ -619,8 +619,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
                 if (WeldStatus != SubDeviceWeldStatus.PreWork && WeldStatus != SubDeviceWeldStatus.Starting
                     && WeldStatus != SubDeviceWeldStatus.Working && WeldStatus != SubDeviceWeldStatus.Stopping)
                 {
-                    GlobalCommData.ShowLog(_tag,
-                        string.Format("Stop 忽略 当前状态 {0} 不在进程中", WeldStatus), MessageLevel.Warning);
+                    Log(string.Format("Stop 忽略 当前状态 {0} 不在进程中", WeldStatus), MessageLevel.Warning);
                     return;
                 }
                 SetWeldStatus(SubDeviceWeldStatus.ManualStopped, "用户手动停止");
@@ -635,13 +634,12 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             {
                 if (WeldStatus != SubDeviceWeldStatus.PreWork)
                 {
-                    GlobalCommData.ShowLog(_tag,
-                        string.Format("BeginStarting 忽略 当前状态 {0} 不是 PreWork", WeldStatus), MessageLevel.Warning);
+                    Log(string.Format("BeginStarting 忽略 当前状态 {0} 不是 PreWork", WeldStatus), MessageLevel.Warning);
                     return;
                 }
                 if (!_preWorkDone)
                 {
-                    GlobalCommData.ShowLog(_tag, "BeginStarting 忽略 PreWork 尚未完成", MessageLevel.Warning);
+                    Log("BeginStarting 忽略 PreWork 尚未完成", MessageLevel.Warning);
                     return;
                 }
                 SetWeldStatus(SubDeviceWeldStatus.Starting, "主设备通知进入 Starting");
@@ -658,13 +656,12 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             {
                 if (WeldStatus != SubDeviceWeldStatus.Starting)
                 {
-                    GlobalCommData.ShowLog(_tag,
-                        string.Format("BeginWorking 忽略 当前状态 {0} 不是 Starting", WeldStatus), MessageLevel.Warning);
+                    Log(string.Format("BeginWorking 忽略 当前状态 {0} 不是 Starting", WeldStatus), MessageLevel.Warning);
                     return;
                 }
                 if (!_dataStable)
                 {
-                    GlobalCommData.ShowLog(_tag, "BeginWorking 忽略 数据尚未稳定", MessageLevel.Warning);
+                    Log("BeginWorking 忽略 数据尚未稳定", MessageLevel.Warning);
                     return;
                 }
                 SetWeldStatus(SubDeviceWeldStatus.Working, "主设备通知进入 Working（焊接开始）");
@@ -719,7 +716,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             {
                 if (State == SubDeviceState.Disconnected)
                 {
-                    GlobalCommData.ShowLog(_tag, "复位拒绝 当前未连接", MessageLevel.Warning);
+                    Log("复位拒绝 当前未连接", MessageLevel.Warning);
                     return false;
                 }
                 SafeShutdownPeripherals();
@@ -843,7 +840,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             }
             catch (Exception ex)
             {
-                GlobalCommData.ShowLog(_tag, "释放相机异常 " + ex.Message, MessageLevel.Warning);
+                Log("释放相机异常 " + ex.Message, MessageLevel.Warning);
             }
             _isWorkflowActive = false;
         }

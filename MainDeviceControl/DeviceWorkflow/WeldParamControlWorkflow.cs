@@ -89,8 +89,6 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
 
         #region 私有变量
 
-        private readonly string _tag = "焊接工艺控制工作流";
-
         /// <summary>私有相位（取代旧基类 _step，仅驱动 FlowProcess 与可观测性）。</summary>
         private WeldParamControlWorkflowState _phase = WeldParamControlWorkflowState.Uninitialized;
 
@@ -116,7 +114,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
 
         #region 公共变量
 
-        public override string StateName => _tag;
+        public override string StateName => Tag;
 
         /// <summary>工艺参数是否已就绪（等价于设备态 Connect）。</summary>
         public bool IsParamReady => _phase == WeldParamControlWorkflowState.Standby;
@@ -131,7 +129,10 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
 
         #region 构造函数
 
-        private WeldParamControlWorkflow() { }
+        private WeldParamControlWorkflow()
+        {
+            Tag = "焊接工艺控制工作流";
+        }
 
         #endregion
 
@@ -184,7 +185,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             }
             catch (Exception ex)
             {
-                GlobalCommData.ShowLog(_tag, "工艺参数下发异常 " + ex.Message, MessageLevel.Warning);
+                Log("工艺参数下发异常 " + ex.Message, MessageLevel.Warning);
                 return false;
             }
         }
@@ -281,10 +282,10 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         {
             SetStep(WeldParamControlWorkflowState.ErrorAborted, FailReason);
             IsAlarm = true;
-            FaultRecoveryManager.Instance.RecordFault(_tag, new FaultRecord
+            FaultRecoveryManager.Instance.RecordFault(Tag, new FaultRecord
             {
                 Time = DateTime.Now,
-                Device = _tag,
+                Device = Tag,
                 State = MapWeldStatus(_phase),
                 Category = FaultCategory.Process,
                 ErrorCode = "WeldParamStepFail",
@@ -292,7 +293,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
                 AutoRecovered = false,
                 RecoveryAction = "重新载入工艺参数后复位"
             });
-            GlobalCommData.ShowLog(_tag, string.Format("焊接工艺控制异常终止 原因 {0}", FailReason), MessageLevel.Error);
+            Log(string.Format("焊接工艺控制异常终止 原因 {0}", FailReason), MessageLevel.Error);
             GoStep(StepIdle);
         }
 
@@ -368,7 +369,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
 
         /// <summary>单步分派，由监听线程节拍驱动。</summary>
         /// <remarks>全部 case 无 Thread.Sleep / while 轮询。</remarks>
-        protected override void FlowProcess()
+        public  override void FlowProcess()
         {
             switch (WorkStep)
             {
@@ -413,15 +414,15 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             {
                 try
                 {
-                    GlobalCommData.ShowLog(_tag, "手动连接开始", MessageLevel.Info);
+                    Log("手动连接开始", MessageLevel.Info);
                     bool ok = LoadParameters();
                     SetState(ok ? SubDeviceState.Connected : SubDeviceState.Disconnected,
                         ok ? "工艺参数就绪" : "工艺参数载入失败");
-                    GlobalCommData.ShowLog(_tag, "手动连接完成", MessageLevel.Info);
+                    Log("手动连接完成", MessageLevel.Info);
                 }
                 catch (Exception ex)
                 {
-                    GlobalCommData.ShowLog(_tag, "手动连接异常 " + ex.Message, MessageLevel.Info);
+                    Log("手动连接异常 " + ex.Message, MessageLevel.Info);
                 }
                 finally
                 {
@@ -445,14 +446,14 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             {
                 try
                 {
-                    GlobalCommData.ShowLog(_tag, "手动断开开始", MessageLevel.Info);
+                    Log("手动断开开始", MessageLevel.Info);
                     SetStep(WeldParamControlWorkflowState.Standby, "手动停止焊接工艺控制");
                     SetState(SubDeviceState.Disconnected, "焊接工艺控制断开");
-                    GlobalCommData.ShowLog(_tag, "手动断开完成", MessageLevel.Info);
+                    Log("手动断开完成", MessageLevel.Info);
                 }
                 catch (Exception ex)
                 {
-                    GlobalCommData.ShowLog(_tag, "手动断开异常 " + ex.Message, MessageLevel.Info);
+                    Log("手动断开异常 " + ex.Message, MessageLevel.Info);
                 }
                 finally
                 {

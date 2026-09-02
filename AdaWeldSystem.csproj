@@ -144,6 +144,8 @@
     <Compile Include="ProductFileManager\RunRecordManager.cs" />
     <Compile Include="ProductFileManager\SmartRayConverter.cs" />
     <Compile Include="ProductFileManager\WeldActionRecord.cs" />
+    <!-- 设备控制核心（三态模型 + 5 子工作流 + 2 管控类 + 统一日志出口 DeviceLog） -->
+    <Compile Include="MainDeviceControl\DeviceLog.cs" />
     <Compile Include="MainDeviceControl\DeviceStateApiCore\CommandTable.cs" />
     <Compile Include="MainDeviceControl\DeviceStateApiCore\DeviceStateBase.cs" />
     <Compile Include="MainDeviceControl\DeviceStateApiCore\DeviceWorkflowBase.cs" />
@@ -350,7 +352,9 @@
     <Compile Include="LaserWeldHead\LaserWeldHeadController.cs" />
     <Compile Include="LaserWeldHead\LaserWeldHeadData.cs" />
     <!-- 注：原 DeviceStateMachine/、DataModels/、Workflow\Safety\ 条目已随目录删除移除；
-         安全检查已合并为单文件 MainDeviceControl\DeviceWorkflow\SafetyWorkflow.cs（配置 SafetyFlow + 判定 SafetyInterlockChecker + 监控循环 三合一，2026-08-31），
+         安全检查（含互锁配置 SafetyFlow + 判定 SafetyInterlockChecker + 监控循环，2026-08-31 三合一，2026-09-02 更名）
+         现为单文件 MainDeviceControl\DeviceStatusWork.cs（三线程 IOWork / EMGWork / StatusWork）；
+         整机主控为 MainDeviceControl\DeviceControlWork.cs（5 个子设备工作流在 MainDeviceControl\DeviceWorkflow\）；
          FaultRecord/FaultCategory 与 FaultRecoveryManager 已于 2026-09-01 归口 ProductFileManager\FaultRecoveryManager.cs -->
     <EmbeddedResource Include="UIDesign\SubView\RenderParamForm.resx">
       <DependentUpon>RenderParamForm.cs</DependentUpon>

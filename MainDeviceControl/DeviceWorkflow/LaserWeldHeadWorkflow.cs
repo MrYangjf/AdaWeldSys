@@ -1,5 +1,4 @@
 ﻿using System;
-using AdaWeldSystem.Comm;
 using AdaWeldSystem.MainDeviceControl.DeviceState;
 using AdaWeldSystem.MainDeviceControl.FlowState;
 
@@ -29,8 +28,6 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
     {
         #region 私有变量
 
-        private readonly string _tag = "焊接头工作流";
-
         /// <summary>私有相位（取代旧基类 _step，仅驱动 FlowProcess 与可观测性）。</summary>
         private LaserWeldHeadWorkflowState _phase = LaserWeldHeadWorkflowState.Uninitialized;
 
@@ -47,7 +44,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
 
         #region 公共变量
 
-        public override string StateName => _tag;
+        public override string StateName => Tag;
 
         /// <summary>骨架期无业务，不启动常驻监听线程（避免空转线程）。</summary>
         protected override bool IsRunLoopActive { get { return false; } }
@@ -56,7 +53,10 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
 
         #region 构造函数
 
-        private LaserWeldHeadWorkflow() { }
+        private LaserWeldHeadWorkflow()
+        {
+            Tag = "焊接头工作流";
+        }
 
         #endregion
 
@@ -91,7 +91,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
 
         /// <summary>单步分派（骨架期无执行步，空转）。</summary>
         /// <remarks>私有逻辑落地后在此 switch(_phase) 分派，case 内禁止 Thread.Sleep / while 轮询。</remarks>
-        protected override void FlowProcess()
+        public override void FlowProcess()
         {
         }
 

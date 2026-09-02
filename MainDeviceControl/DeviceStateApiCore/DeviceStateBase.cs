@@ -194,7 +194,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceState
         public virtual void EmergencyStop()
         {
             IsAlarm = true;
-            GlobalCommData.ShowLog(StateName, "设备急停", MessageLevel.Error);
+            DeviceLog.Write(StateName, "设备急停", MessageLevel.Error);
         }
 
         #endregion
@@ -224,7 +224,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceState
                     Timestamp = DateTime.Now
                 });
             }
-            GlobalCommData.ShowLog(StateName,
+            DeviceLog.Write(StateName,
                 string.Format("连接态切换 {0} -> {1}", oldState, newState));
         }
 
@@ -244,7 +244,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceState
                     Timestamp = DateTime.Now
                 });
             }
-            GlobalCommData.ShowLog(StateName,
+            DeviceLog.Write(StateName,
                 string.Format("焊接过程态切换 {0} -> {1}", oldStatus, newStatus));
         }
 

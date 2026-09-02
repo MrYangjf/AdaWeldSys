@@ -41,8 +41,6 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
 
         #region 私有变量
 
-        private readonly string _tag = "监控相机工作流";
-
         /// <summary>私有流程态（取代旧基类 _step，仅驱动 FlowProcess 与可观测性）。</summary>
         private MonitorWorkflowState _flowState = MonitorWorkflowState.Uninitialized;
 
@@ -71,7 +69,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         #region 公共变量
 
         /// <summary>对外名片名（日志与监听线程命名用）。</summary>
-        public override string StateName => _tag;
+        public override string StateName => Tag;
 
         /// <summary>最近一轮检测结果（只读快照，供 UI 在流程态转 Completed 后拉取）</summary>
         public MonitorResult LastResult
@@ -117,7 +115,10 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
 
         #region 构造函数
 
-        private MonitorCameraWorkflow() { }
+        private MonitorCameraWorkflow()
+        {
+            Tag = "监控相机工作流";
+        }
 
         #endregion
 
@@ -248,10 +249,10 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         {
             SetStep(MonitorWorkflowState.ErrorAborted, FailReason);
             IsAlarm = true;
-            FaultRecoveryManager.Instance.RecordFault(_tag, new FaultRecord
+            FaultRecoveryManager.Instance.RecordFault(Tag, new FaultRecord
             {
                 Time = DateTime.Now,
-                Device = _tag,
+                Device = Tag,
                 State = MapWeldStatus(_flowState),
                 Category = FaultCategory.Device,
                 ErrorCode = "MonitorStepFail",
@@ -259,7 +260,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
                 AutoRecovered = false,
                 RecoveryAction = "停止巡检，等待人工复位"
             });
-            GlobalCommData.ShowLog(_tag, string.Format("监控检测异常终止 原因 {0}", FailReason), MessageLevel.Error);
+            Log(string.Format("监控检测异常终止 原因 {0}", FailReason), MessageLevel.Error);
             GoStep(StepIdle);
         }
 
@@ -370,7 +371,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
 
         /// <summary>单步分派，由监听线程节拍驱动。</summary>
         /// <remarks>全部 case 无 Thread.Sleep / while 轮询 / 阻塞 WaitOne。</remarks>
-        protected override void FlowProcess()
+        public  override void FlowProcess()
         {
             switch (WorkStep)
             {
@@ -417,18 +418,18 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             {
                 try
                 {
-                    GlobalCommData.ShowLog(_tag, "手动连接开始", MessageLevel.Info);
+                    Log("手动连接开始", MessageLevel.Info);
                     EnsureConnected();
                     bool ok = MonitorCameraRun.Instance.ConnectionState == MonitorCameraConnectionState.Connected;
                     SetState(ok ? SubDeviceState.Connected : SubDeviceState.Disconnected,
                         ok ? "监控相机连接完成" : "监控相机连接失败");
                     SetStep(ok ? MonitorWorkflowState.Standby : MonitorWorkflowState.Uninitialized,
                         ok ? "监控相机就绪" : "监控相机未连接");
-                    GlobalCommData.ShowLog(_tag, ok ? "手动连接完成" : "手动连接失败", MessageLevel.Info);
+                    Log(ok ? "手动连接完成" : "手动连接失败", MessageLevel.Info);
                 }
                 catch (Exception ex)
                 {
-                    GlobalCommData.ShowLog(_tag, "手动连接异常 " + ex.Message, MessageLevel.Info);
+                    Log("手动连接异常 " + ex.Message, MessageLevel.Info);
                 }
                 finally
                 {

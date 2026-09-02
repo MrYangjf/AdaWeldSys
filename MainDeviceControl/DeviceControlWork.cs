@@ -10,6 +10,7 @@ using AdaWeldSystem.LineLaserCam.VirtualCam;
 using AdaWeldSystem.LineLaserCamApi;
 using AdaWeldSystem.MotionControl;
 using AdaWeldSystem.ProductFileManager;
+using AdaWeldSystem.MainDeviceControl.FlowState;
 using AdaWeldSystem.FileOperate;
 
 namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
@@ -119,7 +120,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         /// <summary>当前执行步号（内部游标）。</summary>
         private volatile int _workStep;
 
-        /// <summary>当前步进入时间戳（Ticks）。</summary>
+        /// <summary>当前步进入时间戳（Ticks，Interlocked 读写保证 64 位原子，避免 DateTime 撕裂）。</summary>
         private long _workStartTicks;
 
         private string _failReason = "";
@@ -211,7 +212,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         /// <summary>是否焊接中（运行态 Running 且执行步处于焊接段）。</summary>
         public bool IsWelding
         {
-            get { return _status == MainDeviceStatus.Running && _workStep >= StepStartWelding && _workStep <= StepWelding; }
+            get { return Status == MainDeviceStatus.Running && _workStep >= StepStartWelding && _workStep <= StepWelding; }
         }
 
         // ---- 模拟模式（归并自 SimulationWorkflow，ADR-048） ----
@@ -300,7 +301,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             _workStartTicks = DateTime.Now.Ticks;
             // 订阅顶层 Comm 的通讯指令（机器人 Pose/Command 经此到达；回调只写命令变量，不做业务）
             GlobalCommData.CommunicationCommandReceived += OnCommunicationCommand;
-            GlobalCommData.ShowLog(_tag, "主设备运行管控实例化", MessageLevel.Info);
+            Log("主设备运行管控实例化", MessageLevel.Info);
         }
 
         #endregion
@@ -320,10 +321,16 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
                         ConsumeCommand();
                         FlowProcess();
                     }
+                    else
+                    {
+                        // 非运行态必须持续刷新步时间戳：否则停机数分钟后重启，
+                        // 首拍就会用停机时刻的时间戳判超时，直接误跳失败收尾
+                        ResetStepTime();
+                    }
                 }
                 catch (Exception ex)
                 {
-                    GlobalCommData.ShowLog(_tag, "运行线程异常 " + ex.Message, MessageLevel.Error);
+                    Log("运行线程异常 " + ex.Message, MessageLevel.Error);
                 }
                 Thread.Sleep(BeatMs);
             }
@@ -334,7 +341,13 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         private void GoStep(int step)
         {
             _workStep = step;
-            _workStartTicks = DateTime.Now.Ticks;
+            Interlocked.Exchange(ref _workStartTicks, DateTime.Now.Ticks);
+        }
+
+        /// <summary>刷新当前步进入时间（非运行态每拍调用，防止重启瞬间误判超时）。</summary>
+        private void ResetStepTime()
+        {
+            Interlocked.Exchange(ref _workStartTicks, DateTime.Now.Ticks);
         }
 
         /// <summary>判断当前步停留是否超时。</summary>
@@ -342,7 +355,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         /// <returns>停留超过阈值返回 true</returns>
         private bool IsStepTimeout(double timeoutMs)
         {
-            return (DateTime.Now - new DateTime(_workStartTicks)).TotalMilliseconds > timeoutMs;
+            return (DateTime.Now - new DateTime(Interlocked.Read(ref _workStartTicks))).TotalMilliseconds > timeoutMs;
         }
 
         /// <summary>转入失败收尾并跳 900 段。</summary>
@@ -377,15 +390,14 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
                     Timestamp = DateTime.Now
                 });
             }
-            GlobalCommData.ShowLog(_tag,
-                string.Format("运行态切换 {0} -> {1} 原因 {2}", old, newStatus, reason));
+            Log(string.Format("运行态切换 {0} -> {1} 原因 {2}", old, newStatus, reason));
         }
 
         /// <summary>执行步 0：待机。</summary>
         /// <remarks>就绪（Stop）且收到焊前请求才发起焊前准备。</remarks>
         private void DoIdle()
         {
-            if (_status != MainDeviceStatus.Stop || !_pendingPreWeldRequest) return;
+            if (Status != MainDeviceStatus.Stop || !_pendingPreWeldRequest) return;
             _pendingPreWeldRequest = false;
             SetStatus(MainDeviceStatus.Running, "机器人请求焊前准备");
             CascadeConnect();
@@ -492,7 +504,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         /// <remarks>级联停机并记故障；为超时三步走的第三步。</remarks>
         private void DoFinishFail()
         {
-            SetStatus(MainDeviceStatus.EStop, FailReason);
+            SetStatus(MainDeviceStatus.EStop, "FailReason");
             EmergencyStop();
             FaultRecoveryManager.Instance.RecordFault("MainDevice", new FaultRecord
             {
@@ -500,7 +512,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
                 State = SubDeviceWeldStatus.ErrorAborted,
                 Category = FaultCategory.System,
                 ErrorCode = "FLOW_TIMEOUT",
-                ParamSnapshot = string.Format("WorkStep={0} Reason={1}", FailStep, FailReason)
+                ParamSnapshot = string.Format("WorkStep={0} Reason={1}", "FailStep", "FailReason")
             });
             CascadeDisconnect();
             SendDeviceCommand(DeviceCommand.CmdAbort);
@@ -528,7 +540,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
                     GoStep(StepIdle);
                     break;
                 case RobotPose.StartSafePose:
-                    if (_status != MainDeviceStatus.Running)
+                    if (Status != MainDeviceStatus.Running)
                         SetStatus(MainDeviceStatus.Stop, "机器人进入安全起始位");
                     break;
             }
@@ -720,7 +732,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         /// <param name="level">日志级别</param>
         private void Log(string message, MessageLevel level = MessageLevel.Info)
         {
-            GlobalCommData.ShowLog(_tag, message, level);
+            DeviceLog.Write(_tag, message, level);
         }
 
         /// <summary>模拟挂起的线激光连接回调。</summary>
@@ -947,7 +959,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             // 持久化"上次选择的模式"，使重启后下拉框显示本次选择
             SaveSimulation();
 
-            GlobalCommData.ShowLog(_simTag, string.Format(
+            DeviceLog.Write(_simTag, string.Format(
                 "模拟模式开启 模式 {0} 起点X {1:F1} 速度 {2:F1} 目标 {3:F1}",
                 mode, SimStartX, SimSpeed, SimTargetDistance), MessageLevel.Info);
         }
@@ -963,7 +975,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             }
             if (!wasEnabled) return; // 幂等：已关闭则不重复停止/记录，消除「模拟模式关闭」重复日志
             StopRobotXSimulation();
-            GlobalCommData.ShowLog(_simTag, "模拟模式关闭", MessageLevel.Info);
+            DeviceLog.Write(_simTag, "模拟模式关闭", MessageLevel.Info);
         }
 
         /// <summary>启动共享模拟 robotX 时钟：robotX = 起点 + 速度 × 流逝时间</summary>
@@ -1219,6 +1231,8 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             if (_running) return true;
             _running = true;
             _runLoopClosing = false;
+            // 重启一律从待机步起算：沿用停机时刻的步号与时间戳会让首拍就判超时
+            GoStep(StepIdle);
             if (_runLoopThread == null || !_runLoopThread.IsAlive)
             {
                 _runLoopThread = new Thread(RunLoop)
@@ -1228,7 +1242,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
                 };
                 _runLoopThread.Start();
             }
-            if (_status != MainDeviceStatus.EStop && _status != MainDeviceStatus.Alarm)
+            if (Status != MainDeviceStatus.EStop && Status != MainDeviceStatus.Alarm)
                 SetStatus(MainDeviceStatus.Stop, "机器启动");
             DeviceStatusWork.Instance.StartWork();
             Log("主设备运行管控启动，运行线程已就绪");
@@ -1246,7 +1260,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             CascadeClearStatus();
             CascadeDisconnect();
             DeviceStatusWork.Instance.CloseWork();
-            if (_status == MainDeviceStatus.Running)
+            if (Status == MainDeviceStatus.Running)
                 SetStatus(MainDeviceStatus.Stop, "机器停止");
             Log("主设备运行管控停止");
         }
@@ -1255,7 +1269,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         /// <returns>受理返回 true；运行中或机器人在位检测不通过返回 false</returns>
         public bool ResetMachine()
         {
-            if (_running && _status == MainDeviceStatus.Running) return false;
+            if (_running && Status == MainDeviceStatus.Running) return false;
             if (!IsRobotReachable())
             {
                 SetStatus(MainDeviceStatus.Alarm, "机器人在位检测失败 复位阻断");
@@ -1311,7 +1325,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         /// <summary>取消急停并转未复位。</summary>
         public void EStopCancel()
         {
-            if (_status != MainDeviceStatus.EStop) return;
+            if (Status != MainDeviceStatus.EStop) return;
             SetStatus(MainDeviceStatus.NoReset, "急停解除 待复位");
         }
 
@@ -1340,7 +1354,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         /// <summary>安全互锁恢复上报（由 DeviceStatusWork 调用）：转未复位。</summary>
         public void ReportAlarmCleared()
         {
-            if (_status == MainDeviceStatus.Alarm)
+            if (Status == MainDeviceStatus.Alarm)
                 SetStatus(MainDeviceStatus.NoReset, "安全互锁恢复 待复位");
         }
 
