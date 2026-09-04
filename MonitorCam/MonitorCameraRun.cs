@@ -14,7 +14,7 @@ namespace AdaWeldSystem.MonitorCam
     /// 设计上解耦具体 SDK：底层通过 IMonitorCameraApi 抽象，当前实现为 HikvisionCameraApi（海康面阵相机，MvCameraControl.Net SDK）。
     /// 参考 SmartRay CameraRun 的 Live/PIL 模式与采集完成信号机制（ADR-005 回调等待）。
     /// 注意：不修改任何既有相机模块，监控相机独立运行。
-    /// 相机自身的健康巡检（连接态 + 近期有效采集）归属本类，不属工作流职责（ADR-042 R1）。
+    /// 相机自身的健康巡检（连接态 + 近期有效采集）归属本类，不属工作流职责（权责边界 R1）。
     /// </summary>
     public class MonitorCameraRun : IDisposable
     {
@@ -47,7 +47,7 @@ namespace AdaWeldSystem.MonitorCam
         private MonitorCameraConfig _config;
         private bool _isDisposed = false;
 
-        // ---- 健康巡检字段（相机自身状态，ADR-042 R1 由工作流下沉至此）----
+        // ---- 健康巡检字段（相机自身状态，按权责边界由工作流下沉至此）----
 
         private readonly object _stateLock = new object();
         private MonitorSupervisionState _supervisionState = MonitorSupervisionState.Idle;

@@ -73,7 +73,7 @@ namespace AdaWeldSystem.MotionControl
         {
             if (IsInitialized) return;
 
-            // 连接阶段：注册正运动控制器并按配置建轴（ADR-041：原状态机四步模板已由本方法内联承载）
+            // 连接阶段：注册正运动控制器并按配置建轴（原状态机四步模板已由本方法内联承载）
             var mgr = MotionConfigManager.Instance;
             mgr.Load();
             string ip = mgr.Config.IpAddress;

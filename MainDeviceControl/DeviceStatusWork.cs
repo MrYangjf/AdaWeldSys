@@ -4,20 +4,12 @@ using System.Threading;
 using AdaWeldSystem.Comm;
 using AdaWeldSystem.Comm.PLC.Siemens;
 using AdaWeldSystem.MainDeviceControl.DeviceState;
-using AdaWeldSystem.ProductFileManager;
 using S7.Net;
 
 namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
 {
-    /// <summary>
-    /// 设备安全/IO/状态管控（单例，参考 PcomDeviceInterface.MachineStatusWork）：
-    /// 由三个常驻监控线程内聚而成——IOWork（安全互锁与 IO 轮询）、
-    /// EMGWork（急停按钮处置）、StatusWork（主设备运行态三色灯反射）。
-    /// 任何线程检测到异常均经 DeviceControlWork 单一控制源变更主设备运行态并记故障，
-    /// 不自行维护设备态/流程态（权责边界见 ADR-043）。
-    ///
-    /// 独立管控类，不继承 DeviceWorkflowBase；启动 StartWork() / 停止 CloseWork()（亦经 Dispose 释放）。
-    /// </summary>
+    /// <summary>设备安全/IO/状态管控（单例，三常驻线程）。</summary>
+    /// <remarks>thIOWork 安全互锁与 IO 轮询、thEMGWork 急停处置、thLightStatusWork 三色灯反射；异常经 DeviceControlWork 单一控制源变更运行态（ADR-030）。</remarks>
     public class DeviceStatusWork
     {
         #region 常量
@@ -44,9 +36,9 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
 
         private volatile bool _running;
         private volatile bool _alarmActive;
-        private Thread _thIOWork;
-        private Thread _thEMGWork;
-        private Thread _thStatusWork;
+        private Thread thIOWork;
+        private Thread thEMGWork;
+        private Thread thLightStatusWork;
 
         private SafetyInterlockResult _lastResult;
 
@@ -59,6 +51,15 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
 
         /// <summary>三个监控线程是否运行中</summary>
         public bool IsRunning { get { return _running; } }
+
+        /// <summary>IO 安全互锁监控线程是否运行中</summary>
+        public bool IsIOWorking { get; private set; }
+
+        /// <summary>急停处置线程是否运行中</summary>
+        public bool IsEMGWorking { get; private set; }
+
+        /// <summary>三色灯状态反射线程是否运行中</summary>
+        public bool IsLightStatusWorking { get; private set; }
 
         /// <summary>最近一次互锁检查结果（由 IOWork 刷新）</summary>
         public SafetyInterlockResult LastResult
@@ -99,18 +100,21 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         /// <param name="level">日志级别</param>
         private void Log(string message, MessageLevel level = MessageLevel.Info)
         {
-            DeviceLog.Write(_tag, message, level);
+            GlobalCommData.ShowLog(_tag, message, level);
         }
 
-        /// <summary>IO 轮询线程主体：互锁检查与设备态监控。</summary>
-        /// <remarks>对应 PDF 架构图 DeviceStatusWork 泳道的 IO 轮询与设备态（Connect/Comm）监控。
-        /// 急停由 EMGWork 专责，避免与互锁报警态相互翻转。</remarks>
+        /// <summary>IO 轮询线程主体：Running IO 扫描与 Alarm IO 互锁检查。</summary>
+        /// <remarks>急停由 EMGWork 专责，避免与互锁报警态相互翻转。</remarks>
         private void IOWork()
         {
+            IsIOWorking = true;
             while (_running)
             {
                 try
                 {
+                    ScanRunningIo();
+                    DeviceControlWork.Instance.CheckPreworkFailed();
+
                     var result = _checker.Check();
                     LastResult = result;
 
@@ -126,46 +130,91 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
                     {
                         _alarmActive = true;
                         DeviceControlWork.Instance.ReportAlarm(result.Reason);
-                        RecordFault(result.Reason);
                     }
                 }
                 catch (Exception ex)
                 {
-                    Log("安全互锁异常 " + ex.Message, MessageLevel.Error);
+                    Log("IO 轮询异常 " + ex.Message, MessageLevel.Error);
                 }
                 Thread.Sleep(IoPollIntervalMs);
             }
+            IsIOWorking = false;
         }
 
-        /// <summary>急停轮询线程主体。</summary>
-        /// <remarks>对应 PDF 架构图 DeviceStatusWork 泳道的 EMG 处置；急停为最高优先级，线程置 Highest。</remarks>
+        /// <summary>读取物理急停位（由控制器 / PLC 给出）。</summary>
+        /// <returns>急停按钮已按下返回 true；PLC 未启用或读取失败返回 false</returns>
+        private bool ReadPhysicalEmg()
+        {
+            var cfg = _checker.Thresholds;
+            var comm = GlobalCommData.mCommunicationManager;
+            var plc = comm != null && comm.IsPlcEnabled ? comm.PlcManager : null;
+            if (plc == null) return false;
+            return plc.ReadBit(DataType.DataBlock, cfg.PlcDb, 0, cfg.EmergencyStopBit);
+        }
+
+        /// <summary>扫描一条脉冲型虚拟 IO：命中即取走并分派执行（保证每条命令只执行一次）。</summary>
+        /// <param name="ioName">虚拟 IO 常量</param>
+        /// <returns>命中并执行返回 true</returns>
+        private bool ScanPulseIo(string ioName)
+        {
+            var work = DeviceControlWork.Instance;
+            if (!work.TakeVirtualIo(ioName)) return false;
+
+            work.ExecuteIo(ioName);
+            Log("Running IO 命中 " + ioName, MessageLevel.Info);
+            return true;
+        }
+
+        /// <summary>扫描全部 Running IO，命中后执行动作。</summary>
+        /// <remarks>只关心 IO 是否置位，不区分硬件、机器人或 UI 触发源。</remarks>
+        private void ScanRunningIo()
+        {
+            ScanPulseIo(DeviceControlWork.IoInit);
+            ScanPulseIo(DeviceControlWork.IoReset);
+            ScanPulseIo(DeviceControlWork.IoStart);
+            ScanPulseIo(DeviceControlWork.IoStop);
+            ScanPulseIo(DeviceControlWork.IoClearAlarm);
+
+            ScanPulseIo(DeviceControlWork.IoSubPrework);
+            ScanPulseIo(DeviceControlWork.IoSubWork);
+            ScanPulseIo(DeviceControlWork.IoSubStop);
+            ScanPulseIo(DeviceControlWork.IoSubManualStop);
+            ScanPulseIo(DeviceControlWork.IoSubAlarmStop);
+        }
+
+        /// <summary>急停轮询线程主体（原档 §2 EMG IO Work）。</summary>
+        /// <remarks>同时监控虚拟与物理急停位，统一走置位 → 扫描 → ExecuteIo 路径，不区分触发源。</remarks>
         private void EMGWork()
         {
             bool emgShown = false;
+            IsEMGWorking = true;
             while (_running)
             {
                 try
                 {
-                    var cfg = _checker.Thresholds;
-                    var comm = GlobalCommData.mCommunicationManager;
-                    var plc = comm != null && comm.IsPlcEnabled ? comm.PlcManager : null;
-                    bool pressed = plc != null &&
-                        plc.ReadBit(DataType.DataBlock, cfg.PlcDb, 0, cfg.EmergencyStopBit);
+                    var work = DeviceControlWork.Instance;
 
-                    var status = DeviceControlWork.Instance.Status;
+                    // ① 物理 IO：硬件按钮按下即置位虚拟 EmgIO（与其余触发源走同一路径）
+                    if (ReadPhysicalEmg()) work.EstopMachine("急停按钮按下");
+
+                    // ② 统一扫描虚拟 EmgIO 并执行（物理与虚拟在此汇合）
+                    bool pressed = work.IsVirtualIoSet(DeviceControlWork.IoEmg);
+                    var status = work.Status;
+
                     if (pressed && !emgShown)
                     {
                         emgShown = true;
-                        DeviceControlWork.Instance.EStopMachine("急停按钮按下");
-                        Log("急停按钮按下", MessageLevel.Error);
+                        work.ExecuteIo(DeviceControlWork.IoEmg);
+                        work.ClearVirtualIo(DeviceControlWork.IoEmg);
+                        Log("急停执行完成", MessageLevel.Error);
                     }
                     else if (!pressed && emgShown)
                     {
                         emgShown = false;
                         if (status == MainDeviceStatus.EStop)
                         {
-                            DeviceControlWork.Instance.EStopCancel();
-                            DeviceControlWork.Instance.ReportAlarmCleared();
+                            work.EstopCancel();
+                            work.ReportAlarmCleared();
                         }
                     }
                 }
@@ -175,13 +224,15 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
                 }
                 Thread.Sleep(EmgPollIntervalMs);
             }
+            IsEMGWorking = false;
         }
 
         /// <summary>三色灯反射线程主体。</summary>
         /// <remarks>对应 PDF 架构图 DeviceStatusWork 泳道的 Status 反射；状态切换才写 PLC，避免每拍抖动。</remarks>
-        private void StatusWork()
+        private void LightStatusWork()
         {
             MainDeviceStatus last = MainDeviceStatus.Stop;
+            IsLightStatusWorking = true;
             while (_running)
             {
                 try
@@ -191,7 +242,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
                     {
                         last = status;
                         DriveTricolorLamp(status);
-                        Log("状态反射 " + status, MessageLevel.Info);
+                        // 状态切换不记日志（ADR-038 报错分层：三色灯动作本身即对外呈现）
                     }
                 }
                 catch (Exception ex)
@@ -200,9 +251,10 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
                 }
                 Thread.Sleep(StatusPollIntervalMs);
             }
+            IsLightStatusWorking = false;
         }
 
-        /// <summary>驱动三色灯 PLC 输出（地址待标定，未配置 StatusLampDb 则不写）。</summary>
+        /// <summary>驱动三色灯 PLC 输出，未配置不写。</summary>
         /// <param name="status">主设备运行态</param>
         private void DriveTricolorLamp(MainDeviceStatus status)
         {
@@ -244,20 +296,6 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             }
         }
 
-        /// <summary>记录安全故障到持久化（经 FaultRecoveryManager）。</summary>
-        /// <param name="reason">故障原因</param>
-        private void RecordFault(string reason)
-        {
-            FaultRecoveryManager.Instance.RecordFault(_tag, new FaultRecord
-            {
-                Device = _tag,
-                State = SubDeviceWeldStatus.ErrorAborted,
-                Category = FaultCategory.Safety,
-                ErrorCode = "INTERLOCK_FAILED",
-                ParamSnapshot = reason
-            });
-        }
-
         /// <summary>等待线程退出（最多 1s）。</summary>
         /// <param name="thread">待汇合的线程</param>
         private void JoinThread(Thread thread)
@@ -269,52 +307,52 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
 
         #region 公共函数
 
-        /// <summary>启动三个监控线程（幂等）。</summary>
-        /// <remarks>由 DeviceControlWork.StartMachine 拉起；IOWork 置 AboveNormal、EMGWork 置 Highest、StatusWork 置 Normal。</remarks>
-        public void StartWork()
+        /// <summary>实例化三条监控线程并 Start（幂等）。</summary>
+        /// <remarks>thIOWork AboveNormal，thEMGWork Highest，thLightStatusWork Normal。</remarks>
+        public void MachineIOWorkOpen()
         {
             if (_running) return;
             _running = true;
             _alarmActive = false;
 
-            _thIOWork = new Thread(IOWork)
+            thIOWork = new Thread(IOWork)
             {
-                Name = "DeviceStatusIO",
+                Name = "thIOWork",
                 IsBackground = true,
                 Priority = ThreadPriority.AboveNormal
             };
-            _thIOWork.Start();
+            thIOWork.Start();
 
-            _thEMGWork = new Thread(EMGWork)
+            thEMGWork = new Thread(EMGWork)
             {
-                Name = "DeviceStatusEMG",
+                Name = "thEMGWork",
                 IsBackground = true,
                 Priority = ThreadPriority.Highest
             };
-            _thEMGWork.Start();
+            thEMGWork.Start();
 
-            _thStatusWork = new Thread(StatusWork)
+            thLightStatusWork = new Thread(LightStatusWork)
             {
-                Name = "DeviceStatusLamp",
+                Name = "thLightStatusWork",
                 IsBackground = true,
                 Priority = ThreadPriority.Normal
             };
-            _thStatusWork.Start();
+            thLightStatusWork.Start();
 
             Log("安全/IO/状态监控启动", MessageLevel.Info);
         }
 
-        /// <summary>停止三个监控线程。</summary>
-        public void CloseWork()
+        /// <summary>停止三条监控线程（置标志位 + 有限等待，不 Abort）。</summary>
+        public void MachineIOWorkClose()
         {
             if (!_running) return;
             _running = false;
-            JoinThread(_thIOWork);
-            JoinThread(_thEMGWork);
-            JoinThread(_thStatusWork);
-            _thIOWork = null;
-            _thEMGWork = null;
-            _thStatusWork = null;
+            JoinThread(thIOWork);
+            JoinThread(thEMGWork);
+            JoinThread(thLightStatusWork);
+            thIOWork = null;
+            thEMGWork = null;
+            thLightStatusWork = null;
             _alarmActive = false;
             Log("安全/IO/状态监控停止", MessageLevel.Info);
         }
@@ -337,7 +375,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         /// <summary>释放：停止监控线程。</summary>
         public void Dispose()
         {
-            CloseWork();
+            MachineIOWorkClose();
         }
 
         #endregion
@@ -460,9 +498,8 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         public DateTime CheckTime { get; set; }
     }
 
-    /// <summary>安全互锁检查器：覆盖硬件（安全门/气压/冷却水/温度/模式）与设备态（四个子设备 Connected、机器人在线）两类互锁。</summary>
-    /// <remarks>阈值与地址来自 <see cref="SafetyFlow"/>，需现场标定；设备就绪判定统一为 SubDeviceState.Connected。
-    /// 急停按钮由 DeviceStatusWork.EMGWork 专责处置（置 EStop），故此处不再检查急停位。</remarks>
+    /// <summary>安全互锁检查器：硬件与设备态两类互锁。</summary>
+    /// <remarks>急停由 DeviceStatusWork.EMGWork 专责处置，此处不检查急停位。</remarks>
     public class SafetyInterlockChecker
     {
         #region 私有变量

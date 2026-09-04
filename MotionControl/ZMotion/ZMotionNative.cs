@@ -662,7 +662,7 @@ namespace AdaWeldSystem.MotionControl.ZMotion
             ref int ifEnable, ref float pitchDist);
 
         // ============================================================
-        // V3 通讯编码器轴（ATYPE=25）— ADR-030
+        // V3 通讯编码器轴（ATYPE=25）— ADR-023
         // ============================================================
 
         /// <summary>

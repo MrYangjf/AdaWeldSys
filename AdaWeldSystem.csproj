@@ -139,14 +139,12 @@
     <Compile Include="FileOperate\XMLfile.cs" />
     <Compile Include="WeldParamControl\WeldDataManager.cs" />
     <Compile Include="WeldParamControl\WeldProcess.cs" />
-    <Compile Include="ProductFileManager\FaultRecoveryManager.cs" />
     <Compile Include="ProductFileManager\RecordFrame.cs" />
     <Compile Include="ProductFileManager\RunRecordManager.cs" />
     <Compile Include="ProductFileManager\SmartRayConverter.cs" />
     <Compile Include="ProductFileManager\WeldActionRecord.cs" />
-    <!-- 设备控制核心（三态模型 + 5 子工作流 + 2 管控类 + 统一日志出口 DeviceLog） -->
-    <Compile Include="MainDeviceControl\DeviceLog.cs" />
-    <Compile Include="MainDeviceControl\DeviceStateApiCore\CommandTable.cs" />
+    <!-- 设备控制核心（三态模型 + 5 子工作流 + 2 管控类） -->
+    <Compile Include="MainDeviceControl\DeviceStateApiCore\CommandCore.cs" />
     <Compile Include="MainDeviceControl\DeviceStateApiCore\DeviceStateBase.cs" />
     <Compile Include="MainDeviceControl\DeviceStateApiCore\DeviceWorkflowBase.cs" />
     <Compile Include="MainDeviceControl\DeviceWorkflow\LaserWeldHeadWorkflow.cs" />
@@ -197,7 +195,6 @@
     <Compile Include="LineLaserCam\HikRobotCam\HikCameraRun.cs" />
     <Compile Include="LineLaserCam\IntelligentLaserCam\IntelligentLaserCameraRun.cs" />
     <Compile Include="SqlLiteDatabase\AuthManager.cs" />
-    <Compile Include="SqlLiteDatabase\FaultRecordManager.cs" />
     <Compile Include="SqlLiteDatabase\AutoParamManager.cs" />
     <Compile Include="SqlLiteDatabase\ConfigManager.cs" />
     <Compile Include="SqlLiteDatabase\SqliteCore\DatabaseManagerBase.cs" />
@@ -287,6 +284,9 @@
     <Compile Include="UIDesign\SubView\AutoParamForm.Designer.cs">
       <DependentUpon>AutoParamForm.cs</DependentUpon>
     </Compile>
+    <Compile Include="UIDesign\SubView\InitWaitingPanel.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
     <Compile Include="UIDesign\SubView\ConfigForm.cs">
       <SubType>UserControl</SubType>
     </Compile>
@@ -355,7 +355,7 @@
          安全检查（含互锁配置 SafetyFlow + 判定 SafetyInterlockChecker + 监控循环，2026-08-31 三合一，2026-09-02 更名）
          现为单文件 MainDeviceControl\DeviceStatusWork.cs（三线程 IOWork / EMGWork / StatusWork）；
          整机主控为 MainDeviceControl\DeviceControlWork.cs（5 个子设备工作流在 MainDeviceControl\DeviceWorkflow\）；
-         FaultRecord/FaultCategory 与 FaultRecoveryManager 已于 2026-09-01 归口 ProductFileManager\FaultRecoveryManager.cs -->
+         FaultRecord/FaultCategory/FaultRecoveryManager/FaultRecordManager 已于 2026-09-04 经用户裁定整体移除（架构无故障恢复定义） -->
     <EmbeddedResource Include="UIDesign\SubView\RenderParamForm.resx">
       <DependentUpon>RenderParamForm.cs</DependentUpon>
     </EmbeddedResource>
@@ -439,11 +439,11 @@
     <Copy SourceFiles="@(ILDll)" DestinationFolder="$(TargetDir)" SkipUnchangedFiles="true" />
   </Target>
   <!-- ============================================================
-       NuGet 本地化（ADR-028）：所有 NuGet 包 DLL 从 3rdDepend 目录引用，
+       NuGet 本地化（ADR-021）：所有 NuGet 包 DLL 从 3rdDepend 目录引用，
        不再依赖 NuGet 源还原。DLL 文件统一存放于 3rdDepend\。
        ============================================================ -->
   <ItemGroup>
-    <!-- AntdUI (MIT) — UI 框架 (ADR-021) -->
+    <!-- AntdUI (MIT) — UI 框架 (ADR-018) -->
     <Reference Include="AntdUI">
       <HintPath>3rdDepend\AntdUI.dll</HintPath>
       <Private>True</Private>
@@ -693,7 +693,7 @@
     <None Include="Resources\Tom.gif" />
   </ItemGroup>
   <ItemGroup>
-    <!-- ADR-028 本地化：Stateless 5.20.1 以本地 DLL 引用（离线构建），禁止 PackageReference -->
+    <!-- ADR-021 本地化：Stateless 5.20.1 以本地 DLL 引用（离线构建），禁止 PackageReference -->
     <Reference Include="Stateless">
       <HintPath>3rdDepend\Stateless.dll</HintPath>
       <Private>True</Private>

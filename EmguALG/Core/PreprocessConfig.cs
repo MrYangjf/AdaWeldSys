@@ -6,7 +6,7 @@ using AdaWeldSystem.EmguALG.EmguConfiger;
 namespace AdaWeldSystem.EmguALG.Core
 {
     /// <summary>滤波阶段配置（强类型，供 AlgorithmBase.Preprocess 直接使用）。
-    /// 算子枚举统一引用 AdaWeldSystem.EmguALG 命名空间下的定义（ADR-026）。</summary>
+    /// 算子枚举统一引用 AdaWeldSystem.EmguALG 命名空间下的定义（ADR-020）。</summary>
     public class FilterConfig
     {
         public bool Enabled;

@@ -13,9 +13,9 @@ namespace AdaWeldSystem.Sub2UI
     /// 监控相机页面 - 监控画面显示与算法调试
     /// 提供：实时预览、焊前对中检测、焊中质量检测、算法参数编辑。
     /// 订阅 MonitorCameraRun 实时帧（图像归相机）与 MonitorCameraWorkflow 基类 StateChanged（流程态归流程）。
-    /// 检测结果在流程态转 Completed 后由本页向流程只读属性拉取（ADR-042）。
+    /// 检测结果在流程态转 Completed 后由本页向流程只读属性拉取（权责边界）。
     /// 所有事件处理均检查 InvokeRequired 以跨线程安全刷新（ADR / Lessons）。
-    /// 算法参数内联于右侧面板，由 MonitorAlgorithmManager 单例持久化（ADR-016）。
+    /// 算法参数内联于右侧面板，由 MonitorAlgorithmManager 单例持久化（ADR-014）。
     /// </summary>
     public partial class MonitorCamPage : UserControl
     {
@@ -74,7 +74,7 @@ namespace AdaWeldSystem.Sub2UI
 
         private void SubscribeEvents()
         {
-            // 图像由监控相机自身输出（ADR-042 R1），流程态由基类统一通知（R3）
+            // 图像由监控相机自身输出（权责边界 R1），流程态由基类统一通知（R3）
             MonitorCameraRun.FrameCompletedEvent += MonitorCameraRun_FrameCompletedEvent;
             MonitorCameraRun.Instance.StatusChanged += MonitorCameraRun_StatusChanged;
             MonitorCameraWorkflow.Instance.WeldStatusChanged += Workflow_StateChanged;
@@ -269,7 +269,7 @@ namespace AdaWeldSystem.Sub2UI
         }
 
         /// <summary>
-        /// 流程态变更：统一入口（ADR-042 R3/R4）。
+        /// 流程态变更：统一入口（权责边界 R3/R4）。
         /// 状态文本直接取流程态；结果数据由本页在 Completed 后向流程拉取只读属性。
         /// </summary>
         private void Workflow_StateChanged(object sender, WeldStatusChangedEventArgs e)
@@ -331,9 +331,9 @@ namespace AdaWeldSystem.Sub2UI
         {
             switch (state)
             {
+                case SubDeviceWeldStatus.NoReset: return "未复位";
                 case SubDeviceWeldStatus.Standby: return "待机";
                 case SubDeviceWeldStatus.PreWork: return "焊接前准备";
-                case SubDeviceWeldStatus.Starting: return "启动中";
                 case SubDeviceWeldStatus.Working: return "工作中";
                 case SubDeviceWeldStatus.Stopping: return "停止中";
                 case SubDeviceWeldStatus.ErrorAborted: return "异常终止";

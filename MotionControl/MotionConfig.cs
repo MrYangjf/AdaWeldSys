@@ -430,7 +430,7 @@ namespace AdaWeldSystem.MotionControl
     /// <summary>
     /// 运动控制配置管理器（单例）
     /// 负责运动控制器配置的 INI 持久化：加载/保存轴字典、IO字典、连接参数、心跳配置等。
-    /// 所有配置存储在单个 INI 文件中，遵循 ADR-008 ConfigLayout 规范。
+    /// 所有配置存储在单个 INI 文件中，遵循 ADR-007 ConfigLayout 规范。
     /// 
     /// INI 文件结构：
     ///   [Controller]
@@ -500,7 +500,7 @@ namespace AdaWeldSystem.MotionControl
 
         /// <summary>
         /// 获取配置文件路径
-        /// 遵循 ADR-008：Config/INI/ 目录
+        /// 遵循 ADR-007：Config/INI/ 目录
         /// </summary>
         private string EnsureConfigPath()
         {

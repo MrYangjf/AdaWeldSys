@@ -7,6 +7,7 @@ using AdaWeldSystem.MotionControl;
 using AdaWeldSystem.LineLaserCamApi;
 using AdaWeldSystem.Sub1UI;
 using AdaWeldSystem.Sub2UI;
+using AdaWeldSystem.Sub3UI;
 using AntdUI;
 using System;
 using System.Drawing;
@@ -34,6 +35,9 @@ namespace AdaWeldSystem
         // V3：整机状态标签（动态添加到状态栏，显示整设备聚合状态）
         private System.Windows.Forms.ToolStripLabel lbl_SystemStatus;
         private System.Windows.Forms.ToolStripSeparator sep_SystemStatus;
+
+        // 初始化等待面板（Modal 内容，初始化结束事件自动关闭）
+        private InitWaitingPanel _initWaiting;
         #endregion
 
         #region 构造函数
@@ -86,17 +90,46 @@ namespace AdaWeldSystem
             // 关闭前询问
             this.FormClosing += FormMain_FormClosing;
 
-            // ── 设备初始化（新主控设计：主设备独立管控类，ADR-049）──
-            // 上电初始化：InitializeMachine() 级联子设备连接并置主设备态 Running
-            DeviceControlWork.Instance.InitializeMachine();
-            // 启动入口：StartMachine() 内部启动主设备监听线程并级联子设备（非阻塞）
-            DeviceControlWork.Instance.StartMachine();
-
-            GlobalCommData.ShowLog("FormMain", "初始化完成");
+            // ── 设备初始化（新主控设计：主设备独立管控类，ADR-034）──
+            // 初始化归 DeviceControlWork 管控，FormMain 不打印初始化结果；
+            // 移至 Shown：界面先行呈现，Modal 提示等待，初始化结束事件自动关闭（ADR-038）
+            this.Shown += FormMain_Shown;
         }
         #endregion
 
         #region 私有函数
+
+        /// <summary>首次呈现后触发整机初始化并弹出等待 Modal（初始化结束事件自动关闭）。</summary>
+        private void FormMain_Shown(object sender, EventArgs e)
+        {
+            _initWaiting = new InitWaitingPanel();
+            DeviceControlWork.Instance.InitializationCompleted += OnInitCompleted;
+            DeviceControlWork.Instance.InitializeMachine();
+
+            // 阻塞式 Modal：初始化在后台线程推进，结束后经 DialogResult 关闭并返回
+            AntdUI.Modal.open(new AntdUI.Modal.Config(this, "设备初始化", _initWaiting, TType.None)
+            {
+                MaskClosable = false,
+                BtnHeight = 0
+            });
+        }
+
+        /// <summary>初始化链结束：切回 UI 线程更新提示并关闭 Modal。</summary>
+        private void OnInitCompleted(bool success)
+        {
+            if (_initWaiting == null || _initWaiting.IsDisposed) return;
+            if (_initWaiting.InvokeRequired)
+            {
+                _initWaiting.BeginInvoke((Action)(() =>
+                {
+                    _initWaiting.SetResult(success);
+                    _initWaiting.CloseModal();
+                }));
+                return;
+            }
+            _initWaiting.SetResult(success);
+            _initWaiting.CloseModal();
+        }
         /// <summary>
         /// 关闭前询问确认
         /// </summary>
@@ -214,7 +247,7 @@ namespace AdaWeldSystem
             toolStrip1.Items.Insert(0, sep_SystemStatus);
             toolStrip1.Items.Insert(0, lbl_SystemStatus);
 
-            // 订阅整机流程态切换（ADR-042 R3：统一走基类 StateChanged）
+            // 订阅整机流程态切换（权责边界：统一走基类 StateChanged）
             DeviceControlWork.Instance.StatusChanged += OnMainDeviceStatusChanged;
             UpdateSystemStatusLabel(DeviceControlWork.Instance.Status);
         }
@@ -301,10 +334,10 @@ namespace AdaWeldSystem
             string statusText;
             switch (state)
             {
+                case SubDeviceWeldStatus.NoReset: statusText = "未复位"; break;
                 case SubDeviceWeldStatus.Standby: statusText = "待机"; break;
                 // 进入工作流程后，只要未手动停止/异常终止，均视为「工作流程中」
                 case SubDeviceWeldStatus.PreWork:
-                case SubDeviceWeldStatus.Starting:
                 case SubDeviceWeldStatus.Working:
                 case SubDeviceWeldStatus.Stopping:
                     statusText = "工作流程中"; break;

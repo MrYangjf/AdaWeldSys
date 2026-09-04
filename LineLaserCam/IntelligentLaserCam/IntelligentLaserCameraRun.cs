@@ -129,7 +129,7 @@ namespace AdaWeldSystem.LineLaserCam.IntelligentLaserCam
         // 默认相机 IP（首次无配置时的回退值；实际以 Config/INI/IntelligentLaser.ini 保存值为准）
         private const string DefaultSensorIp = "192.168.178.210";
 
-        // 英莱相机 IP 持久化文件（INI，归 Config/INI，符合 ADR-008 配置分层）
+        // 英莱相机 IP 持久化文件（INI，归 Config/INI，符合 ADR-007 配置分层）
         private static readonly string _iniFile =
             Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Config", "INI", "IntelligentLaser.ini");
 

@@ -12,7 +12,7 @@ namespace AdaWeldSystem.MonitorCam
     /// 针对的仅是焊缝检查、无多种类，因此不引入 JOB 切换，仅有单一可配置算法 Profile。
     /// 算法参数（对中阈值 / 质量合格分）与相机硬件参数（IP/端口/曝光）在此分离，
     /// 纯算法实现仍集中在 EmguALG/ImageAlgorithm.cs 第 8 区（遵循 [[decisions/ADR-003-SingleAlgorithmFile]]）。
-    /// 持久化到 Config/INI/MonitorAlgorithm.ini（遵循 [[decisions/ADR-008-ConfigLayout]]）。
+    /// 持久化到 Config/INI/MonitorAlgorithm.ini（遵循 [[decisions/ADR-007-ConfigLayout]]）。
     /// 须在应用启动、创建读取它的 UI 页面之前调用 Load()（参见 [[lessons/StartupSingletonInitialization]]）。
     /// </summary>
     public class MonitorAlgorithmManager
@@ -57,7 +57,7 @@ namespace AdaWeldSystem.MonitorCam
 
         #endregion
 
-        #region 配置持久化（INI，归 Config/INI，符合 ADR-008）
+        #region 配置持久化（INI，归 Config/INI，符合 ADR-007）
 
         /// <summary>
         /// 从配置文件加载算法参数。须在应用启动、创建子页面之前调用；

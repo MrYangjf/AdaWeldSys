@@ -56,7 +56,7 @@ namespace AdaWeldSystem.Sub2UI
             if (_ilCamera != null) _ilCamera.ContourFrameReady += OnContourFrameReady;
             // 订阅 Job 参数变更（切 JOB/改参数，可能来自 ILAlgoPage 算法编辑页或工作流）→ 同步主 UI 下拉
             if (_ilCamera != null) _ilCamera.JobParamsChanged += OnIlJobParamsChanged;
-            // ADR-035 + ADR-041：订阅「线激光」设备态切换 StateSwitched（设备状态外发），统一驱动刷新状态标签
+            // ADR-026：订阅「线激光」设备态切换 StateSwitched（设备状态外发），统一驱动刷新状态标签
             LineLaserWorkflow.Instance.StateSwitched += OnIlStateChanged;
             // 若相机已连接（如启动检测/子设备初始化已连接），直接同步一次硬件状态到 UI
             // （"第一次正确"：连接后本地状态与硬件一致，之后按钮点击本地生效）
@@ -187,7 +187,7 @@ namespace AdaWeldSystem.Sub2UI
         private void btnConnect_Click(object sender, EventArgs e)
         {
             if (_ilCamera == null) return;
-            // ADR-035 + ADR-041：手动连接/断开驱动「线激光」工作流（英莱是线激光的厂商实例），
+            // ADR-026：手动连接/断开驱动「线激光」工作流（英莱是线激光的厂商实例），
             // 不在此维护连接布尔；连接态由 LineLaserWorkflow 的 ConnectOn/ConnectOff 承载（内部自起后台线程，非阻塞）。
             if (_ilCamera.IsConnected)
             {
@@ -478,7 +478,6 @@ namespace AdaWeldSystem.Sub2UI
             switch (state)
             {
                 case SubDeviceWeldStatus.PreWork:
-                case SubDeviceWeldStatus.Starting:
                 case SubDeviceWeldStatus.Working:
                 case SubDeviceWeldStatus.Stopping:
                     return true;
@@ -515,7 +514,7 @@ namespace AdaWeldSystem.Sub2UI
                 _ilCamera.IsManualMode = !running;
             }
 
-            // ADR-035：状态标签统一由 Connection 分支刷新（基于状态机识别），本函数只管模式可用性。
+            // ADR-026：状态标签统一由 Connection 分支刷新（基于状态机识别），本函数只管模式可用性。
             if (running)
             {
                 btnConnect.Enabled = false;
