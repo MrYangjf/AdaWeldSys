@@ -412,8 +412,10 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         public override bool InitializeOn()
         {
             _paramReady = LoadParameters();
-            SetState(_paramReady ? SubDeviceState.Connected : SubDeviceState.Disconnected,
-                _paramReady ? "工艺参数就绪" : "工艺参数载入失败");
+            if (_paramReady)
+                SetState(SubDeviceState.Connected, "工艺参数就绪");
+            else
+                MarkConnectFailed("工艺参数载入失败");
             SetWeldStatus(SubDeviceWeldStatus.NoReset, "初始化连接完成，等待复位");
             return _paramReady;
         }

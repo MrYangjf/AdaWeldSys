@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
   <PropertyGroup>
@@ -174,22 +174,34 @@
     <Compile Include="MonitorCam\MonitorCameraRun.cs" />
     <Compile Include="MonitorCam\MonitorAlgorithmManager.cs" />
     <Compile Include="MotionControl\MoveControlData.cs" />
-    <Compile Include="MotionControl\API\IMotionController.cs" />
-    <Compile Include="MotionControl\API\MotionControllerBase.cs" />
-    <Compile Include="MotionControl\API\IAxis.cs" />
-    <Compile Include="MotionControl\API\IIO.cs" />
-    <Compile Include="MotionControl\MotionManager.cs" />
-    <Compile Include="MotionControl\MotionConfig.cs" />
-    <Compile Include="MotionControl\ZMotion\InterpolationEngine.cs" />
-    <Compile Include="MotionControl\ZMotion\ZMotionNative.cs" />
-    <Compile Include="MotionControl\ZMotion\ZMotionNativeLaser.cs" />
-    <Compile Include="MotionControl\ZMotion\ZMotionAxis.cs" />
-    <Compile Include="MotionControl\ZMotion\ZMotionGalvo.cs" />
-    <Compile Include="MotionControl\ZMotion\ZMotionIO.cs" />
-    <Compile Include="MotionControl\ZMotion\ZMotionController.cs" />
-    <Compile Include="MotionControl\ZMotion\RSIPositionBuffer.cs" />
-    <Compile Include="MotionControl\ZMotion\EncoderAxis.cs" />
-    <Compile Include="MotionControl\ZMotion\CamBoxTracker.cs" />
+    <Compile Include="MotionControl\MontionManager.cs" />
+    <Compile Include="MotionControl\AxisRegistry.cs" />
+    <Compile Include="MotionControl\IORegistry.cs" />
+    <Compile Include="MotionControl\CylinderRegistry.cs" />
+    <Compile Include="MotionControl\IMotion\Type.cs" />
+    <Compile Include="MotionControl\IMotion\MontionControl.cs" />
+    <Compile Include="MotionControl\IMotion\MontionAxis.cs" />
+    <Compile Include="MotionControl\IMotion\IPVTMotion.cs" />
+    <Compile Include="MotionControl\IMotion\MontionIO.cs" />
+    <Compile Include="MotionControl\IMotion\InputIO.cs" />
+    <Compile Include="MotionControl\IMotion\OutputIO.cs" />
+    <Compile Include="MotionControl\IMotion\Cylinder.cs" />
+    <Compile Include="MotionControl\IMotion\InterpolationMontionParam.cs" />
+    <Compile Include="MotionControl\DeltaEtherCAT\DeltaMontionControl.cs" />
+    <Compile Include="MotionControl\DeltaEtherCAT\DeltaAxisConfig.cs" />
+    <Compile Include="MotionControl\DeltaEtherCAT\DeltaMotionConfig.cs" />
+    <Compile Include="MotionControl\DeltaEtherCAT\DeltaIOConfig.cs" />
+    <Compile Include="MotionControl\DeltaEtherCAT\DeltaMontionAxis.cs" />
+    <Compile Include="MotionControl\DeltaEtherCAT\DeltaInputIO.cs" />
+    <Compile Include="MotionControl\DeltaEtherCAT\DeltaOutputIO.cs" />
+    <Compile Include="MotionControl\DeltaEtherCAT\DeltaSlaveScanner.cs" />
+    <Compile Include="MotionControl\DeltaEtherCAT\Native\EtherCATMasterNative.cs" />
+    <Compile Include="MotionControl\DeltaEtherCAT\Native\EtherCATMotionNative.cs" />
+    <Compile Include="MotionControl\DeltaEtherCAT\Native\EtherCATIONative.cs" />
+    <Compile Include="MotionControl\DeltaEtherCAT\Native\EtherCATAdvancedNative.cs" />
+    <Compile Include="MotionControl\DeltaEtherCAT\Native\EtherCATPVTNative.cs" />
+    <Compile Include="MotionControl\DeltaEtherCAT\Native\EtherCATEcam2Native.cs" />
+    <Compile Include="MotionControl\DeltaEtherCAT\Native\DeltaErrorCode.cs" />
     <Compile Include="LineLaserCam\HikRobotCam\ApiCore\HikCameraManager.cs" />
     <Compile Include="LineLaserCam\HikRobotCam\ApiCore\HikCameraDevice.cs" />
     <Compile Include="LineLaserCam\HikRobotCam\HikCameraRun.cs" />
@@ -206,11 +218,11 @@
     <Compile Include="UIDesign\MainWindow\FormMain.Designer.cs">
       <DependentUpon>FormMain.cs</DependentUpon>
     </Compile>
-    <Compile Include="UIDesign\ControlPage\DataReviewPage.cs">
+    <Compile Include="UIDesign\ControlPage\DataReviewerPage.cs">
       <SubType>UserControl</SubType>
     </Compile>
-    <Compile Include="UIDesign\ControlPage\DataReviewPage.Designer.cs">
-      <DependentUpon>DataReviewPage.cs</DependentUpon>
+    <Compile Include="UIDesign\ControlPage\DataReviewerPage.Designer.cs">
+      <DependentUpon>DataReviewerPage.cs</DependentUpon>
     </Compile>
     <Compile Include="UIDesign\TabPage\ILCamPage.cs">
       <SubType>UserControl</SubType>
@@ -230,6 +242,9 @@
     <Compile Include="UIDesign\TabPage\MonitorCamPage.Designer.cs">
       <DependentUpon>MonitorCamPage.cs</DependentUpon>
     </Compile>
+    <EmbeddedResource Include="UIDesign\SubDialog\FormMainDialog\InitWaitingForm.resx">
+      <DependentUpon>InitWaitingForm.cs</DependentUpon>
+    </EmbeddedResource>
     <EmbeddedResource Include="UIDesign\TabPage\CommPage.resx">
       <DependentUpon>CommPage.cs</DependentUpon>
     </EmbeddedResource>
@@ -239,8 +254,8 @@
     <EmbeddedResource Include="UIDesign\TabPage\MotionControlPage.resx">
       <DependentUpon>MotionControlPage.cs</DependentUpon>
     </EmbeddedResource>
-    <EmbeddedResource Include="UIDesign\SubView\ILAlgoPage.resx">
-      <DependentUpon>ILAlgoPage.cs</DependentUpon>
+    <EmbeddedResource Include="UIDesign\SubDialog\IntelligentLaserDialog\ILAlgoForm.resx">
+      <DependentUpon>ILAlgoForm.cs</DependentUpon>
     </EmbeddedResource>
     <Compile Include="UIDesign\ControlPage\MainPage.cs">
       <SubType>UserControl</SubType>
@@ -266,11 +281,11 @@
     <Compile Include="UIDesign\TabPage\CommPage.Designer.cs">
       <DependentUpon>CommPage.cs</DependentUpon>
     </Compile>
-    <Compile Include="UIDesign\SubView\UserEdit.cs">
+    <Compile Include="UIDesign\SubDialog\UserManagerDialog\UserEditForm.cs">
       <SubType>UserControl</SubType>
     </Compile>
-    <Compile Include="UIDesign\SubView\UserEdit.Designer.cs">
-      <DependentUpon>UserEdit.cs</DependentUpon>
+    <Compile Include="UIDesign\SubDialog\UserManagerDialog\UserEditForm.Designer.cs">
+      <DependentUpon>UserEditForm.cs</DependentUpon>
     </Compile>
     <Compile Include="UIDesign\TabPage\FileEditorPage.cs">
       <SubType>UserControl</SubType>
@@ -278,73 +293,73 @@
     <Compile Include="UIDesign\TabPage\FileEditorPage.Designer.cs">
       <DependentUpon>FileEditorPage.cs</DependentUpon>
     </Compile>
-    <Compile Include="UIDesign\SubView\AutoParamForm.cs">
+    <Compile Include="UIDesign\SubDialog\ParamContolDialog\AutoParamForm.cs">
       <SubType>UserControl</SubType>
     </Compile>
-    <Compile Include="UIDesign\SubView\AutoParamForm.Designer.cs">
+    <Compile Include="UIDesign\SubDialog\ParamContolDialog\AutoParamForm.Designer.cs">
       <DependentUpon>AutoParamForm.cs</DependentUpon>
     </Compile>
-    <Compile Include="UIDesign\SubView\InitWaitingPanel.cs">
+    <Compile Include="UIDesign\SubDialog\FormMainDialog\InitWaitingForm.cs">
       <SubType>UserControl</SubType>
     </Compile>
-    <Compile Include="UIDesign\SubView\ConfigForm.cs">
+    <Compile Include="UIDesign\SubDialog\ParamContolDialog\ConfigForm.cs">
       <SubType>UserControl</SubType>
     </Compile>
-    <Compile Include="UIDesign\SubView\ConfigForm.Designer.cs">
+    <Compile Include="UIDesign\SubDialog\ParamContolDialog\ConfigForm.Designer.cs">
       <DependentUpon>ConfigForm.cs</DependentUpon>
     </Compile>
-    <Compile Include="UIDesign\SubView\AlgorithmEditForm.cs">
+    <Compile Include="UIDesign\SubDialog\IntelligentLaserDialog\ILAlgorithmEditForm.cs">
       <SubType>UserControl</SubType>
     </Compile>
-    <Compile Include="UIDesign\SubView\AlgorithmEditForm.Designer.cs">
-      <DependentUpon>AlgorithmEditForm.cs</DependentUpon>
+    <Compile Include="UIDesign\SubDialog\IntelligentLaserDialog\ILAlgorithmEditForm.Designer.cs">
+      <DependentUpon>ILAlgorithmEditForm.cs</DependentUpon>
     </Compile>
-    <Compile Include="UIDesign\SubView\ILAlgoPage.cs">
+    <Compile Include="UIDesign\SubDialog\IntelligentLaserDialog\ILAlgoForm.cs">
       <SubType>UserControl</SubType>
     </Compile>
-    <Compile Include="UIDesign\SubView\ILAlgoPage.Designer.cs">
-      <DependentUpon>ILAlgoPage.cs</DependentUpon>
+    <Compile Include="UIDesign\SubDialog\IntelligentLaserDialog\ILAlgoForm.Designer.cs">
+      <DependentUpon>ILAlgoForm.cs</DependentUpon>
     </Compile>
-    <Compile Include="UIDesign\SubView\FormLogin.cs">
+    <Compile Include="UIDesign\SubDialog\UserManagerDialog\LoginForm.cs">
       <SubType>UserControl</SubType>
     </Compile>
-    <Compile Include="UIDesign\SubView\FormLogin.Designer.cs">
-      <DependentUpon>FormLogin.cs</DependentUpon>
+    <Compile Include="UIDesign\SubDialog\UserManagerDialog\LoginForm.Designer.cs">
+      <DependentUpon>LoginForm.cs</DependentUpon>
     </Compile>
-    <Compile Include="UIDesign\SubView\FileTraceForm.cs">
+    <Compile Include="UIDesign\SubDialog\DataReviewerDialog\FileTraceForm.cs">
       <SubType>UserControl</SubType>
     </Compile>
-    <Compile Include="UIDesign\SubView\FileTraceForm.Designer.cs">
+    <Compile Include="UIDesign\SubDialog\DataReviewerDialog\FileTraceForm.Designer.cs">
       <DependentUpon>FileTraceForm.cs</DependentUpon>
     </Compile>
-    <Compile Include="UIDesign\SubView\ILScanDialog.cs">
+    <Compile Include="UIDesign\SubDialog\IntelligentLaserDialog\ILScanForm.cs">
       <SubType>UserControl</SubType>
     </Compile>
-    <Compile Include="UIDesign\SubView\ILScanDialog.Designer.cs">
-      <DependentUpon>ILScanDialog.cs</DependentUpon>
+    <Compile Include="UIDesign\SubDialog\IntelligentLaserDialog\ILScanForm.Designer.cs">
+      <DependentUpon>ILScanForm.cs</DependentUpon>
     </Compile>
-    <Compile Include="UIDesign\SubView\ILParamPage.cs">
+    <Compile Include="UIDesign\SubDialog\IntelligentLaserDialog\ILParamForm.cs">
       <SubType>UserControl</SubType>
     </Compile>
-    <Compile Include="UIDesign\SubView\ILParamPage.Designer.cs">
-      <DependentUpon>ILParamPage.cs</DependentUpon>
+    <Compile Include="UIDesign\SubDialog\IntelligentLaserDialog\ILParamForm.Designer.cs">
+      <DependentUpon>ILParamForm.cs</DependentUpon>
     </Compile>
-    <Compile Include="UIDesign\SubView\RecordConfigForm.cs">
+    <Compile Include="UIDesign\SubDialog\DataReviewerDialog\RecordConfigForm.cs">
       <SubType>UserControl</SubType>
     </Compile>
-    <Compile Include="UIDesign\SubView\RecordConfigForm.Designer.cs">
+    <Compile Include="UIDesign\SubDialog\DataReviewerDialog\RecordConfigForm.Designer.cs">
       <DependentUpon>RecordConfigForm.cs</DependentUpon>
     </Compile>
-    <Compile Include="UIDesign\SubView\RenderParamForm.cs">
+    <Compile Include="UIDesign\SubDialog\DataReviewerDialog\RenderParamForm.cs">
       <SubType>UserControl</SubType>
     </Compile>
-    <Compile Include="UIDesign\SubView\RenderParamForm.Designer.cs">
+    <Compile Include="UIDesign\SubDialog\DataReviewerDialog\RenderParamForm.Designer.cs">
       <DependentUpon>RenderParamForm.cs</DependentUpon>
     </Compile>
-    <Compile Include="UIDesign\SubView\HelixRenderForm.cs">
+    <Compile Include="UIDesign\SubDialog\DataReviewerDialog\HelixRenderForm.cs">
       <SubType>UserControl</SubType>
     </Compile>
-    <Compile Include="UIDesign\SubView\HelixRenderForm.Designer.cs">
+    <Compile Include="UIDesign\SubDialog\DataReviewerDialog\HelixRenderForm.Designer.cs">
       <DependentUpon>HelixRenderForm.cs</DependentUpon>
     </Compile>
     <!-- 激光焊接头模块（含由 DataModels 迁入的 3 个数据类） -->
@@ -356,10 +371,10 @@
          现为单文件 MainDeviceControl\DeviceStatusWork.cs（三线程 IOWork / EMGWork / StatusWork）；
          整机主控为 MainDeviceControl\DeviceControlWork.cs（5 个子设备工作流在 MainDeviceControl\DeviceWorkflow\）；
          FaultRecord/FaultCategory/FaultRecoveryManager/FaultRecordManager 已于 2026-09-04 经用户裁定整体移除（架构无故障恢复定义） -->
-    <EmbeddedResource Include="UIDesign\SubView\RenderParamForm.resx">
+    <EmbeddedResource Include="UIDesign\SubDialog\DataReviewerDialog\RenderParamForm.resx">
       <DependentUpon>RenderParamForm.cs</DependentUpon>
     </EmbeddedResource>
-    <EmbeddedResource Include="UIDesign\SubView\HelixRenderForm.resx">
+    <EmbeddedResource Include="UIDesign\SubDialog\DataReviewerDialog\HelixRenderForm.resx">
       <DependentUpon>HelixRenderForm.cs</DependentUpon>
     </EmbeddedResource>
     <EmbeddedResource Include="Properties\Resources.resx">
@@ -375,8 +390,8 @@
     <EmbeddedResource Include="UIDesign\MainWindow\FormMain.resx">
       <DependentUpon>FormMain.cs</DependentUpon>
     </EmbeddedResource>
-    <EmbeddedResource Include="UIDesign\ControlPage\DataReviewPage.resx">
-      <DependentUpon>DataReviewPage.cs</DependentUpon>
+    <EmbeddedResource Include="UIDesign\ControlPage\DataReviewerPage.resx">
+      <DependentUpon>DataReviewerPage.cs</DependentUpon>
     </EmbeddedResource>
     <EmbeddedResource Include="UIDesign\ControlPage\MainPage.resx">
       <DependentUpon>MainPage.cs</DependentUpon>
@@ -387,34 +402,34 @@
     <EmbeddedResource Include="UIDesign\TabPage\ParamConfigPage.resx">
       <DependentUpon>ParamConfigPage.cs</DependentUpon>
     </EmbeddedResource>
-    <EmbeddedResource Include="UIDesign\SubView\UserEdit.resx">
-      <DependentUpon>UserEdit.cs</DependentUpon>
+    <EmbeddedResource Include="UIDesign\SubDialog\UserManagerDialog\UserEditForm.resx">
+      <DependentUpon>UserEditForm.cs</DependentUpon>
     </EmbeddedResource>
     <EmbeddedResource Include="UIDesign\TabPage\FileEditorPage.resx">
       <DependentUpon>FileEditorPage.cs</DependentUpon>
     </EmbeddedResource>
-    <EmbeddedResource Include="UIDesign\SubView\AlgorithmEditForm.resx">
-      <DependentUpon>AlgorithmEditForm.cs</DependentUpon>
+    <EmbeddedResource Include="UIDesign\SubDialog\IntelligentLaserDialog\ILAlgorithmEditForm.resx">
+      <DependentUpon>ILAlgorithmEditForm.cs</DependentUpon>
     </EmbeddedResource>
-    <EmbeddedResource Include="UIDesign\SubView\AutoParamForm.resx">
+    <EmbeddedResource Include="UIDesign\SubDialog\ParamContolDialog\AutoParamForm.resx">
       <DependentUpon>AutoParamForm.cs</DependentUpon>
     </EmbeddedResource>
-    <EmbeddedResource Include="UIDesign\SubView\ConfigForm.resx">
+    <EmbeddedResource Include="UIDesign\SubDialog\ParamContolDialog\ConfigForm.resx">
       <DependentUpon>ConfigForm.cs</DependentUpon>
     </EmbeddedResource>
-    <EmbeddedResource Include="UIDesign\SubView\FormLogin.resx">
-      <DependentUpon>FormLogin.cs</DependentUpon>
+    <EmbeddedResource Include="UIDesign\SubDialog\UserManagerDialog\LoginForm.resx">
+      <DependentUpon>LoginForm.cs</DependentUpon>
     </EmbeddedResource>
-    <EmbeddedResource Include="UIDesign\SubView\FileTraceForm.resx">
+    <EmbeddedResource Include="UIDesign\SubDialog\DataReviewerDialog\FileTraceForm.resx">
       <DependentUpon>FileTraceForm.cs</DependentUpon>
     </EmbeddedResource>
-    <EmbeddedResource Include="UIDesign\SubView\ILScanDialog.resx">
-      <DependentUpon>ILScanDialog.cs</DependentUpon>
+    <EmbeddedResource Include="UIDesign\SubDialog\IntelligentLaserDialog\ILScanForm.resx">
+      <DependentUpon>ILScanForm.cs</DependentUpon>
     </EmbeddedResource>
-    <EmbeddedResource Include="UIDesign\SubView\ILParamPage.resx">
-      <DependentUpon>ILParamPage.cs</DependentUpon>
+    <EmbeddedResource Include="UIDesign\SubDialog\IntelligentLaserDialog\ILParamForm.resx">
+      <DependentUpon>ILParamForm.cs</DependentUpon>
     </EmbeddedResource>
-    <EmbeddedResource Include="UIDesign\SubView\RecordConfigForm.resx">
+    <EmbeddedResource Include="UIDesign\SubDialog\DataReviewerDialog\RecordConfigForm.resx">
       <DependentUpon>RecordConfigForm.cs</DependentUpon>
     </EmbeddedResource>
     <None Include="Properties\Settings.settings">
@@ -699,6 +714,7 @@
       <Private>True</Private>
     </Reference>
   </ItemGroup>
+  <ItemGroup />
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- NuGet 本地化后原生 DLL 不再由 NuGet 自动部署，改为手动从 3rdDepend 拷贝到输出目录 -->
   <Target Name="CopyNative3rdDependToOutput" AfterTargets="Build">
@@ -729,9 +745,8 @@
       <Native3rdDepend Include="3rdDepend\swscale-5.dll" />
       <Native3rdDepend Include="3rdDepend\vcruntime140.dll" />
       <Native3rdDepend Include="3rdDepend\vcruntime140_1.dll" />
-      <!-- 正运动(ZMotion) 原生依赖：板卡通讯库 + 激光振镜控制库 -->
-      <Native3rdDepend Include="3rdDepend\zauxdll.dll" />
-      <Native3rdDepend Include="3rdDepend\ZmotionScanLaser.dll" />
+      <!-- 台达 EtherCAT 原生依赖：主站库（x64，与 PlatformTarget 一致，禁 AnyCPU） -->
+      <Native3rdDepend Include="3rdDepend\EtherCAT_DLL_x64.dll" />
     </ItemGroup>
     <Copy SourceFiles="@(Native3rdDepend)" DestinationFolder="$(TargetDir)" SkipUnchangedFiles="true" />
     <!-- SQLite.Interop.dll 需按架构部署到 x64/x86 子目录 -->

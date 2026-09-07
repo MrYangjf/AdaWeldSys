@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using AdaWeldSystem.Comm;
 
 namespace AdaWeldSystem.MainDeviceControl.DeviceState
@@ -10,7 +10,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceState
         Connected = 1
     }
 
-    /// <summary>子设备焊接过程态（7 态，ADR-036 裁定 C2）。</summary>
+    /// <summary>子设备焊接过程态（7 态，ADR-030 裁定 C2）。</summary>
     public enum SubDeviceWeldStatus
     {
         NoReset = 0,
@@ -75,6 +75,9 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceState
         private SubDeviceWeldStatus _weldStatus = SubDeviceWeldStatus.NoReset;
         private bool _isAlarm;
         private string _lastReason;
+        private bool _connectSettled;
+        private string _connectResult = string.Empty;
+        private readonly object _connectLock = new object();
 
         #endregion
 
@@ -131,6 +134,19 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceState
         /// <summary>急停/告警发生事件。</summary>
         public event EventHandler AlarmOccurred;
 
+        /// <summary>连接尝试是否已出结果（成功或失败都置 true）。</summary>
+        /// <remarks>用于把「已确认失败」与「尚未有反馈」区分开：前者立即收敛，后者才需要等超时。</remarks>
+        public bool ConnectSettled
+        {
+            get { lock (_connectLock) { return _connectSettled; } }
+        }
+
+        /// <summary>最近一次连接尝试的结果描述（成功为「已连接」，失败为失败原因）。</summary>
+        public string ConnectResult
+        {
+            get { lock (_connectLock) { return _connectResult; } }
+        }
+
         /// <summary>设备名称（日志/事件标识），子类必须实现。</summary>
         public abstract string StateName { get; }
 
@@ -144,7 +160,30 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceState
         protected void SetState(SubDeviceState newState, string reason)
         {
             _lastReason = reason;
+            if (newState == SubDeviceState.Connected)
+                SettleConnect(string.IsNullOrEmpty(reason) ? "已连接" : reason);
             State = newState;
+        }
+
+        /// <summary>发起一次连接尝试（连接动作开始前调用，复位上次结果）。</summary>
+        /// <remarks>调用后 <see cref="ConnectSettled"/> 置 false，直到成功置 Connected 或调用 <see cref="MarkConnectFailed"/>。</remarks>
+        public void BeginConnectAttempt()
+        {
+            lock (_connectLock)
+            {
+                _connectSettled = false;
+                _connectResult = string.Empty;
+            }
+        }
+
+        /// <summary>标记连接尝试已失败并置 Disconnected。</summary>
+        /// <remarks>异步连接线程拿到确定失败结果时调用，使等待方不必等超时即可收敛。</remarks>
+        /// <param name="reason">失败原因（记入 <see cref="ConnectResult"/> 与状态切换原因）</param>
+        public void MarkConnectFailed(string reason)
+        {
+            string text = string.IsNullOrEmpty(reason) ? "连接失败" : reason;
+            SettleConnect(text);
+            SetState(SubDeviceState.Disconnected, text);
         }
 
         /// <summary>切换焊接过程态（带原因），WeldStatus 唯一写入口。</summary>
@@ -169,6 +208,17 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceState
 
         #region 私有函数
 
+        /// <summary>落定连接结果（线程安全写入）。</summary>
+        /// <param name="result">结果描述</param>
+        private void SettleConnect(string result)
+        {
+            lock (_connectLock)
+            {
+                _connectSettled = true;
+                _connectResult = result;
+            }
+        }
+
         /// <summary>读取设备 IO 安全互锁。</summary>
         /// <returns>当前是否安全（默认实现恒安全）</returns>
         protected virtual bool CheckDeviceIOSafe()
@@ -192,7 +242,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceState
                         Timestamp = DateTime.Now
                     });
                 }
-                // 状态切换不记日志（ADR-038 报错分层：连接态经事件/状态栏呈现）
+                // 状态切换不记日志（ADR-032 报错分层：连接态经事件/状态栏呈现）
             }
 
         /// <summary>焊接过程态变更钩子：触发 WeldStatusChanged 事件并记录日志。</summary>
@@ -211,7 +261,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceState
                         Timestamp = DateTime.Now
                     });
                 }
-                // 状态切换不记日志（ADR-038 报错分层：焊接过程态经事件/状态栏呈现）
+                // 状态切换不记日志（ADR-032 报错分层：焊接过程态经事件/状态栏呈现）
             }
 
         #endregion

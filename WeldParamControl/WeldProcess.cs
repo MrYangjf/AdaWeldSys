@@ -782,12 +782,12 @@ namespace AdaWeldSystem.WeldParamControl
         /// 计算并缓存水平移动距离（线激光前置标定 + 焊缝中心点与标定中心点比较）。
         /// 依据焊缝中心点（SeamFeatureResult.CenterX/CenterY）与标定值比较，经 MotionControl.MoveControlData
         /// 得到水平移动距离，以「机器人X + 线激光前置标定距离」为键写入缓存，
-        /// 供 MotionControl 水平移动工作流「趋近」触发（运动控制由 MotionManager 统一管理，默认空实现，正运动控制器对接后输出实际指令）。
+        /// 供运控水平移动「趋近」触发（运动控制由 MontionManager 统一管理，台达总线就绪后输出实际指令）。
         /// </summary>
         public void ComputeAndCacheHorizontalMove(SeamFeatureResult seamFeature, double robotX)
         {
             // 水平移动算法已统一收敛至 MotionControl.MoveControlData，此处仅委派以保持对外接口兼容
-            MoveControlData.Instance.ComputeAndCacheHorizontalMove(seamFeature, robotX);
+            MontionManager.Instance.MoveData.ComputeAndCacheHorizontalMove(seamFeature, robotX);
         }
 
         /// <summary>

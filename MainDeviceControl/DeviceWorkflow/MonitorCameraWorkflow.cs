@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Threading;
 using AdaWeldSystem.Comm;
 using AdaWeldSystem.MainDeviceControl.DeviceState;
@@ -422,10 +422,13 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             try
             {
                 Log("监控相机初始化连接开始", MessageLevel.Info);
+                BeginConnectAttempt();
                 EnsureConnected();
                 bool ok = MonitorCameraRun.Instance.ConnectionState == MonitorCameraConnectionState.Connected;
-                SetState(ok ? SubDeviceState.Connected : SubDeviceState.Disconnected,
-                    ok ? "监控相机初始化连接完成" : "监控相机初始化连接失败");
+                if (ok)
+                    SetState(SubDeviceState.Connected, "监控相机初始化连接完成");
+                else
+                    MarkConnectFailed("监控相机初始化连接失败");
                 SetPhase(ok ? MonitorWorkflowState.Standby : MonitorWorkflowState.Uninitialized,
                     ok ? "监控相机就绪" : "监控相机未连接");
                 if (ok) SetWeldStatus(SubDeviceWeldStatus.NoReset, "初始化连接完成，等待复位");
@@ -433,6 +436,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             }
             catch (Exception ex)
             {
+                MarkConnectFailed("监控相机初始化连接异常 " + ex.Message);
                 Log("监控相机初始化连接异常 " + ex.Message, MessageLevel.Error);
                 return false;
             }
@@ -502,23 +506,27 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         {
             if (_manualBusy) return false;
             _manualBusy = true;
+            BeginConnectAttempt();
             var t = new Thread(() =>
             {
                 try
                 {
-                    Log("手动连接开始", MessageLevel.Info);
-                    EnsureConnected();
-                    bool ok = MonitorCameraRun.Instance.ConnectionState == MonitorCameraConnectionState.Connected;
-                    SetState(ok ? SubDeviceState.Connected : SubDeviceState.Disconnected,
-                        ok ? "监控相机连接完成" : "监控相机连接失败");
-                    SetPhase(ok ? MonitorWorkflowState.Standby : MonitorWorkflowState.Uninitialized,
-                        ok ? "监控相机就绪" : "监控相机未连接");
-                    Log(ok ? "手动连接完成" : "手动连接失败", MessageLevel.Info);
-                }
-                catch (Exception ex)
-                {
-                    Log("手动连接异常 " + ex.Message, MessageLevel.Info);
-                }
+                Log("手动连接开始", MessageLevel.Info);
+                EnsureConnected();
+                bool ok = MonitorCameraRun.Instance.ConnectionState == MonitorCameraConnectionState.Connected;
+                if (ok)
+                    SetState(SubDeviceState.Connected, "监控相机连接完成");
+                else
+                    MarkConnectFailed("监控相机连接失败");
+                SetPhase(ok ? MonitorWorkflowState.Standby : MonitorWorkflowState.Uninitialized,
+                    ok ? "监控相机就绪" : "监控相机未连接");
+                Log(ok ? "手动连接完成" : "手动连接失败", MessageLevel.Info);
+            }
+            catch (Exception ex)
+            {
+                MarkConnectFailed("监控相机连接异常 " + ex.Message);
+                Log("手动连接异常 " + ex.Message, MessageLevel.Info);
+            }
                 finally
                 {
                     _manualBusy = false;
@@ -592,8 +600,13 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
     /// <summary>监控相机检测结果（流程读取算法输出后的只读数据，非事件参数）</summary>
     public class MonitorResult
     {
+        /// <summary>检测所处阶段</summary>
         public MonitorCameraPhase Phase { get; set; }
+
+        /// <summary>检测是否合格</summary>
         public bool Pass { get; set; }
+
+        /// <summary>质量评分</summary>
         public double QualityScore { get; set; }
 
         /// <summary>光斑对准偏差 X（供控制器驱动振镜摆动光斑，原档20260904 §7.4.5）。</summary>
@@ -607,9 +620,16 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         /// 本值由机器人消费以控制送丝距离，不由相机自行补偿。</remarks>
         public double WireStickoutDeviation { get; set; }
 
+        /// <summary>检测角度</summary>
         public double Angle { get; set; }
+
+        /// <summary>缺陷数量</summary>
         public int DefectCount { get; set; }
+
+        /// <summary>结果描述</summary>
         public string Message { get; set; }
+
+        /// <summary>结果生成时间</summary>
         public DateTime Timestamp { get; set; }
     }
 }

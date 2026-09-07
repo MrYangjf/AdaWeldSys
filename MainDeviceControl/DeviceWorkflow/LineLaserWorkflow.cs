@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Threading;
 using AdaWeldSystem.Comm;
 using AdaWeldSystem.MainDeviceControl.DeviceState;
@@ -35,7 +35,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
 
         #region 私有变量
 
-        /// <summary>公共方法互斥锁（ADR-028 ④-3：禁止 lock(this)，用私有锁对象）。</summary>
+        /// <summary>公共方法互斥锁（ADR-023 ④-3：禁止 lock(this)，用私有锁对象）。</summary>
         private readonly object _syncRoot = new object();
 
         private int _consecutiveFailureCount;
@@ -527,12 +527,14 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
                 }
                 else
                 {
+                    MarkConnectFailed("线激光连接失败");
                     SetWeldStatus(SubDeviceWeldStatus.ErrorAborted, "线激光连接失败");
                     Log("连接失败", MessageLevel.Info);
                 }
             }
             catch (Exception ex)
             {
+                MarkConnectFailed("线激光连接异常 " + ex.Message);
                 SetWeldStatus(SubDeviceWeldStatus.ErrorAborted, "连接异常 " + ex.Message);
                 Log("连接异常 " + ex.Message, MessageLevel.Info);
             }
@@ -826,6 +828,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             if (State == SubDeviceState.Connected) return true;
             if (_isConnecting) return false;
             _isConnecting = true;
+            BeginConnectAttempt();
             var t = new Thread(ConnectWorker)
             {
                 Name = "LineLaserConnect",

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Threading;
 using AdaWeldSystem.Comm;
 using AdaWeldSystem.FileOperate;
@@ -133,7 +133,7 @@ namespace AdaWeldSystem.MainDeviceControl.FlowState
         #region 公共函数
 
         /// <summary>释放资源并调用子类释放钩子。</summary>
-        /// <remarks>按 ADR-025 使用标准 IDisposable.Dispose()，禁止重写 Dispose(bool)。</remarks>
+        /// <remarks>按 ADR-023 使用标准 IDisposable.Dispose()，禁止重写 Dispose(bool)。</remarks>
         public void Dispose()
         {
             if (_disposed) return;

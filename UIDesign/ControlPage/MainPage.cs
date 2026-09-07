@@ -1,4 +1,4 @@
-﻿using AdaWeldSystem.Comm;
+using AdaWeldSystem.Comm;
 using AdaWeldSystem.MainDeviceControl.DeviceState;
 using AdaWeldSystem.MainDeviceControl.DeviceWorkflow;
 using AdaWeldSystem.WeldParamControl;

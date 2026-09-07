@@ -74,7 +74,7 @@ namespace AdaWeldSystem.Sub2UI
 
         private void LoadFromModel()
         {
-            var mc = MoveControlData.Instance;
+            var mc = MontionManager.Instance.MoveData;
             txtFrontOffset.Text = mc.LaserFrontOffset.ToString("F3");
             txtAngle.Text = mc.LaserToHorizontalAngleDeg.ToString("F3");
             txtScaleX.Text = mc.LaserToHorizontalScaleX.ToString("F3");
@@ -109,7 +109,7 @@ namespace AdaWeldSystem.Sub2UI
 
         private void BtnSaveCalib_Click(object sender, EventArgs e)
         {
-            var mc = MoveControlData.Instance;
+            var mc = MontionManager.Instance.MoveData;
             mc.LaserFrontOffset = ParseDouble(txtFrontOffset, mc.LaserFrontOffset);
             mc.LaserToHorizontalAngleDeg = ParseDouble(txtAngle, mc.LaserToHorizontalAngleDeg);
             mc.LaserToHorizontalScaleX = ParseDouble(txtScaleX, mc.LaserToHorizontalScaleX);

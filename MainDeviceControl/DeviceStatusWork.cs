@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Threading;
 using AdaWeldSystem.Comm;
@@ -9,7 +9,7 @@ using S7.Net;
 namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
 {
     /// <summary>设备安全/IO/状态管控（单例，三常驻线程）。</summary>
-    /// <remarks>thIOWork 安全互锁与 IO 轮询、thEMGWork 急停处置、thLightStatusWork 三色灯反射；异常经 DeviceControlWork 单一控制源变更运行态（ADR-030）。</remarks>
+    /// <remarks>thIOWork 安全互锁与 IO 轮询、thEMGWork 急停处置、thLightStatusWork 三色灯反射；异常经 DeviceControlWork 单一控制源变更运行态（ADR-027）。</remarks>
     public class DeviceStatusWork
     {
         #region 常量
@@ -39,6 +39,10 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         private Thread thIOWork;
         private Thread thEMGWork;
         private Thread thLightStatusWork;
+
+        private readonly object _actionLock = new object();
+        private volatile bool _actionBusy;
+        private Thread thAction;
 
         private SafetyInterlockResult _lastResult;
 
@@ -152,21 +156,75 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             return plc.ReadBit(DataType.DataBlock, cfg.PlcDb, 0, cfg.EmergencyStopBit);
         }
 
-        /// <summary>扫描一条脉冲型虚拟 IO：命中即取走并分派执行（保证每条命令只执行一次）。</summary>
+        /// <summary>扫描一条脉冲型虚拟 IO：命中即取走并异步分派（保证每条命令只执行一次）。</summary>
+        /// <remarks>
+        /// 取走（清位）与记日志都在动作执行前完成，IO 不因动作耗时而滞留；
+        /// 动作交由独立线程执行，IO 扫描线程立即返回，避免初始化链等长耗时动作独占扫描。
+        /// 运行中子流程类 IO（requireRunning）分派前问询运行态：整机已非 Running（停机/报警/急停）则丢弃，
+        /// 避免「排队中的工作指令在停机后被执行」。
+        /// </remarks>
         /// <param name="ioName">虚拟 IO 常量</param>
-        /// <returns>命中并执行返回 true</returns>
-        private bool ScanPulseIo(string ioName)
+        /// <param name="requireRunning">true 时要求当前运行态为 Running 才分派，否则丢弃</param>
+        /// <returns>命中并已分派返回 true；未置位或因运行态变更被丢弃返回 false</returns>
+        private bool ScanPulseIo(string ioName, bool requireRunning = false)
         {
             var work = DeviceControlWork.Instance;
             if (!work.TakeVirtualIo(ioName)) return false;
 
-            work.ExecuteIo(ioName);
+            if (requireRunning && work.Status != MainDeviceStatus.Running)
+            {
+                Log("Running IO 命中 " + ioName + " 但运行态已变更为 " + work.Status + " 已丢弃", MessageLevel.Warning);
+                return false;
+            }
+
             Log("Running IO 命中 " + ioName, MessageLevel.Info);
+            DispatchAction(ioName);
             return true;
         }
 
+        /// <summary>把命中 IO 对应的动作拉到独立线程执行（同一时刻只允许一个动作在跑）。</summary>
+        /// <remarks>与急停区分：急停必须同步立即生效，故仍由 EMGWork 直接执行，不走本通道。
+        /// 动作执行前后各问询一次运行态：执行期间被急停 / 报警抢占时记一次变更日志，供追溯动作是否被新状态打断。</remarks>
+        /// <param name="ioName">已取走的虚拟 IO 常量</param>
+        private void DispatchAction(string ioName)
+        {
+            lock (_actionLock)
+            {
+                if (_actionBusy)
+                {
+                    Log("动作执行中 " + ioName + " 被丢弃（前一动作未结束）", MessageLevel.Warning);
+                    return;
+                }
+                _actionBusy = true;
+            }
+
+            thAction = new Thread(() =>
+            {
+                MainDeviceStatus before = DeviceControlWork.Instance.Status;
+                try
+                {
+                    DeviceControlWork.Instance.ExecuteIo(ioName);
+                }
+                catch (Exception ex)
+                {
+                    Log("动作执行异常 " + ioName + " " + ex.Message, MessageLevel.Error);
+                }
+                finally
+                {
+                    MainDeviceStatus after = DeviceControlWork.Instance.Status;
+                    if (after != before)
+                        Log("动作 " + ioName + " 执行期间运行态变更为 " + after, MessageLevel.Warning);
+                    lock (_actionLock) { _actionBusy = false; }
+                }
+            });
+            thAction.Name = "thAction_" + ioName;
+            thAction.IsBackground = true;
+            thAction.Start();
+        }
+
         /// <summary>扫描全部 Running IO，命中后执行动作。</summary>
-        /// <remarks>只关心 IO 是否置位，不区分硬件、机器人或 UI 触发源。</remarks>
+        /// <remarks>只关心 IO 是否置位，不区分硬件、机器人或 UI 触发源；
+        /// 子流程类 IO（Sub*）要求运行态为 Running，整机被抢占后排队指令一律丢弃。</remarks>
         private void ScanRunningIo()
         {
             ScanPulseIo(DeviceControlWork.IoInit);
@@ -175,11 +233,11 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             ScanPulseIo(DeviceControlWork.IoStop);
             ScanPulseIo(DeviceControlWork.IoClearAlarm);
 
-            ScanPulseIo(DeviceControlWork.IoSubPrework);
-            ScanPulseIo(DeviceControlWork.IoSubWork);
-            ScanPulseIo(DeviceControlWork.IoSubStop);
-            ScanPulseIo(DeviceControlWork.IoSubManualStop);
-            ScanPulseIo(DeviceControlWork.IoSubAlarmStop);
+            ScanPulseIo(DeviceControlWork.IoSubPrework, true);
+            ScanPulseIo(DeviceControlWork.IoSubWork, true);
+            ScanPulseIo(DeviceControlWork.IoSubStop, true);
+            ScanPulseIo(DeviceControlWork.IoSubManualStop, true);
+            ScanPulseIo(DeviceControlWork.IoSubAlarmStop, true);
         }
 
         /// <summary>急停轮询线程主体（原档 §2 EMG IO Work）。</summary>
@@ -242,7 +300,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
                     {
                         last = status;
                         DriveTricolorLamp(status);
-                        // 状态切换不记日志（ADR-038 报错分层：三色灯动作本身即对外呈现）
+                        // 状态切换不记日志（ADR-032 报错分层：三色灯动作本身即对外呈现）
                     }
                 }
                 catch (Exception ex)

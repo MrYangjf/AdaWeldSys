@@ -1,4 +1,4 @@
-﻿using AdaWeldSystem.Comm;
+using AdaWeldSystem.Comm;
 using AdaWeldSystem.EmguALG;
 using AdaWeldSystem.LineLaserCamApi;
 using IntelligentLaser_CSharp;

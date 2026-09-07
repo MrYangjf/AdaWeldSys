@@ -1,4 +1,4 @@
-﻿using AdaWeldSystem.Comm.NetworkPort.Ethernet;
+using AdaWeldSystem.Comm.NetworkPort.Ethernet;
 using AdaWeldSystem.Comm.IntelligentLaserModbus;
 using AdaWeldSystem.Comm.Robot.KUKARobot;
 using AdaWeldSystem.Comm.PLC.Siemens;

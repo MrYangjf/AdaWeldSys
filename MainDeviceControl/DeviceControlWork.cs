@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading;
@@ -177,6 +177,9 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         /// <summary>本轮运行是否已真正进入 Working（用于区分「预检失败」与「焊接完成回落」）。</summary>
         private volatile bool _everWorking;
 
+        /// <summary>子流程是否已因运行态被抢占而停止驱动（0=驱动中，1=已停止；Interlocked 保证停止动作只做一次）。</summary>
+        private int _driveStopped;
+
         /// <summary>待下发的焊接工艺参数（原档 §10.5 序号 19 SetWeldParam 写入）。</summary>
         private WeldParamOutput _pendingWeldParam;
 
@@ -190,7 +193,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         private KUKARobotManager RobotManager { get; set; }
 
         /// <summary>运动管理器（构造函数获取，供第 2 步初始化使用，原档 R013）。</summary>
-        private MotionManager Motion { get; set; }
+        private MontionManager Motion { get; set; }
 
         // 级联目标（子设备）
         private readonly LineLaserWorkflow _lineLaser = LineLaserWorkflow.Instance;
@@ -249,7 +252,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         public static DeviceControlWork Instance { get { return _lazyInstance.Value; } }
 
         /// <summary>对中偏差数据中枢（原档 §7.4.5 只读）。</summary>
-        /// <remarks>OffsetX/Y 供控制器驱动振镜，WireStickoutDeviation 供机器人调送丝；ADR-030 产出方持有，消费方取用。</remarks>
+        /// <remarks>OffsetX/Y 供控制器驱动振镜，WireStickoutDeviation 供机器人调送丝；ADR-027 产出方持有，消费方取用。</remarks>
         public MonitorResult AlignDatum
         {
             get { return _monitorCam.LastResult; }
@@ -364,7 +367,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         private DeviceControlWork()
         {
             // 原档 R013 / 范式 M8：构造内取运动管理器并持有
-            Motion = MotionManager.Instance;
+            Motion = MontionManager.Instance;
             // 订阅顶层 Comm 的通讯指令（回调只入队，不做业务）
             GlobalCommData.CommunicationCommandReceived += OnCommRecived;
             Log("主设备运行管控实例化", MessageLevel.Info);
@@ -447,7 +450,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
                         Timestamp = DateTime.Now
                     });
                 }
-                // 状态切换不记日志（ADR-038 报错分层：内部态迁移由状态栏/事件呈现）
+                // 状态切换不记日志（ADR-032 报错分层：内部态迁移由状态栏/事件呈现）
             }
 
         /// <summary>驱动 5 个子流程各自执行焊接工作态迁移。</summary>
@@ -488,19 +491,35 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         {
             while (!IsCloseWork)
             {
+                // 每拍前置问询运行态：一旦被改为非 Running（停机 / 报警 / 急停 / 复位）立即停止驱动
                 if (Current != MainDeviceStatus.Running)
                 {
+                    StopSubDeviceDrive(flow);
                     Thread.Sleep(BeatIdleMs);
-                    // 清步骤计时，防暂停时长被计入超时
-                    flow.ResetWorkTime();
                     continue;
                 }
+
+                if (_driveStopped != 0) Interlocked.Exchange(ref _driveStopped, 0);
 
                 try { flow.FlowProcess(); }
                 catch (Exception ex) { Log(name + " 流程执行异常 " + ex.Message, MessageLevel.Error); }
 
                 Thread.Sleep(BeatWorkMs);
             }
+        }
+
+        /// <summary>运行态被抢占后的处置：停止驱动本流程，只记日志，不改任何状态。</summary>
+        /// <remarks>参考基线裁定（HonorMachineTest）：线程只判断「状态不对就不执行」，不修改状态——
+        /// 状态一律由 IO 动作链（DoXxx → SetStatus）专门管理；Stopping 等焊接态迁移由停止命令链下发，本方法不越权。
+        /// 停止提醒整机只做一次（Interlocked 闭锁），清步骤计时仍每拍执行，防暂停时长被计入超时。</remarks>
+        /// <param name="flow">子流程</param>
+        private void StopSubDeviceDrive(DeviceWorkflowBase flow)
+        {
+            // 清步骤计时，防暂停时长被计入超时
+            flow.ResetWorkTime();
+
+            if (Interlocked.CompareExchange(ref _driveStopped, 1, 0) != 0) return;
+            Log("运行态已变更为 " + Current + " 子流程停止驱动", MessageLevel.Warning);
         }
 
         /// <summary>焊接头工作线程：驱动 LaserWeldHeadWorkflow。</summary>
@@ -797,16 +816,26 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             return child.State == SubDeviceState.Connected;
         }
 
-        /// <summary>等待子设备连接完成（轮询 State，有界等待）。</summary>
+        /// <summary>等待子设备连接出结果（有界等待，出结果即退出）。</summary>
+        /// <remarks>已确认失败与成功一样立即结束，只有始终无反馈才等满超时——避免出现「失败已返回却仍空等到超时」；
+        /// 等待循环每拍问询运行态，初始化被抢占（急停/复位/启动）也立即退出。</remarks>
         /// <param name="child">子设备</param>
         /// <param name="name">子设备中文名（日志用）</param>
-        private void WaitChildConnected(DeviceStateBase child, string name)
+        /// <returns>Connected 返回 true；已确认失败、被抢占或超时未反馈返回 false</returns>
+        private bool WaitChildConnected(DeviceStateBase child, string name)
         {
             var deadline = DateTime.Now.AddMilliseconds(CascadeConnectTimeoutMs);
-            while (child.State != SubDeviceState.Connected && DateTime.Now < deadline)
+            while (!child.ConnectSettled && DateTime.Now < deadline && !IsInitPreempted())
                 Thread.Sleep(WaitChildPollMs);
-            if (child.State != SubDeviceState.Connected)
-                Log(string.Format("{0} 连接等待超时", name), MessageLevel.Warning);
+
+            if (child.State == SubDeviceState.Connected) return true;
+
+            if (child.ConnectSettled)
+                Log(string.Format("{0} 连接失败 {1}", name, child.ConnectResult), MessageLevel.Warning);
+            else
+                Log(string.Format("{0} 连接等待超时（{1} 毫秒无反馈）", name, CascadeConnectTimeoutMs),
+                    MessageLevel.Warning);
+            return false;
         }
 
         /// <summary>统计未就绪的子设备数。</summary>
@@ -850,9 +879,40 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             return RobotManager != null && (RobotManager.IsRSIConnected || RobotManager.IsEKIConnected);
         }
 
+        /// <summary>长动作链中止判定：运行态已被抢占则记一次中止日志（范式 M5 状态前置问询）。</summary>
+        /// <remarks>复位 / 启动链每步前置问询运行态，被抢占即中止本链，且不再覆盖被抢占后的新状态。</remarks>
+        /// <param name="expected">本链要求的运行态</param>
+        /// <param name="action">动作名（日志用）</param>
+        /// <returns>已中止返回 true</returns>
+        private bool IsActionAborted(MainDeviceStatus expected, string action)
+        {
+            MainDeviceStatus now = Current;
+            if (now == expected) return false;
+            Log(string.Format("{0}被中止 运行态已变更为 {1}", action, now), MessageLevel.Warning);
+            return true;
+        }
+
+        /// <summary>初始化链中止判定：初始化期间被急停 / 复位 / 启动抢占即中止。</summary>
+        /// <remarks>初始化期间合法运行态只有 NoReset 与 Alarm（互锁未通过）；出现 EStop / Reseting / Running 说明被抢占，后续步骤不再执行。</remarks>
+        /// <returns>已中止返回 true</returns>
+        private bool IsInitAborted()
+        {
+            if (!IsInitPreempted()) return false;
+            Log("初始化链被中止 运行态已变更为 " + Current, MessageLevel.Warning);
+            return true;
+        }
+
+        /// <summary>初始化链抢占判定（静默版，供等待循环每拍问询，不打日志）。</summary>
+        /// <returns>运行态已变为 EStop / Reseting / Running 返回 true</returns>
+        private bool IsInitPreempted()
+        {
+            MainDeviceStatus now = Current;
+            return now == MainDeviceStatus.EStop || now == MainDeviceStatus.Reseting || now == MainDeviceStatus.Running;
+        }
+
         /// <summary>级联子流程复位。</summary>
-        /// <remarks>单个流程失败记日志不中断后续，与级联连接容错口径一致。</remarks>
-        /// <returns>全部受理返回 true</returns>
+        /// <remarks>单个流程失败记日志不中断后续，与级联连接容错口径一致；每步前置问询 Reseting，被抢占立即中止。</remarks>
+        /// <returns>全部受理返回 true；中途被抢占返回 false</returns>
         private bool CascadeResetProcess()
         {
             var flows = new DeviceWorkflowBase[] { _weldHead, _lineLaser, _monitorCam, _motion, _weldParam };
@@ -860,6 +920,9 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             bool allAccepted = true;
             for (int i = 0; i < flows.Length; i++)
             {
+                // 复位链被抢占：立即中止，中止日志由调用方统一记一次
+                if (Current != MainDeviceStatus.Reseting) return false;
+
                 try
                 {
                     if (!flows[i].ResetProcess())
@@ -1083,7 +1146,11 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         }
 
         /// <summary>虚拟 IO 执行分派（由 thIOWork / thEMGWork 扫描命中后调用）。</summary>
-        /// <remarks>扫描器唯一执行入口：只负责命中 IO，不关心该 IO 由谁置位、该执行什么。</remarks>
+        /// <remarks>
+        /// 扫描器唯一执行入口：只负责命中 IO，不关心该 IO 由谁置位、该执行什么。
+        /// 调用方须先 <see cref="TakeVirtualIo"/> 取走 IO——IO 在动作开始前即已消除，不存在滞留重复触发。
+        /// 除急停（须同步立即生效）外，调用方应在独立动作线程上执行本方法，不得占用 IO 扫描线程。
+        /// </remarks>
         /// <param name="ioName">已命中的虚拟 IO 常量</param>
         /// <returns>已分派执行返回 true；IO 名未登记返回 false</returns>
         public bool ExecuteIo(string ioName)
@@ -1343,8 +1410,9 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         }
 
         /// <summary>执行初始化链（由 thIOWork 扫描到 Init_IO 后调用，不对外直接调用）。</summary>
-        /// <remarks>原档 §7 阶段 1：连接 4 个实体子设备 + 加载虚拟设备，全部 Connected 才置可运行。</remarks>
-        /// <returns>全部子设备 Connected 返回 true</returns>
+        /// <remarks>原档 §7 阶段 1：连接 4 个实体子设备 + 加载虚拟设备，全部 Connected 才置可运行；
+        /// 每步前置问询运行态，被急停 / 复位 / 启动抢占即中止，不再执行后续步骤与聚合判定。</remarks>
+        /// <returns>全部子设备 Connected 返回 true；中途被抢占返回 false</returns>
         public bool DoInitializeMachine()
         {
             if (_initializing) return false;
@@ -1356,6 +1424,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
 
                 // 0. 机器人通讯开启（与子设备同级且优先开启；失败仅报通讯层，继续子设备连接）
                 InitializeRobotComm();
+                if (IsInitAborted()) return false;
 
                 // 1. 焊接头初始化（激光器握手 + 温度模块枚举 + IO 映射）
                 Log(" 焊接头初始化开始");
@@ -1365,9 +1434,11 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
                     Log("焊接头初始化完成");
                 }
                 // 初始化失败由控制器层报错，此处不置 Connected、不重复报错
+                if (IsInitAborted()) return false;
 
                 // 2. 运动控制器初始化 + CAMBOX 跟踪工作流初始化
                 InitializeMotionControl();
+                if (IsInitAborted()) return false;
 
                 // 3. 线激光相机连接（受理式 + 等待 Connected）
                 Log("线激光相机初始化开始");
@@ -1387,6 +1458,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
                 {
                     Log("[3/5] 线激光相机初始化异常 " + ex.Message, MessageLevel.Warning);
                 }
+                if (IsInitAborted()) return false;
 
                 // 4. 监控相机连接（受理式 + 等待 Connected）
                 Log("[4/5] 监控相机初始化开始");
@@ -1406,6 +1478,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
                 {
                     Log("[4/5] 监控相机初始化失败 原因是 " + ex.Message, MessageLevel.Warning);
                 }
+                if (IsInitAborted()) return false;
 
                 // 聚合判定：全部就绪保持 NoReset 等待复位（只有复位流程成功才到 Stop）；
                 // 失败置 Alarm（消除报警后回 NoReset），并通知 UI 初始化结束
@@ -1449,10 +1522,17 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         }
 
         /// <summary>执行复位链（由 thIOWork 扫描到 Reset_IO 后调用）。</summary>
-        /// <remarks>范式 M4/M5：一次性 Task + 每步后复查状态仍为 Reseting，否则判「被中止」。</remarks>
-        /// <returns>受理返回 true；机器人在位检测不通过返回 false</returns>
+        /// <remarks>范式 M4/M5：一次性 Task + 每步前置问询状态——急停态直接拒绝复位，
+        /// 清状态后校验仍为 NoReset、级联复位每步校验仍为 Reseting，任一步被抢占即中止且不覆盖新状态。</remarks>
+        /// <returns>受理返回 true；急停态或机器人在位检测不通过返回 false</returns>
         public bool DoResetMachine()
         {
+            if (Current == MainDeviceStatus.EStop)
+            {
+                Log("急停态禁止复位 请先解除急停", MessageLevel.Warning);
+                return false;
+            }
+
             if (!IsRobotReachable())
             {
                 SetStatus(MainDeviceStatus.Alarm, "机器人在位检测失败 复位阻断");
@@ -1466,6 +1546,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
                 try
                 {
                     ClearMachine();
+                    if (IsActionAborted(MainDeviceStatus.NoReset, "复位链")) return;
 
                     if (!MachineStatusTrans(MainDeviceStatus.Reseting))
                     {
@@ -1475,11 +1556,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
                     SetStatus(MainDeviceStatus.Reseting, "流程复位");
 
                     bool accepted = CascadeResetProcess();
-                    if (Current != MainDeviceStatus.Reseting)
-                    {
-                        Log("复位过程被中止", MessageLevel.Warning);
-                        return;
-                    }
+                    if (IsActionAborted(MainDeviceStatus.Reseting, "复位链")) return;
 
                     SetStatus(accepted ? MainDeviceStatus.Stop : MainDeviceStatus.Alarm,
                         accepted ? "流程复位完成" : "子流程复位失败");
@@ -1515,7 +1592,8 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         }
 
         /// <summary>执行启动链（由 thIOWork 扫描到 Start_IO 后调用，范式 M6）。</summary>
-        /// <remarks>真正执行由常驻子线程轮询判断，本方法只切状态并拉起线程。</remarks>
+        /// <remarks>真正执行由常驻子线程轮询判断，本方法只切状态并拉起线程；
+        /// 置 Running 后仍前置问询一次运行态，被急停 / 报警抢占则中止，不拉起工作线程。</remarks>
         /// <returns>状态切换成功返回 true</returns>
         public bool DoStartMachine()
         {
@@ -1528,6 +1606,8 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             }
 
             SetStatus(MainDeviceStatus.Running, "机器启动");
+            if (IsActionAborted(MainDeviceStatus.Running, "启动链")) return false;
+
             IsWorking = true;
             _everWorking = false;
 

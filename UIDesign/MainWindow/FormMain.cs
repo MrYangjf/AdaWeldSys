@@ -2,17 +2,14 @@ using AdaWeldSystem.Comm;
 using AdaWeldSystem.MainDeviceControl.DeviceState;
 using AdaWeldSystem.MainDeviceControl.DeviceWorkflow;
 using AdaWeldSystem.MonitorCam;
-using AdaWeldSystem.MonitorCam.Api;
-using AdaWeldSystem.MotionControl;
-using AdaWeldSystem.LineLaserCamApi;
 using AdaWeldSystem.Sub1UI;
 using AdaWeldSystem.Sub2UI;
 using AdaWeldSystem.Sub3UI;
 using AntdUI;
 using System;
-using System.Drawing;
 using System.ComponentModel;
 using System.Windows.Forms;
+using AdaWeldSystem.MotionControl;
 
 namespace AdaWeldSystem
 {
@@ -26,7 +23,7 @@ namespace AdaWeldSystem
         MainPage mainPage;
         NavPage navPageParam;
         NavPage navPageImage;
-        DataReviewPage dataPage;
+        DataReviewerPage dataPage;
 
         bool HidePage = false;
         // 存储被隐藏的 SegmentedItem 引用，用于恢复显示
@@ -37,7 +34,7 @@ namespace AdaWeldSystem
         private System.Windows.Forms.ToolStripSeparator sep_SystemStatus;
 
         // 初始化等待面板（Modal 内容，初始化结束事件自动关闭）
-        private InitWaitingPanel _initWaiting;
+        private InitWaitingForm _initWaiting;
         #endregion
 
         #region 构造函数
@@ -52,7 +49,7 @@ namespace AdaWeldSystem
             }
 
             // ── 配置加载 ──
-            MoveControlData.Instance.Load();          // 运控标定参数
+            MontionManager.Instance.MoveData.Load();  // 运控标定与轴 IO 配置
             DeviceControlWork.Instance.LoadSimulation();     // 模拟模式参数
             MonitorAlgorithmManager.Instance.Load();  // 监控相机算法参数
 
@@ -63,7 +60,7 @@ namespace AdaWeldSystem
             mainPage = new MainPage();
             navPageParam = new NavPage();
             navPageImage = new NavPage();
-            dataPage = new DataReviewPage();
+            dataPage = new DataReviewerPage();
 
             // 加载子页配置到 NavPage（全量加载）
             navPageParam.LoadTabs(
@@ -90,9 +87,9 @@ namespace AdaWeldSystem
             // 关闭前询问
             this.FormClosing += FormMain_FormClosing;
 
-            // ── 设备初始化（新主控设计：主设备独立管控类，ADR-034）──
+            // ── 设备初始化（新主控设计：主设备独立管控类，ADR-028）──
             // 初始化归 DeviceControlWork 管控，FormMain 不打印初始化结果；
-            // 移至 Shown：界面先行呈现，Modal 提示等待，初始化结束事件自动关闭（ADR-038）
+            // 移至 Shown：界面先行呈现，Modal 提示等待，初始化结束事件自动关闭（ADR-032）
             this.Shown += FormMain_Shown;
         }
         #endregion
@@ -102,7 +99,7 @@ namespace AdaWeldSystem
         /// <summary>首次呈现后触发整机初始化并弹出等待 Modal（初始化结束事件自动关闭）。</summary>
         private void FormMain_Shown(object sender, EventArgs e)
         {
-            _initWaiting = new InitWaitingPanel();
+            _initWaiting = new InitWaitingForm();
             DeviceControlWork.Instance.InitializationCompleted += OnInitCompleted;
             DeviceControlWork.Instance.InitializeMachine();
 
@@ -416,7 +413,7 @@ namespace AdaWeldSystem
 
         private void buttonSZ_Click(object sender, EventArgs e)
         {
-            using (FormLogin mLogin = new FormLogin(this))
+            using (LoginForm mLogin = new LoginForm(this))
             {
                 AntdUI.Modal.open(new AntdUI.Modal.Config(this, "登录界面", mLogin, TType.None)
                 {
