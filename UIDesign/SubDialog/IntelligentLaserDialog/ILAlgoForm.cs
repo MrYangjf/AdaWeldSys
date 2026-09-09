@@ -11,7 +11,7 @@ namespace AdaWeldSystem.Sub3UI
     public partial class ILAlgoForm : UserControl
     {
         #region 私有变量
-        private readonly IntelligentLaserCameraRun _ilCamera;
+        private readonly IntelligentLaserCam _ilCamera;
         private List<IlJobParamInfo> _ilParams;
         private AntdUI.AntList<IlJobParamRow> _ilParamRows;
         private readonly Dictionary<int, AntdUI.Button> _jobButtons = new Dictionary<int, AntdUI.Button>();
@@ -33,7 +33,7 @@ namespace AdaWeldSystem.Sub3UI
 
         #region 构造函数
 
-        public ILAlgoForm(IntelligentLaserCameraRun ilCamera)
+        public ILAlgoForm(IntelligentLaserCam ilCamera)
         {
             InitializeComponent();
             InitTableColumns();

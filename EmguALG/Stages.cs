@@ -1,8 +1,7 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
-using AdaWeldSystem.EmguALG.EmguConfiger;
 using Emgu.CV.CvEnum;
 
 namespace AdaWeldSystem.EmguALG

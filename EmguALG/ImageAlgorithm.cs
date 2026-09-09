@@ -1,4 +1,4 @@
-using Emgu.CV;
+﻿using Emgu.CV;
 using Emgu.CV.CvEnum;
 using Emgu.CV.Structure;
 using Emgu.CV.Util;
@@ -6,112 +6,17 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
-using AdaWeldSystem.PCLOperate.Models;
-using AdaWeldSystem.EmguALG.Core; // ProfileTransform（mm↔px 唯一换算点，供 ConvertContourToMat 重载复用）
+using AdaWeldSystem.EmguALG.WireFeedDistance;
+using AdaWeldSystem.EmguALG.WeldQuality;
 
 namespace AdaWeldSystem.EmguALG
 {
     /// <summary>
     /// 图像算法统一入口 - 所有图像算法必须在此文件中实现
-    /// 分类组织：1.点云转换 2.预处理 3.边缘检测 4.形态学 5.特征提取 6.模板匹配 7.辅助工具
+    /// 分类组织：1.预处理 3.边缘检测 4.形态学 5.特征提取 6.模板匹配 7.辅助工具
     /// </summary>
     public static class ImageAlgorithm
     {
-        #region 1. 点云转换区
-
-        /// <summary>
-        /// 将3D轮廓点云转换为Mat图像（线激光原理：单帧X=0，YZ构成轮廓线）
-        /// </summary>
-        public static Mat ConvertContourToMat(PointCloudData pointCloud, int imageWidth = 640, int imageHeight = 480)
-        {
-            if (pointCloud == null || pointCloud.PointCount == 0)
-                throw new ArgumentNullException(nameof(pointCloud), "轮廓点云为空");
-
-            Mat contourImage = new Mat(imageHeight, imageWidth, DepthType.Cv8U, 1);
-            contourImage.SetTo(new MCvScalar(0));
-
-            float minY = float.MaxValue, maxY = float.MinValue;
-            float minZ = float.MaxValue, maxZ = float.MinValue;
-            foreach (var pt in pointCloud.Points)
-            {
-                if (pt.Y < minY) minY = pt.Y;
-                if (pt.Y > maxY) maxY = pt.Y;
-                if (pt.Z < minZ) minZ = pt.Z;
-                if (pt.Z > maxZ) maxZ = pt.Z;
-            }
-
-            float yRange = maxY - minY;
-            float zRange = maxZ - minZ;
-            if (yRange < 0.001f || zRange < 0.001f)
-                throw new InvalidOperationException("轮廓点云YZ范围过小，无法生成有效图像");
-
-            float scaleX = (imageWidth - 20) / yRange;
-            float scaleY = (imageHeight - 20) / zRange;
-            float scale = Math.Min(scaleX, scaleY);
-
-            float offsetX = (imageWidth - yRange * scale) / 2;
-            float offsetY = (imageHeight - zRange * scale) / 2;
-
-            System.Drawing.Point prevPoint = System.Drawing.Point.Empty;
-            bool firstPoint = true;
-            foreach (var pt in pointCloud.Points)
-            {
-                int px = (int)((pt.Y - minY) * scale + offsetX);
-                int py = imageHeight - (int)((pt.Z - minZ) * scale + offsetY);
-
-                px = Math.Max(0, Math.Min(imageWidth - 1, px));
-                py = Math.Max(0, Math.Min(imageHeight - 1, py));
-
-                if (!firstPoint)
-                {
-                    CvInvoke.Line(contourImage, prevPoint, new System.Drawing.Point(px, py),
-                        new MCvScalar(255), 2, LineType.AntiAlias);
-                }
-                prevPoint = new System.Drawing.Point(px, py);
-                firstPoint = false;
-            }
-
-            return contourImage;
-        }
-
-        /// <summary>
-        /// 以点云栅格化生成轮廓图像，使用指定的 mm↔px 变换（与焊缝识别流程共用同一 ProfileTransform，保证坐标一致）。
-        /// 几何与偏移在 mm 空间进行，此处仅做像素化（算法架构设计 §5.1 / §6.5）。
-        /// </summary>
-        public static Mat ConvertContourToMat(PointCloudData pointCloud, ProfileTransform transform)
-        {
-            if (pointCloud == null || pointCloud.PointCount == 0)
-                throw new ArgumentNullException(nameof(pointCloud), "轮廓点云为空");
-            if (transform == null)
-                throw new ArgumentNullException(nameof(transform));
-
-            int w = transform.ImgW;
-            int h = transform.ImgH;
-            Mat contourImage = new Mat(h, w, DepthType.Cv8U, 1);
-            contourImage.SetTo(new MCvScalar(0));
-
-            System.Drawing.Point prevPoint = System.Drawing.Point.Empty;
-            bool firstPoint = true;
-            foreach (var pt in pointCloud.Points)
-            {
-                System.Drawing.Point px = transform.ToPixel(pt.Y, pt.Z);
-                if (px.X < 0) px.X = 0;
-                if (px.X > w - 1) px.X = w - 1;
-                if (px.Y < 0) px.Y = 0;
-                if (px.Y > h - 1) px.Y = h - 1;
-
-                if (!firstPoint)
-                {
-                    CvInvoke.Line(contourImage, prevPoint, px, new MCvScalar(255), 2, LineType.AntiAlias);
-                }
-                prevPoint = px;
-                firstPoint = false;
-            }
-            return contourImage;
-        }
-
-        #endregion
-
         #region 2. 预处理算法区
 
         public static Mat GaussianBlur(Mat image, int ksize = 5, double sigmaX = 1.5)
@@ -686,9 +591,9 @@ namespace AdaWeldSystem.EmguALG
 
         #region 8. 监控相机算法区（焊前对中 / 焊中质量检测）
 
-        public static PreWeldAlignmentResult DetectPreWeldAlignment(Mat image, PreWeldAlignmentConfig config)
+        public static WireFeedResult DetectPreWeldAlignment(Mat image, WireFeedConfig config)
         {
-            var result = new PreWeldAlignmentResult();
+            var result = new WireFeedResult();
             if (image == null || image.IsEmpty)
             {
                 result.Aligned = false;
@@ -884,54 +789,5 @@ namespace AdaWeldSystem.EmguALG
         public double Area { get; set; }
     }
 
-    /// <summary>焊前对中检测配置</summary>
-    public class PreWeldAlignmentConfig
-    {
-        public double ToleranceX { get; set; }
-        public double ToleranceY { get; set; }
-        public double ToleranceAngle { get; set; }
-        public PreWeldAlignmentConfig()
-        {
-            ToleranceX = 8;
-            ToleranceY = 8;
-            ToleranceAngle = 2.0;
-        }
-    }
-
-    /// <summary>焊前对中检测结果</summary>
-    public class PreWeldAlignmentResult
-    {
-        public double OffsetX { get; set; }
-        public double OffsetY { get; set; }
-        public double AngleDeg { get; set; }
-        public bool Aligned { get; set; }
-        public PointF LaserCenter { get; set; }
-        public PointF WireCenter { get; set; }
-        public Mat OverlayMat { get; set; }
-    }
-
-    /// <summary>焊中质量检测配置</summary>
-    public class WeldQualityConfig
-    {
-        public double PassScore { get; set; }
-        public WeldQualityConfig()
-        {
-            PassScore = 80;
-        }
-    }
-
-    /// <summary>焊中质量检测结果</summary>
-    public class WeldQualityResult
-    {
-        public int DefectCount { get; set; }
-        public List<WeldDefect> Defects { get; set; }
-        public double QualityScore { get; set; }
-        public bool Pass { get; set; }
-        public Mat OverlayMat { get; set; }
-        public WeldQualityResult()
-        {
-            Defects = new List<WeldDefect>();
-        }
-    }
     #endregion
 }

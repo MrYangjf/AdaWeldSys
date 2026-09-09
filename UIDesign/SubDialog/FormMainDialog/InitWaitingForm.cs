@@ -50,16 +50,6 @@ namespace AdaWeldSystem.Sub3UI
 
         #endregion
 
-        private void InitializeComponent()
-        {
-            this.SuspendLayout();
-            // 
-            // InitWaitingPanel
-            // 
-            this.Name = "InitWaitingPanel";
-            this.Size = new System.Drawing.Size(300, 208);
-            this.ResumeLayout(false);
 
-        }
     }
 }

@@ -1,17 +1,19 @@
-using System;
+﻿using System;
 using System.Threading;
 using AdaWeldSystem.Comm;
 using AdaWeldSystem.MainDeviceControl.DeviceState;
 using AdaWeldSystem.MainDeviceControl.FlowState;
-using AdaWeldSystem.EmguALG;
+using AdaWeldSystem.EmguALG.Manager;
+using AdaWeldSystem.EmguALG.WireFeedDistance;
+using AdaWeldSystem.EmguALG.WeldQuality;
 using AdaWeldSystem.MonitorCam;
-using AdaWeldSystem.MonitorCam.Api;
+using AdaWeldSystem.MonitorCam.IMonitorCam;
 using Emgu.CV;
 
 namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
 {
     /// <summary>监控相机工作流（单例）。</summary>
-    /// <remarks>数据归 MonitorCameraRun（图像与健康巡检），结果经 LastResult/LastOverlay 只读拉取；差异化职责（原档 R010）轴控制行为 + 送丝距离合规检查。</remarks>
+    /// <remarks>数据归 MonitorCamManager（图像与健康巡检），结果经 LastResult/LastOverlay 只读拉取；差异化职责（原档 R010）轴控制行为 + 送丝距离合规检查。</remarks>
     public class MonitorCameraWorkflow : DeviceWorkflowBase
     {
         #region 常量
@@ -125,7 +127,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         /// <remarks>未连接时用配置地址或默认地址打开。</remarks>
         private void EnsureConnected()
         {
-            var cam = MonitorCameraRun.Instance;
+            var cam = MonitorCamManager.Instance;
             if (cam.ConnectionState == MonitorCameraConnectionState.Connected) return;
             string ip = cam.Config != null ? cam.Config.IpAddress : DefaultIp;
             string port = cam.Config != null ? cam.Config.Port : DefaultPort;
@@ -190,7 +192,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         /// <returns>触发完成返回 true</returns>
         private bool DoAcquireTrigger()
         {
-            var cam = MonitorCameraRun.Instance;
+            var cam = MonitorCamManager.Instance;
             cam.SetPhase(_phase);
             cam.AcquisitionCompletedSignal.Reset();
             EnsureConnected();
@@ -203,7 +205,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         /// <returns>采集到有效图像返回 true</returns>
         private bool DoAcquireWait()
         {
-            var cam = MonitorCameraRun.Instance;
+            var cam = MonitorCamManager.Instance;
             if (!cam.AcquisitionCompletedSignal.WaitOne(0))
             {
                 if (StepWorkTime.TotalSeconds > AcquireTimeoutSeconds)
@@ -264,19 +266,19 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             if (_lastMat == null || _lastMat.IsEmpty) return false;
             try
             {
-                var mgr = MonitorAlgorithmManager.Instance;
-                PreWeldAlignmentResult alignment = null;
+                var mgr = AlgorithmManager.Instance;
+                WireFeedResult alignment = null;
                 WeldQualityResult quality = null;
                 Mat overlay;
 
                 if (_phase == MonitorCameraPhase.PreWeldAlignment)
                 {
-                    alignment = ImageAlgorithm.DetectPreWeldAlignment(_lastMat, mgr.AlignmentConfig);
+                    alignment = mgr.DetectWireFeed(_lastMat);
                     overlay = alignment.OverlayMat;
                 }
                 else
                 {
-                    quality = ImageAlgorithm.DetectWeldQuality(_lastMat, mgr.QualityConfig);
+                    quality = mgr.DetectWeldQuality(_lastMat);
                     overlay = quality.OverlayMat;
                 }
 
@@ -296,7 +298,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         /// <summary>按检测阶段把算法结果写入 _result（调用方已持有 _resultLock）</summary>
         /// <param name="alignment">焊前对齐结果（单轮模式使用）</param>
         /// <param name="quality">焊缝质量结果（连续模式使用）</param>
-        private void FillResult(PreWeldAlignmentResult alignment, WeldQualityResult quality)
+        private void FillResult(WireFeedResult alignment, WeldQualityResult quality)
         {
             _result.Phase = _phase;
             _result.Timestamp = DateTime.Now;
@@ -335,7 +337,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         #region 公共函数
 
         /// <summary>启动检测（phase 指定检测类型），continuous=true 则连续循环。</summary>
-        /// <remarks>相机健康巡检由 MonitorCameraRun 自身启停，流程只发指令。</remarks>
+        /// <remarks>相机健康巡检由 MonitorCamManager 自身启停，流程只发指令。</remarks>
         /// <param name="phase">检测类型</param>
         /// <param name="continuous">true 表示连续循环检测</param>
         public void Start(MonitorCameraPhase phase, bool continuous)
@@ -343,14 +345,14 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             RequireStandby("Start");
             _phase = phase;
             _continuous = continuous;
-            MonitorCameraRun.Instance.StartSupervision();
+            MonitorCamManager.Instance.StartSupervision();
             SetPhase(MonitorWorkflowState.Acquiring, "启动监控检测");
         }
 
         /// <summary>停止（手动终止）并停相机健康巡检。</summary>
         public void Stop()
         {
-            MonitorCameraRun.Instance.StopSupervision();
+            MonitorCamManager.Instance.StopSupervision();
             if (_flowState != MonitorWorkflowState.ManualStopped)
                 SetPhase(MonitorWorkflowState.ManualStopped, "用户停止");
         }
@@ -424,7 +426,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
                 Log("监控相机初始化连接开始", MessageLevel.Info);
                 BeginConnectAttempt();
                 EnsureConnected();
-                bool ok = MonitorCameraRun.Instance.ConnectionState == MonitorCameraConnectionState.Connected;
+                bool ok = MonitorCamManager.Instance.ConnectionState == MonitorCameraConnectionState.Connected;
                 if (ok)
                     SetState(SubDeviceState.Connected, "监控相机初始化连接完成");
                 else
@@ -513,7 +515,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
                 {
                 Log("手动连接开始", MessageLevel.Info);
                 EnsureConnected();
-                bool ok = MonitorCameraRun.Instance.ConnectionState == MonitorCameraConnectionState.Connected;
+                bool ok = MonitorCamManager.Instance.ConnectionState == MonitorCameraConnectionState.Connected;
                 if (ok)
                     SetState(SubDeviceState.Connected, "监控相机连接完成");
                 else
@@ -574,7 +576,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         /// <summary>停巡检并释放图像资源。</summary>
         protected override void DisposeManaged()
         {
-            try { MonitorCameraRun.Instance.StopSupervision(); } catch { }
+            try { MonitorCamManager.Instance.StopSupervision(); } catch { }
             lock (_resultLock)
             {
                 try { if (_lastMat != null) { _lastMat.Dispose(); _lastMat = null; } } catch { }

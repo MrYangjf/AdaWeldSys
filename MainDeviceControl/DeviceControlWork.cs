@@ -9,7 +9,7 @@ using AdaWeldSystem.Comm.Robot.KUKARobot;
 using AdaWeldSystem.FileOperate;
 using AdaWeldSystem.LaserWeldHead;
 using AdaWeldSystem.LineLaserCam.VirtualCam;
-using AdaWeldSystem.LineLaserCamApi;
+using AdaWeldSystem.LineLaserCam;
 using AdaWeldSystem.MainDeviceControl.DeviceState;
 using AdaWeldSystem.MainDeviceControl.FlowState;
 using AdaWeldSystem.MotionControl;
@@ -100,8 +100,8 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         /// <summary>虚拟 IO：消除报警（原档 §10.2 序号 5，映射 ClearAlarm_IO）。</summary>
         public const string IoClearAlarm = "IO_CLEAR_ALARM";
 
-        /// <summary>虚拟 IO：急停（原档 §10.2 序号 6，映射 EMG_IO）。</summary>
-        public const string IoEmg = "IO_EMG";
+        /// <summary>虚拟 IO：运控总线故障（电平型报警源，由 IOWork 总线监督扫描置位，消警后随状态离开 Alarm 自动解除）。</summary>
+        public const string IoMotionBusFault = "IO_MOTION_BUS_FAULT";
 
         /// <summary>虚拟 IO：子设备连接（原档 §10.3 序号 7，映射 SubConnect_IO）。</summary>
         public const string IoSubConnect = "IO_SUB_CONNECT";
@@ -484,22 +484,29 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         }
 
         /// <summary>子设备工作线程公共体（五段式）。</summary>
-        /// <remarks>非运行态慢节拍空转，运行态每拍驱动一步；单拍异常只记日志不退出，避免流程永久停摆。</remarks>
+        /// <remarks>非运行态慢节拍空转，运行态每拍驱动一步；单拍异常只记日志不退出，避免流程永久停摆。
+        /// <paramref name="name"/> 子设备中文名（日志用）与局部 <c>wasDriving</c> 配合：
+        /// 仅从 Running 真正跌出才记「停止驱动」，启动默认态（程序打开即 NoReset，从未 Running）不打日志。</remarks>
         /// <param name="flow">子流程</param>
         /// <param name="name">子设备中文名（日志用）</param>
         private void SubDeviceWork(DeviceWorkflowBase flow, string name)
         {
+            bool wasDriving = false;   // 上一拍是否处于 Running 驱动中（区分「启动默认态」与「真实被抢占」）
             while (!IsCloseWork)
             {
                 // 每拍前置问询运行态：一旦被改为非 Running（停机 / 报警 / 急停 / 复位）立即停止驱动
                 if (Current != MainDeviceStatus.Running)
                 {
-                    StopSubDeviceDrive(flow);
+                    // 清步骤计时，防暂停时长被计入超时
+                    flow.ResetWorkTime();
+                    if (wasDriving) LogDriveStopped();
+                    wasDriving = false;
                     Thread.Sleep(BeatIdleMs);
                     continue;
                 }
 
                 if (_driveStopped != 0) Interlocked.Exchange(ref _driveStopped, 0);
+                wasDriving = true;
 
                 try { flow.FlowProcess(); }
                 catch (Exception ex) { Log(name + " 流程执行异常 " + ex.Message, MessageLevel.Error); }
@@ -508,16 +515,11 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             }
         }
 
-        /// <summary>运行态被抢占后的处置：停止驱动本流程，只记日志，不改任何状态。</summary>
-        /// <remarks>参考基线裁定（HonorMachineTest）：线程只判断「状态不对就不执行」，不修改状态——
-        /// 状态一律由 IO 动作链（DoXxx → SetStatus）专门管理；Stopping 等焊接态迁移由停止命令链下发，本方法不越权。
-        /// 停止提醒整机只做一次（Interlocked 闭锁），清步骤计时仍每拍执行，防暂停时长被计入超时。</remarks>
-        /// <param name="flow">子流程</param>
-        private void StopSubDeviceDrive(DeviceWorkflowBase flow)
+        /// <summary>整机停止驱动提醒：运行态从 Running 真正跌出时记一次（Interlocked 闭锁，五线程共用）。</summary>
+        /// <remarks>只记日志不改任何状态——状态由 IO 动作链（DoXxx → SetStatus）专门管理（参考基线裁定）；
+        /// 启动默认态从未 Running，不会进入本方法（由调用方 <c>wasDriving</c> 门控）。</remarks>
+        private void LogDriveStopped()
         {
-            // 清步骤计时，防暂停时长被计入超时
-            flow.ResetWorkTime();
-
             if (Interlocked.CompareExchange(ref _driveStopped, 1, 0) != 0) return;
             Log("运行态已变更为 " + Current + " 子流程停止驱动", MessageLevel.Warning);
         }
@@ -618,7 +620,10 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
                     string ioName = MapCommandToIo(command);
                     if (string.IsNullOrEmpty(ioName))
                     {
-                        Log("机器人指令 " + command + " 为坐标上报类，仅记录不驱动状态转换", MessageLevel.Info);
+                        if (command == CommandCore.RxAbort)
+                            Log("机器人指令 RxAbort 急停已同步执行", MessageLevel.Error);
+                        else
+                            Log("机器人指令 " + command + " 为坐标上报类，仅记录不驱动状态转换", MessageLevel.Info);
                         continue;
                     }
 
@@ -651,10 +656,10 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         {
             switch (command)
             {
-                // 动作类：机器人主动急停 → 急停 IO
+                // 动作类：机器人主动急停 → 直接同步执行（急停无虚拟 IO，2026-09-08 裁定；返回 null 表示已就地处理）
                 case CommandCore.RxAbort:
-                    _emgReason = "机器人主动急停指令";
-                    return IoEmg;
+                    EstopMachine("机器人主动急停指令");
+                    return null;
 
                 // 动作类：机器人请求进入焊前 → 启动 IO
                 case CommandCore.RxPreWeldRequest:
@@ -1177,8 +1182,8 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
                     DoClearAlarm();
                     return true;
 
-                case IoEmg:
-                    DoEstopMachine();
+                case IoMotionBusFault:
+                    DoMotionBusFault();
                     return true;
 
                 case IoSubPrework:
@@ -1665,16 +1670,25 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             return true;
         }
 
-        /// <summary>急停命令（原档20260904 §10.2 序号 6，映射 EMG_IO）。</summary>
-        /// <remarks>用户 2026-09-04 裁定：所有 IO 工作一致，急停同样置位后由 thEMGWork 扫描执行。</remarks>
+        /// <summary>执行运控总线故障报警（由 thIOWork 总线监督扫描在 OK→NG 上升沿调用）。</summary>
+        /// <remarks>纯状态迁移动作（µs 级，无阻塞调用），与急停同属同步例外——
+        /// 报警不允许被 DispatchAction 的忙丢弃机制拒绝；根因 Error 已由检测点归口记一次（ADR-035 D1），此处只推进状态。</remarks>
+        public void DoMotionBusFault()
+        {
+            SetStatus(MainDeviceStatus.Alarm, "运控总线故障");
+        }
+
+        /// <summary>急停命令（原档20260904 §10.2 序号 6）。</summary>
+        /// <remarks>用户 2026-09-08 裁定：急停无虚拟 IO、只有物理 IO——触发源（EMGWork 反逻辑信号 /
+        /// 机器人 RxAbort 指令）直接同步执行，不走虚拟 IO 扫描（急停必须立即生效，同属同步白名单）。</remarks>
         /// <param name="reason">急停原因</param>
         public void EstopMachine(string reason)
         {
             _emgReason = reason;
-            SetVirtualIo(IoEmg);
+            DoEstopMachine();
         }
 
-        /// <summary>执行急停（由 thEMGWork 扫描到 EMG_IO 或物理急停位后调用）。</summary>
+        /// <summary>执行急停（由 EstopMachine 直通调用，触发源为 EMGWork 物理信号边沿 / 机器人 RxAbort 指令）。</summary>
         public void DoEstopMachine()
         {
             string reason = string.IsNullOrEmpty(_emgReason) ? "急停信号触发" : _emgReason;
@@ -1756,14 +1770,14 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
 
             // 选相机（A/B 虚拟，C 真实英莱）
             if (ShouldUseVirtualCamera)
-                CameraSelector.SelectVirtual();
+                LineLaserManager.Instance.SelectVirtual();
             else
-                CameraSelector.SelectIntelligentLaser();
+                LineLaserManager.Instance.SelectIntelligentLaser();
 
             // 套用虚拟相机轮廓/随机设置（仅当选中虚拟相机时生效）
-            var virt = CameraSelector.Active as VirtualCameraRun;
-            if (virt != null)
+            if (LineLaserManager.Instance.IsVirtual)
             {
+                var virt = LineLaserManager.Instance.VirtualCamera;
                 virt.SeamProfile = SeamProfile;
                 virt.RandomMode = RandomMode;
                 virt.TargetDistance = SimTargetDistance;
@@ -1892,9 +1906,9 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
                     SeamProfile = (SimSeamProfile)profileIdx;
                 RandomMode = ini.ReadInt("VirtualCamera", "RandomMode", RandomMode ? 1 : 0) == 1;
 
-                if (CameraSelector.IsVirtual)
+                if (LineLaserManager.Instance.IsVirtual)
                 {
-                    var virt = CameraSelector.Active as VirtualCameraRun;
+                    var virt = LineLaserManager.Instance.VirtualCamera;
                     if (virt != null)
                     {
                         virt.SeamProfile = SeamProfile;

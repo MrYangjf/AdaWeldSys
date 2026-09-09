@@ -2,6 +2,7 @@ using System;
 using AdaWeldSystem.Comm;
 using AdaWeldSystem.MainDeviceControl.DeviceState;
 using AdaWeldSystem.MainDeviceControl.FlowState;
+using AdaWeldSystem.LineLaserCam;
 using AdaWeldSystem.MotionControl;
 using AdaWeldSystem.MotionControl.IMotion;
 
@@ -298,6 +299,23 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             ResetStepTime();
         }
 
+        /// <summary>
+        /// 把焊缝跟踪轴的 PVT 能力注入线激光管理器（依赖注入，只传能力抽象不传控制器）。
+        /// 轴名取自线激光配置 SeamTrackAxisName，未配置到该轴时只记录警告，不影响初始化成功。
+        /// </summary>
+        private void AttachSeamTrackAxis()
+        {
+            string axisName = LineLaserManager.Instance.Config.SeamTrackAxisName;
+            MontionAxis axis = MontionManager.Instance.GetAxis(axisName);
+            if (axis == null)
+            {
+                Log(string.Format("未找到焊缝跟踪轴 {0} 焊缝跟踪 PVT 未启用", axisName), MessageLevel.Warning);
+                return;
+            }
+
+            LineLaserManager.Instance.AttachYAxis(axis);
+        }
+
         /// <summary>设备连接（阻塞）：初始化台达总线，同步等待完成。</summary>
         /// <returns>连接成功返回 true</returns>
         public override bool InitializeOn()
@@ -318,6 +336,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
                 }
 
                 _initialized = true;
+                AttachSeamTrackAxis();
                 SetPhase(MotionControlPhase.Idle, "初始化完成");
                 SetState(SubDeviceState.Connected, "运控连接完成");
                 SetWeldStatus(SubDeviceWeldStatus.NoReset, "初始化完成 等待复位");

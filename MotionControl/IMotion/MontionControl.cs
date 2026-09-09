@@ -100,6 +100,16 @@ namespace AdaWeldSystem.MotionControl.IMotion
         /// <returns>厂家类型</returns>
         public abstract ManufacturerType GetManufacturerType();
 
+        /// <summary>检查总线是否全部就绪（供状态监督轮询调用，须非阻塞）。</summary>
+        /// <remarks>virtual 默认实现（同 IPVTMotion 契约范式）：未覆写的派生类视为「不支持总线检查」，返回 false 并给出描述。</remarks>
+        /// <param name="faultDesc">故障描述；总线健康时为空串</param>
+        /// <returns>总线健康返回 true</returns>
+        public virtual bool CheckBusOK(out string faultDesc)
+        {
+            faultDesc = "控制器未实现总线检查";
+            return false;
+        }
+
         #endregion
     }
 }

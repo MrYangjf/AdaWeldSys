@@ -14,7 +14,7 @@ namespace AdaWeldSystem.Sub3UI
         #region 私有变量
         // 复刻 AntdUI demo SystemSet 模式：注入父 Window，内部方法用 this.Window 作 owner
         private readonly Window Window;
-        private readonly IntelligentLaserCameraRun _ilCamera;
+        private readonly IntelligentLaserCam _ilCamera;
         private AntdUI.AntList<CameraParamRow> _rows;
         #endregion
 
@@ -39,7 +39,7 @@ namespace AdaWeldSystem.Sub3UI
 
         #region 构造函数
 
-        public ILParamForm(Window _window, IntelligentLaserCameraRun ilCamera)
+        public ILParamForm(Window _window, IntelligentLaserCam ilCamera)
         {
             Window = _window;
             _ilCamera = ilCamera;

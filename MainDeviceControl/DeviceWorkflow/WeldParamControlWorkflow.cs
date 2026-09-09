@@ -2,7 +2,6 @@
 using AdaWeldSystem.Comm;
 using AdaWeldSystem.MainDeviceControl.DeviceState;
 using AdaWeldSystem.MainDeviceControl.FlowState;
-using AdaWeldSystem.EmguALG.EmguConfiger;
 using AdaWeldSystem.WeldParamControl;
 
 namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow

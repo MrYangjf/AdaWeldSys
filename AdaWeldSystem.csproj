@@ -57,11 +57,6 @@
     <Reference Include="HarfBuzzSharp">
       <HintPath>3rdDepend\HarfBuzzSharp.dll</HintPath>
     </Reference>
-    <Reference Include="Mv3dLpNet, Version=1.3.3.2, Culture=neutral, processorArchitecture=MSIL">
-      <SpecificVersion>False</SpecificVersion>
-      <HintPath>3rdDepend\Mv3dLpNet.dll</HintPath>
-      <Private>True</Private>
-    </Reference>
     <Reference Include="PresentationCore" />
     <Reference Include="PresentationFramework" />
     <Reference Include="ScottPlot">
@@ -76,11 +71,6 @@
     </Reference>
     <Reference Include="IntelligentLaser_CSharp">
       <HintPath>3rdDepend\IntelligentLaser_CSharp.dll</HintPath>
-      <Private>True</Private>
-    </Reference>
-    <Reference Include="MvCameraControl.Net, Version=0.0.0.0, Culture=neutral, processorArchitecture=MSIL">
-      <SpecificVersion>False</SpecificVersion>
-      <HintPath>3rdDepend\MvCameraControl.Net.dll</HintPath>
       <Private>True</Private>
     </Reference>
     <Reference Include="System" />
@@ -107,18 +97,24 @@
     <Compile Include="Comm\Robot\KUKARobot\RSICommunication.cs" />
     <Compile Include="EmguALG\Stages.cs" />
     <Compile Include="EmguALG\ImageAlgorithm.cs" />
-    <Compile Include="EmguALG\EmguConfiger\AlgorithmJob.cs" />
-    <Compile Include="EmguALG\EmguConfiger\AlgorithmManager.cs" />
-    <Compile Include="EmguALG\EmguConfiger\JobManager.cs" />
     <Compile Include="EmguALG\ImageRoiTools.cs" />
+    <Compile Include="EmguALG\Abstractions\IAlgorithm.cs" />
+    <Compile Include="EmguALG\Abstractions\IResultStore.cs" />
+    <Compile Include="EmguALG\WireFeedDistance\WireFeedConfig.cs" />
+    <Compile Include="EmguALG\WireFeedDistance\WireFeedResult.cs" />
+    <Compile Include="EmguALG\WireFeedDistance\WireFeedDistanceAlgorithm.cs" />
+    <Compile Include="EmguALG\WeldQuality\WeldQualityConfig.cs" />
+    <Compile Include="EmguALG\WeldQuality\WeldQualityResult.cs" />
+    <Compile Include="EmguALG\WeldQuality\WeldQualityAlgorithm.cs" />
+    <Compile Include="EmguALG\Manager\AlgorithmManager.cs" />
+    <Compile Include="EmguALG\Manager\AlgorithmResultStore.cs" />
+    <Compile Include="EmguALG\Manager\AlgorithmCompletedEventArgs.cs" />
     <Compile Include="EmguALG\Core\AlgorithmBase.cs" />
     <Compile Include="EmguALG\Core\AlgorithmResult.cs" />
+    <Compile Include="EmguALG\Core\AlgorithmOperations.cs" />
     <Compile Include="EmguALG\Core\PreprocessConfig.cs" />
-    <Compile Include="EmguALG\Core\ProfileTransform.cs" />
     <Compile Include="EmguALG\Core\UnitAttribute.cs" />
     <Compile Include="EmguALG\Core\RangeAttribute.cs" />
-    <Compile Include="EmguALG\SeamRecognition\SeamModel.cs" />
-    <Compile Include="EmguALG\SeamRecognition\SeamRecognitionAlgorithm.cs" />
     <Compile Include="EmguALG\RealtimeMonitor\RealtimeMonitorAlgorithm.cs" />
     <Compile Include="PCLOperate\3DModel\Point3D.cs" />
     <Compile Include="PCLOperate\3DModel\PointCloudData.cs" />
@@ -156,23 +152,21 @@
     <Compile Include="MainDeviceControl\DeviceStatusWork.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
-    <Compile Include="LineLaserCam\SmartRayCam\ApiCore\PackagedImage.cs" />
-    <Compile Include="LineLaserCam\SmartRayCam\ApiCore\Sensor.cs" />
-    <Compile Include="LineLaserCam\SmartRayCam\ApiCore\SensorHelper.cs" />
-    <Compile Include="LineLaserCam\SmartRayCam\ApiCore\SensorImageData.cs" />
-    <Compile Include="LineLaserCam\SmartRayCam\ApiCore\SensorManager.cs" />
-    <Compile Include="LineLaserCam\SmartRayCam\ApiCore\SensorPointCloud.cs" />
-    <Compile Include="LineLaserCam\SmartRayCam\ApiCore\SensorPointCloudMSR.cs" />
-    <Compile Include="LineLaserCam\SmartRayCam\ApiCore\SensorState.cs" />
-    <Compile Include="LineLaserCam\SmartRayCam\CameraRun.cs" />
-    <Compile Include="LineLaserCam\Api\ICameraRun.cs" />
-    <Compile Include="LineLaserCam\SmartRayCam\CameraPresetManager.cs" />
-    <Compile Include="LineLaserCam\VirtualCam\VirtualCameraRun.cs" />
-    <Compile Include="LineLaserCam\Api\CameraSelector.cs" />
-    <Compile Include="MonitorCam\Api\IMonitorCameraApi.cs" />
-    <Compile Include="MonitorCam\Api\HikvisionCameraApi.cs" />
-    <Compile Include="MonitorCam\MonitorCameraRun.cs" />
-    <Compile Include="MonitorCam\MonitorAlgorithmManager.cs" />
+    <Compile Include="LineLaserCam\ILineLaser\LineLaserType.cs" />
+    <Compile Include="LineLaserCam\ILineLaser\LineLaserCalibration.cs" />
+    <Compile Include="LineLaserCam\ILineLaser\LineLaserEventArgs.cs" />
+    <Compile Include="LineLaserCam\ILineLaser\LineLaserCameraBase.cs" />
+    <Compile Include="LineLaserCam\CameraRegistry.cs" />
+    <Compile Include="LineLaserCam\LineLaserConfig.cs" />
+    <Compile Include="LineLaserCam\LineLaserManager.cs" />
+    <Compile Include="LineLaserCam\VirtualCam\VirtualCam.cs" />
+    <Compile Include="MonitorCam\IMonitorCam\MonitorCamType.cs" />
+    <Compile Include="MonitorCam\IMonitorCam\MonitorCamEventArgs.cs" />
+    <Compile Include="MonitorCam\IMonitorCam\IMonitorCamApi.cs" />
+    <Compile Include="MonitorCam\MecaVisionCam\MecaVisionCam.cs" />
+    <Compile Include="MonitorCam\MecaVisionCam\Native\MVSDK.cs" />
+    <Compile Include="MonitorCam\MonitorCamConfig.cs" />
+    <Compile Include="MonitorCam\MonitorCamManager.cs" />
     <Compile Include="MotionControl\MoveControlData.cs" />
     <Compile Include="MotionControl\MontionManager.cs" />
     <Compile Include="MotionControl\AxisRegistry.cs" />
@@ -202,10 +196,7 @@
     <Compile Include="MotionControl\DeltaEtherCAT\Native\EtherCATPVTNative.cs" />
     <Compile Include="MotionControl\DeltaEtherCAT\Native\EtherCATEcam2Native.cs" />
     <Compile Include="MotionControl\DeltaEtherCAT\Native\DeltaErrorCode.cs" />
-    <Compile Include="LineLaserCam\HikRobotCam\ApiCore\HikCameraManager.cs" />
-    <Compile Include="LineLaserCam\HikRobotCam\ApiCore\HikCameraDevice.cs" />
-    <Compile Include="LineLaserCam\HikRobotCam\HikCameraRun.cs" />
-    <Compile Include="LineLaserCam\IntelligentLaserCam\IntelligentLaserCameraRun.cs" />
+    <Compile Include="LineLaserCam\IntelligentLaserCam\IntelligentLaserCam.cs" />
     <Compile Include="SqlLiteDatabase\AuthManager.cs" />
     <Compile Include="SqlLiteDatabase\AutoParamManager.cs" />
     <Compile Include="SqlLiteDatabase\ConfigManager.cs" />
@@ -714,7 +705,9 @@
       <Private>True</Private>
     </Reference>
   </ItemGroup>
-  <ItemGroup />
+  <ItemGroup>
+    <Folder Include="UIDesign\SubDialog\MotionControlDialog\" />
+  </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- NuGet 本地化后原生 DLL 不再由 NuGet 自动部署，改为手动从 3rdDepend 拷贝到输出目录 -->
   <Target Name="CopyNative3rdDependToOutput" AfterTargets="Build">
@@ -747,6 +740,11 @@
       <Native3rdDepend Include="3rdDepend\vcruntime140_1.dll" />
       <!-- 台达 EtherCAT 原生依赖：主站库（x64，与 PlatformTarget 一致，禁 AnyCPU） -->
       <Native3rdDepend Include="3rdDepend\EtherCAT_DLL_x64.dll" />
+      <!-- 麦格威 MVSDK 原生依赖（x64，与 PlatformTarget 一致）：MvApi 静态构造 LoadLibrary 加载，缺失时委托为 null 导致 NullReferenceException -->
+      <Native3rdDepend Include="3rdDepend\MecaVision\MVCAMSDK_X64.dll" />
+      <Native3rdDepend Include="3rdDepend\MecaVision\MVImageProcess_X64.DLL" />
+      <Native3rdDepend Include="3rdDepend\MecaVision\GiGeCamera_X64.Interface" />
+      <Native3rdDepend Include="3rdDepend\MecaVision\Usb3Camera0_X64.Interface" />
     </ItemGroup>
     <Copy SourceFiles="@(Native3rdDepend)" DestinationFolder="$(TargetDir)" SkipUnchangedFiles="true" />
     <!-- SQLite.Interop.dll 需按架构部署到 x64/x86 子目录 -->

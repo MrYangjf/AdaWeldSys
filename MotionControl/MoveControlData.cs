@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using AdaWeldSystem.Comm;
-using AdaWeldSystem.EmguALG.EmguConfiger;
 using AdaWeldSystem.MotionControl.DeltaEtherCAT;
 
 namespace AdaWeldSystem.MotionControl
@@ -125,16 +124,6 @@ namespace AdaWeldSystem.MotionControl
             {
                 _horizontalMoveCache[key] = moveDistance;
             }
-        }
-
-        /// <summary>计算并缓存水平移动距离，供真实/模拟流程统一调用。</summary>
-        /// <param name="seamFeature">焊缝特征</param>
-        /// <param name="robotX">机器人 X 坐标</param>
-        public void ComputeAndCacheHorizontalMove(SeamFeatureResult seamFeature, double robotX)
-        {
-            if (seamFeature == null) return;
-            double move = ComputeHorizontalMove(seamFeature.CenterX, seamFeature.CenterY);
-            CacheHorizontalMove(robotX, move);
         }
 
         /// <summary>查询最接近的水平移动缓存项，用于趋近触发。</summary>

@@ -3,7 +3,8 @@ using AdaWeldSystem.MainDeviceControl.DeviceWorkflow;
 using AdaWeldSystem.MainDeviceControl.DeviceState;
 using AdaWeldSystem.EmguALG;
 using AdaWeldSystem.LineLaserCam.IntelligentLaserCam;
-using AdaWeldSystem.LineLaserCamApi;
+using AdaWeldSystem.LineLaserCam;
+using AdaWeldSystem.LineLaserCam.ILineLaser;
 using AdaWeldSystem.Sub3UI;
 using AntdUI;
 using Emgu.CV;
@@ -18,7 +19,7 @@ namespace AdaWeldSystem.Sub2UI
     /// <summary>英莱线激光相机页面</summary>
     public partial class ILCamPage : UserControl
     {
-        private IntelligentLaserCameraRun _ilCamera;
+        private IntelligentLaserCam _ilCamera;
 
         private Mat _displayedClone;
 
@@ -44,16 +45,16 @@ namespace AdaWeldSystem.Sub2UI
             LineLaserWorkflow.Instance.WeldStatusChanged += OnWorkflowStateChanged;
 
             // 切换到英莱相机并获取实例（不持久化，仅当前会话生效）
-            CameraSelector.SelectIntelligentLaser();
-            _ilCamera = CameraSelector.Active as IntelligentLaserCameraRun;
+            LineLaserManager.Instance.SelectIntelligentLaser();
+            _ilCamera = LineLaserManager.Instance.IntelligentLaser;
 
             // 初始化 IP 输入框：显示本地配置保存的 IP（需求：初始化使用保存路径上的 IP）
-            txtIP.Text = IntelligentLaserCameraRun.LoadSavedIp();
+            txtIP.Text = LineLaserManager.Instance.Config.SensorIp;
 
             // 统一刷新入口：连接态 + 模式（覆盖原 UpdateConnectionUi/UpdateModeUi 两处直调）
             RefreshUi(RefreshUiScope.Connection | RefreshUiScope.Mode);
-            // 订阅轮廓帧就绪事件（回调驱动显示，替代轮询 Timer）
-            if (_ilCamera != null) _ilCamera.ContourFrameReady += OnContourFrameReady;
+            // 订阅线激光管理器的 Mat 更新事件（显示处理由管理器承担，ADR-039）
+            LineLaserManager.Instance.MatUpdated += OnMatUpdated;
             // 订阅 Job 参数变更（切 JOB/改参数，可能来自 ILAlgoPage 算法编辑页或工作流）→ 同步主 UI 下拉
             if (_ilCamera != null) _ilCamera.JobParamsChanged += OnIlJobParamsChanged;
             // ADR-022：订阅「线激光」设备态切换 StateSwitched（设备状态外发），统一驱动刷新状态标签
@@ -97,12 +98,12 @@ namespace AdaWeldSystem.Sub2UI
 
         #region 显示刷新（回调驱动）
 
-        private void OnContourFrameReady(object sender, EventArgs e)
+        private void OnMatUpdated(object sender, LineLaserMatEventArgs e)
         {
             if (IsDisposed || Disposing) return;
             if (InvokeRequired)
             {
-                BeginInvoke(new Action(() => OnContourFrameReady(sender, e)));
+                BeginInvoke(new Action(() => OnMatUpdated(sender, e)));
                 return;
             }
             RefreshDisplay();
@@ -119,8 +120,7 @@ namespace AdaWeldSystem.Sub2UI
             // 实测回调帧率（首帧已剔除，保留 1 位小数）
             lblMeasuredFps.Text = string.Format("回调帧率：{0:F1} Hz", _ilCamera.MeasuredFps);
 
-            // 仅手动/空闲模式下在本页绘制 Mat 和结果表；
-            // 自动模式下轮廓数据和结果通过 ContourDataReady 事件外传（ScottPlot + 自动调整）。
+            // 自动运行期间不在本页绘制，轮廓与结果由管理器分发给主页面 ScottPlot
             if (IsWorkflowRunning(LineLaserWorkflow.Instance.WeldStatus)) return;
 
             // 手动模式下 swDisplay 控制是否绘制 Mat（允许只看结果表不看画面）
@@ -160,13 +160,13 @@ namespace AdaWeldSystem.Sub2UI
         private void RefreshInspectResult()
         {
             var rows = new List<InspectResultRow>();
-            if (_ilCamera == null || !_ilCamera.HasInspectResult)
+            LineLaserSeamResult r = _ilCamera.LastInspectResult;
+            if (!r.Valid)
             {
                 rows.Add(new InspectResultRow { Field = "状态", Value = "-", Unit = "无识别结果" });
             }
             else
             {
-                var r = _ilCamera.LastInspectResult;
                 rows.Add(new InspectResultRow { Field = "ParseRes", Value = r.ParseRes.ToString(), Unit = "-" });
                 rows.Add(new InspectResultRow { Field = "ErrorCode", Value = r.ErrorCode.ToString(), Unit = "-" });
                 rows.Add(new InspectResultRow { Field = "FeatureY", Value = r.FeatureY.ToString("F3"), Unit = "mm" });
@@ -258,7 +258,8 @@ namespace AdaWeldSystem.Sub2UI
                 {
                     // 选中后 IP 自动填充并保存到本地配置
                     txtIP.Text = dlg.SelectedIp;
-                    IntelligentLaserCameraRun.SaveSensorIp(dlg.SelectedIp);
+                    LineLaserManager.Instance.Config.SensorIp = dlg.SelectedIp;
+                    LineLaserManager.Instance.SaveConfig();
                 }
             }
         }
@@ -507,12 +508,9 @@ namespace AdaWeldSystem.Sub2UI
         {
             bool running = IsWorkflowRunning(LineLaserWorkflow.Instance.WeldStatus);
 
-            // 设置回调模式：自动运行时关闭 Mat 生成和 UI 事件，节省 CPU/GPU；
-            // 空闲/手动模式下开启 Mat 生成和 UI 刷新，供调试页面显示。
-            if (_ilCamera != null)
-            {
-                _ilCamera.IsManualMode = !running;
-            }
+            // 设置显示处理：手动/空闲模式下按需开启轮廓 Mat 生成，自动运行时关闭以节省 CPU/GPU。
+            // 生成动作由 LineLaserManager 承担（ADR-039），本页只切换开关。
+            LineLaserManager.Instance.SetDisplayOptions(!running, LineLaserManager.Instance.DisplayFps, true);
 
             // ADR-022：状态标签统一由 Connection 分支刷新（基于状态机识别），本函数只管模式可用性。
             if (running)
@@ -618,9 +616,9 @@ namespace AdaWeldSystem.Sub2UI
             swDisplay.CheckedChanged -= swDisplay_CheckedChanged;
             LineLaserWorkflow.Instance.WeldStatusChanged -= OnWorkflowStateChanged;
             LineLaserWorkflow.Instance.StateSwitched -= OnIlStateChanged;
+            LineLaserManager.Instance.MatUpdated -= OnMatUpdated;
             if (_ilCamera != null)
             {
-                _ilCamera.ContourFrameReady -= OnContourFrameReady;
                 _ilCamera.JobParamsChanged -= OnIlJobParamsChanged;
             }
 

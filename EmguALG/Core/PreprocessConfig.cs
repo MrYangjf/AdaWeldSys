@@ -1,7 +1,6 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Globalization;
 using AdaWeldSystem.FileOperate;
-using AdaWeldSystem.EmguALG.EmguConfiger;
 
 namespace AdaWeldSystem.EmguALG.Core
 {

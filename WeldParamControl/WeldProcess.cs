@@ -1,10 +1,9 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
 using AdaWeldSystem.Comm;
-using AdaWeldSystem.EmguALG.EmguConfiger;
 using AdaWeldSystem.ProductFileManager;
 using AdaWeldSystem.MotionControl;
 
@@ -533,11 +532,6 @@ namespace AdaWeldSystem.WeldParamControl
         public AutoParam CurrentAutoParam { get; set; }
 
         /// <summary>
-        /// 最近一次算法完成事件携带的焊缝特征（供 LineLaserWorkflow 在 Adjust 步骤调用）
-        /// </summary>
-        private SeamFeatureResult _lastSeamFeature;
-
-        /// <summary>
         /// 最近一次算法完成事件携带的机器人X坐标
         /// </summary>
         private double _lastRobotX;
@@ -577,36 +571,8 @@ namespace AdaWeldSystem.WeldParamControl
             IsCountType = true;
             CountNum = 5;
 
-            // 绑定算法完成事件
-            PipelineManager.Instance.AlgorithmCompleted += OnAlgorithmCompleted;
         }
 
-        /// <summary>
-        /// 算法完成事件处理：每一帧数据都执行AutoAction
-        /// </summary>
-        private void OnAlgorithmCompleted(object sender, AlgorithmCompletedEventArgs e)
-        {
-            TotalExecuteCount++;
-
-            if (!e.Success)
-            {
-                // 算法失败，增加连续失败计数
-                ConsecutiveFailureCount++;
-                Log(string.Format(
-                    "算法执行失败 连续失败次数 {0} 错误 {1}",
-                    ConsecutiveFailureCount, e.ErrorMessage), MessageLevel.Info);
-            }
-            else
-            {
-                // 算法成功，重置连续失败计数
-                ConsecutiveFailureCount = 0;
-            }
-
-            // 暂存本帧焊缝特征与机器人X坐标，由 LineLaserWorkflow 在 Adjust 步骤
-            // 调用 TriggerAdjustment() 统一执行自动调整并落盘记录（单一驱动源，避免重复处理）
-            _lastSeamFeature = e.SeamFeature;
-            _lastRobotX = e.RobotX;
-        }
 
         #region 自动调整参数，需要从数据库读取的参数列表，焊缝宽度为基准值，其他参数为对应关系
 
@@ -643,8 +609,7 @@ namespace AdaWeldSystem.WeldParamControl
         /// <param name="countNum">每段点数</param>
         /// <param name="robotX">当前机器人X坐标</param>
         /// <param name="contourPoints">轮廓点列表（可选）</param>
-        /// <param name="seamFeature">焊缝特征结果（可选，包含原始宽度）</param>
-        public void AutoAction(AutoParam autoParam, bool isCountType, int countNum, double robotX = 0, List<System.Drawing.Point> contourPoints = null, SeamFeatureResult seamFeature = null)
+        public void AutoAction(AutoParam autoParam, bool isCountType, int countNum, double robotX = 0, List<System.Drawing.Point> contourPoints = null)
         {
             if (autoParam == null)
             {
@@ -679,12 +644,6 @@ namespace AdaWeldSystem.WeldParamControl
             }
 
             bool actionSuccess = false;
-
-            // 如果有原始宽度数据，添加到滑动窗口进行平滑
-            if (seamFeature != null)
-            {
-                SeamCalData.AddSeamWidth(seamFeature.SeamWidth);
-            }
 
             // 设定执行宽度值，第一次输入为焊缝当前基准
             // 输入连续的宽度值，计算最后整体长度（以某个值定义为一段）：比如5个点或距离5mm生成一段焊缝宽
@@ -745,12 +704,6 @@ namespace AdaWeldSystem.WeldParamControl
             // 将数据存入ChartVar（基于RobotX）
             StoreChartData(robotX, contourPoints);
 
-            // 计算并缓存水平移动距离（线激光前置标定 + 中心点比较）
-            if (seamFeature != null)
-            {
-                ComputeAndCacheHorizontalMove(seamFeature, robotX);
-            }
-
             // 如果计算成功，记录到RunFileRecord
             if (actionSuccess)
             {
@@ -772,22 +725,8 @@ namespace AdaWeldSystem.WeldParamControl
         {
             if (CurrentAutoParam != null)
             {
-                AutoAction(CurrentAutoParam, IsCountType, CountNum, _lastRobotX,
-                    _lastSeamFeature != null ? _lastSeamFeature.ContourPoints : null,
-                    _lastSeamFeature);
+                AutoAction(CurrentAutoParam, IsCountType, CountNum, _lastRobotX);
             }
-        }
-
-        /// <summary>
-        /// 计算并缓存水平移动距离（线激光前置标定 + 焊缝中心点与标定中心点比较）。
-        /// 依据焊缝中心点（SeamFeatureResult.CenterX/CenterY）与标定值比较，经 MotionControl.MoveControlData
-        /// 得到水平移动距离，以「机器人X + 线激光前置标定距离」为键写入缓存，
-        /// 供运控水平移动「趋近」触发（运动控制由 MontionManager 统一管理，台达总线就绪后输出实际指令）。
-        /// </summary>
-        public void ComputeAndCacheHorizontalMove(SeamFeatureResult seamFeature, double robotX)
-        {
-            // 水平移动算法已统一收敛至 MotionControl.MoveControlData，此处仅委派以保持对外接口兼容
-            MontionManager.Instance.MoveData.ComputeAndCacheHorizontalMove(seamFeature, robotX);
         }
 
         /// <summary>

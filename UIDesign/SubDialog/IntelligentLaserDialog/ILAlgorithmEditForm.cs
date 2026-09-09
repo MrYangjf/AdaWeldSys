@@ -1,6 +1,6 @@
 using AdaWeldSystem.EmguALG;
 using AdaWeldSystem.LineLaserCam.IntelligentLaserCam;
-using AdaWeldSystem.LineLaserCamApi;
+using AdaWeldSystem.LineLaserCam;
 using AntdUI;
 using System;
 using System.Windows.Forms;
@@ -9,7 +9,7 @@ namespace AdaWeldSystem.Sub3UI
 {
     /// <summary>
     /// 算法编辑窗体（AntdUI 迁移版）。
-    /// 按当前激活相机的接口（CameraSelector.Active 类型）只挂载对应的算法编辑页，
+    /// 按当前激活相机的接口（LineLaserManager.Instance.Active 类型）只挂载对应的算法编辑页，
     /// 另一页根本不 AddTabSelect，从而「只显示并编辑对应算法、隐藏另一套」——满足接口分隔要求。
     /// 迁移要点（ADR-018 / AntdUI-DesignParadigm）：
     /// 子页（EmguAlgoPage / ILAlgoPage）为 UserControl，需包进 AntdUI.TabPage 再 AddTabSelect（Dock=Fill 加入 Controls）。
@@ -22,7 +22,7 @@ namespace AdaWeldSystem.Sub3UI
         private readonly PipelineConfig _config;
         // 按接口只创建并挂载其中一个页；另一个保持 null（即不显示）
         private readonly ILAlgoForm _ilPage;
-        private readonly IntelligentLaserCameraRun _ilCamera;
+        private readonly IntelligentLaserCam _ilCamera;
 
         public ILAlgorithmEditForm(Window _window, PipelineConfig config)
         {
@@ -31,7 +31,7 @@ namespace AdaWeldSystem.Sub3UI
             _config = config ?? throw new ArgumentNullException(nameof(config));
 
             // 按接口判断当前激活相机类型，仅挂载对应算法编辑页（隐藏另一页）
-            _ilCamera = CameraSelector.Active as IntelligentLaserCameraRun;
+            _ilCamera = LineLaserManager.Instance.IntelligentLaser;
             if (_ilCamera != null)
             {
                 _ilPage = new ILAlgoForm(_ilCamera);

@@ -1,8 +1,6 @@
-using Emgu.CV;
+﻿using Emgu.CV;
 using Emgu.CV.Util;
-using AdaWeldSystem.EmguALG.EmguConfiger;
 using AdaWeldSystem.FileOperate;
-using AdaWeldSystem.PCLOperate.Models;
 
 namespace AdaWeldSystem.EmguALG.Core
 {
@@ -106,19 +104,6 @@ namespace AdaWeldSystem.EmguALG.Core
         protected VectorOfVectorOfPoint FindContours(Mat bin, double thr = 127)
         {
             return ImageAlgorithm.FindContours(bin, thr);
-        }
-
-        #endregion
-
-        #region 单位变换（mm ↔ px）
-
-        /// <summary>
-        /// 由点云构建 mm↔px 变换（唯一换算点，见 ProfileTransform）。
-        /// 同一帧内应复用同一变换，保证一致性。
-        /// </summary>
-        protected ProfileTransform BuildTransform(PointCloudData pc, int imgW, int imgH, int margin = 10)
-        {
-            return ProfileTransform.FromPointCloud(pc, imgW, imgH, margin);
         }
 
         #endregion

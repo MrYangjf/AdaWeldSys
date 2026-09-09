@@ -1,4 +1,5 @@
-using AdaWeldSystem.Comm;
+﻿using AdaWeldSystem.Comm;
+using AdaWeldSystem.EmguALG.Manager;
 using AdaWeldSystem.MainDeviceControl.DeviceState;
 using AdaWeldSystem.MainDeviceControl.DeviceWorkflow;
 using AdaWeldSystem.MonitorCam;
@@ -29,10 +30,6 @@ namespace AdaWeldSystem
         // 存储被隐藏的 SegmentedItem 引用，用于恢复显示
         AntdUI.SegmentedItem _hiddenItem1, _hiddenItem2, _hiddenItem3;
 
-        // V3：整机状态标签（动态添加到状态栏，显示整设备聚合状态）
-        private System.Windows.Forms.ToolStripLabel lbl_SystemStatus;
-        private System.Windows.Forms.ToolStripSeparator sep_SystemStatus;
-
         // 初始化等待面板（Modal 内容，初始化结束事件自动关闭）
         private InitWaitingForm _initWaiting;
         #endregion
@@ -51,7 +48,7 @@ namespace AdaWeldSystem
             // ── 配置加载 ──
             MontionManager.Instance.MoveData.Load();  // 运控标定与轴 IO 配置
             DeviceControlWork.Instance.LoadSimulation();     // 模拟模式参数
-            MonitorAlgorithmManager.Instance.Load();  // 监控相机算法参数
+            AlgorithmManager.Instance.Load();  // 监控相机算法参数
 
             // ── 全局 UI 配置（AntdUI 主题 + 文本渲染） ──
             GlobalCommData.UIConfigSetting();
@@ -80,9 +77,6 @@ namespace AdaWeldSystem
             // ── 事件订阅 ──
             LineLaserWorkflow.Instance.WeldStatusChanged += OnWorkflowStateChanged;
             UpdateStatusLabel(LineLaserWorkflow.Instance.WeldStatus);
-
-            // V3：动态添加整机状态标签到状态栏
-            InitializeSystemStatusLabel();
 
             // 关闭前询问
             this.FormClosing += FormMain_FormClosing;
@@ -227,87 +221,6 @@ namespace AdaWeldSystem
         }
 
         /// <summary>
-        /// 初始化整机状态标签
-        /// </summary>
-        private void InitializeSystemStatusLabel()
-        {
-            lbl_SystemStatus = new System.Windows.Forms.ToolStripLabel();
-            lbl_SystemStatus.Name = "lbl_SystemStatus";
-            lbl_SystemStatus.Text = "整机：初始化中";
-            lbl_SystemStatus.ForeColor = System.Drawing.Color.Orange;
-            lbl_SystemStatus.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Bold);
-
-            sep_SystemStatus = new System.Windows.Forms.ToolStripSeparator();
-            sep_SystemStatus.Name = "sep_SystemStatus";
-
-            // 整机状态置顶（最左），其后为流程状态、系统时间
-            toolStrip1.Items.Insert(0, sep_SystemStatus);
-            toolStrip1.Items.Insert(0, lbl_SystemStatus);
-
-            // 订阅整机流程态切换（权责边界：统一走基类 StateChanged）
-            DeviceControlWork.Instance.StatusChanged += OnMainDeviceStatusChanged;
-            UpdateSystemStatusLabel(DeviceControlWork.Instance.Status);
-        }
-
-        /// <summary>
-        /// 整机流程态变更回调
-        /// </summary>
-        /// <param name="sender">事件源</param>
-        /// <param name="e">流程态变更参数</param>
-        private void OnMainDeviceStatusChanged(object sender, MainDeviceStatusChangedEventArgs e)
-        {
-            if (InvokeRequired)
-            {
-                BeginInvoke(new Action(() => OnMainDeviceStatusChanged(sender, e)));
-                return;
-            }
-            UpdateSystemStatusLabel(e.NewStatus);
-        }
-
-        /// <summary>
-        /// 更新整机状态标签（展示整机流程态 MainDeviceFlowState）
-        /// </summary>
-        /// <param name="state">整机流程态</param>
-        private void UpdateSystemStatusLabel(MainDeviceStatus state)
-        {
-            string text;
-            System.Drawing.Color color;
-            switch (state)
-            {
-                case MainDeviceStatus.Running:
-                    text = "整机：运行中";
-                    color = System.Drawing.Color.Green;
-                    break;
-                case MainDeviceStatus.Alarm:
-                    text = "整机：报警";
-                    color = System.Drawing.Color.Red;
-                    break;
-                case MainDeviceStatus.EStop:
-                    text = "整机：急停";
-                    color = System.Drawing.Color.Red;
-                    break;
-                case MainDeviceStatus.Stop:
-                    text = "整机：已停止";
-                    color = System.Drawing.Color.Gray;
-                    break;
-                case MainDeviceStatus.NoReset:
-                    text = "整机：未复位";
-                    color = System.Drawing.Color.Orange;
-                    break;
-                case MainDeviceStatus.Reseting:
-                    text = "整机：复位中";
-                    color = System.Drawing.Color.Orange;
-                    break;
-                default:
-                    text = "整机：" + state.ToString();
-                    color = System.Drawing.Color.Gray;
-                    break;
-            }
-            lbl_SystemStatus.Text = text;
-            lbl_SystemStatus.ForeColor = color;
-        }
-
-        /// <summary>
         /// 线激光状态变更处理
         /// </summary>
         /// <param name="sender">事件源</param>
@@ -401,8 +314,6 @@ namespace AdaWeldSystem
         {
             // 退订工作流状态事件（设计器 Dispose(bool) 不覆盖静态/单例事件订阅，须显式退订）
             LineLaserWorkflow.Instance.WeldStatusChanged -= OnWorkflowStateChanged;
-
-            DeviceControlWork.Instance.StatusChanged -= OnMainDeviceStatusChanged;
 
             DeviceControlWork.Instance.Dispose();
 

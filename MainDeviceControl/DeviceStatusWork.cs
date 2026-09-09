@@ -4,6 +4,7 @@ using System.Threading;
 using AdaWeldSystem.Comm;
 using AdaWeldSystem.Comm.PLC.Siemens;
 using AdaWeldSystem.MainDeviceControl.DeviceState;
+using AdaWeldSystem.MotionControl;
 using S7.Net;
 
 namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
@@ -23,6 +24,9 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         /// <summary>状态反射轮询周期（毫秒，20Hz）</summary>
         private const int StatusPollIntervalMs = 50;
 
+        /// <summary>运控总线监督扫描节流拍数（50ms×4=200ms，总线检查为 µs~ms 级读共享内存，无需 20Hz 高频）</summary>
+        private const int MotionBusCheckBeats = 4;
+
         #endregion
 
         #region 私有变量
@@ -41,6 +45,9 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         private Thread thLightStatusWork;
 
         private readonly object _actionLock = new object();
+
+        /// <summary>运控总线监督节流拍计数器（IOWork 专享）</summary>
+        private int _motionBusCheckBeat;
         private volatile bool _actionBusy;
         private Thread thAction;
 
@@ -118,6 +125,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
                 {
                     ScanRunningIo();
                     DeviceControlWork.Instance.CheckPreworkFailed();
+                    ScanMotionBusFault();
 
                     var result = _checker.Check();
                     LastResult = result;
@@ -145,15 +153,18 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             IsIOWorking = false;
         }
 
-        /// <summary>读取物理急停位（由控制器 / PLC 给出）。</summary>
-        /// <returns>急停按钮已按下返回 true；PLC 未启用或读取失败返回 false</returns>
+        /// <summary>读取物理急停位（反逻辑：安全型常闭回路，与普通 IO 相反）。</summary>
+        /// <remarks>用户 2026-09-08 裁定：EMGWork 只负责急停且只看物理 IO——
+        /// **没有电平信号 = 急停，有电平信号 = 不急停**（按钮按下或回路断线都表现为信号消失，故障安全）。
+        /// PLC 未连接时无法判定，返回 false 不主动触发急停（互锁检查器对 PLC 未连接恒判不通过兜底）。</remarks>
+        /// <returns>信号消失（急停有效）返回 true</returns>
         private bool ReadPhysicalEmg()
         {
             var cfg = _checker.Thresholds;
             var comm = GlobalCommData.mCommunicationManager;
             var plc = comm != null && comm.IsPlcEnabled ? comm.PlcManager : null;
             if (plc == null) return false;
-            return plc.ReadBit(DataType.DataBlock, cfg.PlcDb, 0, cfg.EmergencyStopBit);
+            return !plc.ReadBit(DataType.DataBlock, cfg.PlcDb, 0, cfg.EmergencyStopBit);
         }
 
         /// <summary>扫描一条脉冲型虚拟 IO：命中即取走并异步分派（保证每条命令只执行一次）。</summary>
@@ -240,8 +251,55 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             ScanPulseIo(DeviceControlWork.IoSubAlarmStop, true);
         }
 
+        /// <summary>运控总线健康电平扫描：OK→NG 上升沿置虚拟 IO 并同步执行报警动作链。</summary>
+        /// <remarks>
+        /// 用户 2026-09-08 裁定：总线故障属普通 Alarm，检查放 IOWork（EMGWork 专责急停）；
+        /// 控制器状态变量注册成电平型虚拟 IO——持续 NG 期间 IoMotionBusFault 常置，天然闭锁不重复报（ADR-035 D1）；
+        /// NG→OK 不自动消警，归 ClearAlarm 链；消警（状态离开 Alarm）后闭锁自动解除，若仍 NG 在下一拍重新触发。
+        /// 未初始化（IsInitialized=false）不检测，避免启动阶段误报。
+        /// </remarks>
+        private void ScanMotionBusFault()
+        {
+            var work = DeviceControlWork.Instance;
+
+            // 已触发：闭锁。整机已离开 Alarm（消警/急停解除回 NoReset）则解除闭锁，允许下次故障重新触发
+            if (work.IsVirtualIoSet(DeviceControlWork.IoMotionBusFault))
+            {
+                if (work.Status != MainDeviceStatus.Alarm) work.ClearVirtualIo(DeviceControlWork.IoMotionBusFault);
+                return;
+            }
+
+            // 节流：50ms×4=200ms 采样一次
+            _motionBusCheckBeat++;
+            if (_motionBusCheckBeat < MotionBusCheckBeats) return;
+            _motionBusCheckBeat = 0;
+
+            if (!MontionManager.Instance.IsInitialized) return;
+
+            string desc;
+            bool ok;
+            try
+            {
+                ok = MontionManager.Instance.MontionControl.CheckBusOK(out desc);
+            }
+            catch (Exception ex)
+            {
+                Log("运控总线检查异常 " + ex.Message, MessageLevel.Warning);
+                return;
+            }
+            if (ok) return;
+
+            // OK→NG 上升沿：根因归口记一次 Error，置电平型虚拟 IO 并同步执行报警动作链（纯状态迁移 µs 级，与急停同属同步例外）
+            Log("运控总线故障 " + desc, MessageLevel.Error);
+            work.SetVirtualIo(DeviceControlWork.IoMotionBusFault);
+            work.ExecuteIo(DeviceControlWork.IoMotionBusFault);
+        }
+
         /// <summary>急停轮询线程主体（原档 §2 EMG IO Work）。</summary>
-        /// <remarks>同时监控虚拟与物理急停位，统一走置位 → 扫描 → ExecuteIo 路径，不区分触发源。</remarks>
+        /// <remarks>用户 2026-09-08 裁定：EMGWork 只负责急停且只看物理 IO（无虚拟 IO）——
+        /// 反逻辑：信号消失=急停有效（按下/断线均表现为信号消失，故障安全）；
+        /// 检测到 IO 上电（设备通知上位机安全）才允许取消急停，未检测到前 EStop 状态无法清除
+        /// （EstopCancel 仅在本线程信号恢复分支调用）。</remarks>
         private void EMGWork()
         {
             bool emgShown = false;
@@ -252,22 +310,19 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
                 {
                     var work = DeviceControlWork.Instance;
 
-                    // ① 物理 IO：硬件按钮按下即置位虚拟 EmgIO（与其余触发源走同一路径）
-                    if (ReadPhysicalEmg()) work.EstopMachine("急停按钮按下");
-
-                    // ② 统一扫描虚拟 EmgIO 并执行（物理与虚拟在此汇合）
-                    bool pressed = work.IsVirtualIoSet(DeviceControlWork.IoEmg);
+                    // 反逻辑物理急停：true=信号消失（急停有效），false=IO 上电（设备通知安全）
+                    bool estopActive = ReadPhysicalEmg();
                     var status = work.Status;
 
-                    if (pressed && !emgShown)
+                    if (estopActive && !emgShown)
                     {
+                        // 上升沿：信号消失 → 同步执行急停（EstopMachine 内部直通 DoEstopMachine，无虚拟 IO）
                         emgShown = true;
-                        work.ExecuteIo(DeviceControlWork.IoEmg);
-                        work.ClearVirtualIo(DeviceControlWork.IoEmg);
-                        Log("急停执行完成", MessageLevel.Error);
+                        work.EstopMachine("急停按钮按下");
                     }
-                    else if (!pressed && emgShown)
+                    else if (!estopActive && emgShown)
                     {
+                        // 下降沿：IO 上电 = 设备通知上位机安全，才允许取消急停
                         emgShown = false;
                         if (status == MainDeviceStatus.EStop)
                         {

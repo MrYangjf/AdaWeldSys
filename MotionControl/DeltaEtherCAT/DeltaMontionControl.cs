@@ -259,15 +259,25 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
             return ManufacturerType.Delta;
         }
 
-        /// <summary>检查总线是否全部就绪</summary>
+        /// <summary>检查总线是否全部就绪（逐从站读连接态与报警位，读共享内存非阻塞，供状态监督轮询）。</summary>
+        /// <param name="faultDesc">故障描述：首个非就绪从站的站号与现象；总线健康时为空串</param>
         /// <returns>所有从站均在运行态且无报警返回 true</returns>
-        public bool CheckBusOK()
+        public override bool CheckBusOK(out string faultDesc)
         {
-            if (!_isInitial) return false;
+            faultDesc = string.Empty;
+            if (!_isInitial)
+            {
+                faultDesc = "控制器未初始化";
+                return false;
+            }
 
             foreach (SlaveInfo slave in _slaveScanner.SlaveInfos)
             {
-                if (!IsSlaveOperational(slave.NodeId, 0)) return false;
+                if (!IsSlaveOperational(slave.NodeId, 0))
+                {
+                    faultDesc = "从站 " + slave.NodeId + " 非运行态或存在报警";
+                    return false;
+                }
             }
             return true;
         }

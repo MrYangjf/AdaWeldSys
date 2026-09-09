@@ -2,12 +2,13 @@ using AdaWeldSystem.Comm;
 using AdaWeldSystem.MainDeviceControl.DeviceState;
 using AdaWeldSystem.MainDeviceControl.DeviceWorkflow;
 using AdaWeldSystem.WeldParamControl;
-using AdaWeldSystem.LineLaserCamApi;
-using AdaWeldSystem.LineLaserCam.IntelligentLaserCam;
+using AdaWeldSystem.LineLaserCam;
+using AdaWeldSystem.LineLaserCam.ILineLaser;
 using AdaWeldSystem.PCLOperate.Models;
 using AntdUI;
 using System;
 using System.Drawing;
+using System.Threading;
 using System.Windows.Forms;
 //using ScottPlot;
 
@@ -38,7 +39,13 @@ namespace AdaWeldSystem.Sub1UI
         private ScottPlot.Plottable.ScatterPlot _featurePointPlot;  // 特征点散点（红色实心圆）
         private double[] _featureXs = new double[1];  // 特征点 X 数组（复用，避免每帧分配）
         private double[] _featureYs = new double[1];  // 特征点 Y 数组（复用，避免每帧分配）
-        private IntelligentLaserCameraRun _contourCamera;  // 订阅的英莱相机引用
+
+        // 轮廓轮询：主页面用独立线程按固定节拍从 LineLaserManager 拉取最新快照（ADR-039），
+        // 取代原先「回调逐帧驱动 UI」的方式——界面刷新不必跟随相机帧率，且手动/自动模式可各自取舍。
+        private const int ProfilePollIntervalMs = 33;   // 约 30Hz
+        private Thread _profilePollThread;
+        private volatile bool _profilePolling;
+        private long _lastProfileVersion;
 
         // 轮廓图轴范围（mm）：优先用校准框动态确定，无校准框时用默认回退值
         private double _contourYMin = -30.0;
@@ -78,6 +85,11 @@ namespace AdaWeldSystem.Sub1UI
         private static readonly System.Drawing.Color DeviceBackDisconnected = System.Drawing.Color.FromArgb(200, 200, 200);
         // 默认按钮图标（Ant Design poweroff 电源 SVG，与 buttonShadow1 demo 同源；可经 SetDeviceIconSvg 替换）
         private const string DefaultDeviceIconSvg = "ApiOutlined";
+
+        // ── 整机状态标签（LabelStatus，承接原 FormMain 左下角整机状态）──
+        private System.Windows.Forms.Timer _statusBlinkTimer;   // EStop 态 0.5s 红闪定时器
+        private bool _blinkOn;                                  // 闪烁相位（true=亮红）
+        private MainDeviceStatus _currentStatus;                // 当前整机态（闪烁 Tick 防越界改色）
         #endregion
 
         #region 构造函数
@@ -96,7 +108,6 @@ namespace AdaWeldSystem.Sub1UI
             // 填 i 作为严格递增占位保证 AddSignalXY 调用不崩，首帧数据到达后由生产者线程用真实 Y 覆盖（数据严格递增，无需额外校验）。
             for (int i = 0; i < ContourSignalMaxPoints; i++)
                 _contourSignalXs[i] = i;
-            _contourCamera = null;
             GlobalCommData.EventInfoHandler += CommenData_EventInfoHandler;
 
             // 硬件快捷开关按钮（常驻 panelfloatbutton 面板，页面切换时随宿主自动显隐，无需事件同步）
@@ -104,6 +115,14 @@ namespace AdaWeldSystem.Sub1UI
 
             // 页面销毁时释放外部资源（ADR-001：UI 类用 DisposeComponents，不在 .cs 重写 Dispose(bool)）
             this.HandleDestroyed += MainPage_HandleDestroyed;
+
+            // 整机状态标签（承接原 FormMain 左下角整机状态，2026-09-08 迁移）：
+            // 闪烁定时器 0.5s 翻转一次相位（ADR-002：字段统一在构造函数初始化）
+            _statusBlinkTimer = new System.Windows.Forms.Timer();
+            _statusBlinkTimer.Interval = 500;
+            _statusBlinkTimer.Tick += StatusBlinkTimer_Tick;
+            DeviceControlWork.Instance.StatusChanged += OnMainDeviceStatusChanged;
+            ApplyDeviceStatus(DeviceControlWork.Instance.Status);
         }
         #endregion
 
@@ -114,95 +133,87 @@ namespace AdaWeldSystem.Sub1UI
         }
 
         /// <summary>
-        /// 订阅英莱轮廓事件
+        /// 启动轮廓轮询线程（取代原先订阅相机回调的方式）
         /// </summary>
-        private void SubscribeContourCamera()
+        private void StartProfilePolling()
         {
-            // 轴范围锁定复位：重新订阅（相机切换/重连）时，下一帧用新校准框重新锁定
+            // 轴范围锁定复位：重启轮询（相机切换/重连）时，下一帧用新校准框重新锁定
             _contourAxisLocked = false;
             // 轮廓线复位为不可见：重连/切换相机期间尚未有有效数据，避免残留上一会话的轮廓线
             if (_contourSignalPlot != null) _contourSignalPlot.IsVisible = false;
-            // 先取消旧订阅（防止重复订阅）
-            if (_contourCamera != null)
-            {
-                _contourCamera.ContourDataReady -= IlCamera_ContourDataReady;
-                _contourCamera = null;
-            }
 
-            var cam = CameraSelector.Active as IntelligentLaserCameraRun;
-            if (cam != null)
+            if (_profilePolling) return;
+            _profilePolling = true;
+            _lastProfileVersion = 0;
+
+            _profilePollThread = new Thread(ProfilePollLoop);
+            _profilePollThread.IsBackground = true;
+            _profilePollThread.Name = "轮廓轮询";
+            _profilePollThread.Start();
+        }
+
+        /// <summary>
+        /// 停止轮廓轮询线程
+        /// </summary>
+        private void StopProfilePolling()
+        {
+            _profilePolling = false;
+            Thread thread = _profilePollThread;
+            if (thread != null && thread.IsAlive)
             {
-                _contourCamera = cam;
-                _contourCamera.ContourDataReady += IlCamera_ContourDataReady;
+                thread.Join(300);
+            }
+            _profilePollThread = null;
+        }
+
+        /// <summary>
+        /// 轮询主循环：按固定节拍从线激光管理器取最新快照，版本号未变则跳过
+        /// </summary>
+        private void ProfilePollLoop()
+        {
+            while (_profilePolling)
+            {
+                try
+                {
+                    ProfileSnapshot snap = LineLaserManager.Instance.Profile;
+                    if (snap != null && snap.Version != _lastProfileVersion)
+                    {
+                        _lastProfileVersion = snap.Version;
+                        ApplyProfileSnapshot(snap);
+                    }
+                }
+                catch
+                {
+                    // 轮询异常不影响页面其它功能
+                }
+                Thread.Sleep(ProfilePollIntervalMs);
             }
         }
 
         /// <summary>
-        /// 英莱轮廓数据就绪回调
+        /// 把快照拷入 ScottPlot 复用数组并派发一次界面刷新
         /// </summary>
-        /// <param name="sender">事件源</param>
-        /// <param name="e">轮廓数据参数</param>
-        private void IlCamera_ContourDataReady(object sender, ContourDataEventArgs e)
+        /// <param name="snap">轮廓帧快照</param>
+        private void ApplyProfileSnapshot(ProfileSnapshot snap)
         {
-            if (e.Cloud == null || e.Cloud.PointCount <= 0) return;
+            int pointCount = Math.Min(snap.Count, ContourSignalMaxPoints);
+            if (pointCount <= 0) return;
 
-            // 生产者线程立即预拷贝：把云点拷入复用数组/快照，避免 BeginInvoke 延迟读取被相机回收的缓冲（Bug1 候选 b：读到陈旧/清零数据→平直线）
-            int pointCount = Math.Min(e.Cloud.PointCount, ContourSignalMaxPoints);
-            var points = e.Cloud.Points;
             for (int i = 0; i < pointCount; i++)
             {
-                _contourSignalData[i] = points[i].Z;
-                _contourSignalXs[i] = points[i].Y;   // X = 沿激光线物理坐标 Y（非等距，AddSignalXY 显式传入）
+                _contourSignalData[i] = snap.Zs[i];
+                _contourSignalXs[i] = snap.Ys[i];   // X = 沿激光线物理坐标 Y（非等距，AddSignalXY 显式传入）
             }
             _snapPointCount = pointCount;
 
-            // 特征点 & 结果快照
-            _snapHasResult = e.HasValidResult;
-            if (e.HasValidResult)
+            _snapHasResult = snap.HasResult;
+            if (snap.HasResult)
             {
-                _snapFeatureY = e.Inspect.FeatureY;
-                _snapFeatureZ = e.Inspect.FeatureZ;
+                _snapFeatureY = snap.FeatureY;
+                _snapFeatureZ = snap.FeatureZ;
             }
 
-            // ① 首帧轴范围锁定（仅一次，满足"固定视图"约束）：
-            //    连接相机后由校准框回调（CalibrationInfo 四角点）确定轴限度——此为相机视野的最大/最小值，
-            //    角点可带负值（Math.Min/Max 已兼容），故不假设符号、直接取极值。锁定后恒定不变，每帧仅更新轮廓与特征点。
-            //    SetAxisLimits 属 UI 操作，置 _pendingAxisLock 由 UI 线程应用。
-            if (!_contourAxisLocked && _contourCamera != null)
-            {
-                var calib = _contourCamera.CalibrationInfo;
-                if (calib != null && calib.HasData)
-                {
-                    // 从 4 个角点直接取 min/max（含负值，直接取极值最稳妥）
-                    double yMin = Math.Min(
-                        Math.Min(calib.LeftTopCorner[0], calib.RightTopCorner[0]),
-                        Math.Min(calib.LeftBottomCorner[0], calib.RightBottomCorner[0]));
-                    double yMax = Math.Max(
-                        Math.Max(calib.LeftTopCorner[0], calib.RightTopCorner[0]),
-                        Math.Max(calib.LeftBottomCorner[0], calib.RightBottomCorner[0]));
-                    double zMin = Math.Min(
-                        Math.Min(calib.LeftTopCorner[1], calib.RightTopCorner[1]),
-                        Math.Min(calib.LeftBottomCorner[1], calib.RightBottomCorner[1]));
-                    double zMax = Math.Max(
-                        Math.Max(calib.LeftTopCorner[1], calib.RightTopCorner[1]),
-                        Math.Max(calib.LeftBottomCorner[1], calib.RightBottomCorner[1]));
-
-                    // 范围有效性检查 + 5% 边距，避免轮廓贴边或零范围报错
-                    double yRange = yMax - yMin;
-                    double zRange = zMax - zMin;
-                    if (yRange > 0.001 && zRange > 0.001)
-                    {
-                        double yPad = yRange * 0.05;
-                        double zPad = zRange * 0.05;
-                        _contourYMin = yMin - yPad;
-                        _contourYMax = yMax + yPad;
-                        _contourZMin = zMin - zPad;
-                        _contourZMax = zMax + zPad;
-                        _contourAxisLocked = true;
-                        _pendingAxisLock = true;
-                    }
-                }
-            }
+            LockContourAxisOnce();
 
             // 合并派发：保证 BeginInvoke 队列最多 1 个待处理，根治逐事件派发导致的队列堆积（内存↑/卡死，Bug2/3）
             if (_uiUpdatePending) return;
@@ -211,6 +222,50 @@ namespace AdaWeldSystem.Sub1UI
                 formsPlot1.BeginInvoke(new Action(UpdateChartUI));
             else
                 UpdateChartUI();
+        }
+
+        /// <summary>
+        /// 首帧轴范围锁定（仅一次，满足"固定视图"约束）：
+        /// 由相机校准框四角点确定轴限度——此为相机视野的最大/最小值，
+        /// 角点可带负值（Math.Min/Max 已兼容），故不假设符号、直接取极值。锁定后恒定不变，每帧仅更新轮廓与特征点。
+        /// SetAxisLimits 属 UI 操作，置 _pendingAxisLock 由 UI 线程应用。
+        /// </summary>
+        private void LockContourAxisOnce()
+        {
+            if (_contourAxisLocked) return;
+
+            LineLaserCameraBase camera = LineLaserManager.Instance.Active;
+            if (camera == null) return;
+
+            LineLaserCalibration calib = camera.Calibration;
+            if (calib == null || !calib.HasData) return;
+
+            double yMin = Math.Min(
+                Math.Min(calib.LeftTopCorner[0], calib.RightTopCorner[0]),
+                Math.Min(calib.LeftBottomCorner[0], calib.RightBottomCorner[0]));
+            double yMax = Math.Max(
+                Math.Max(calib.LeftTopCorner[0], calib.RightTopCorner[0]),
+                Math.Max(calib.LeftBottomCorner[0], calib.RightBottomCorner[0]));
+            double zMin = Math.Min(
+                Math.Min(calib.LeftTopCorner[1], calib.RightTopCorner[1]),
+                Math.Min(calib.LeftBottomCorner[1], calib.RightBottomCorner[1]));
+            double zMax = Math.Max(
+                Math.Max(calib.LeftTopCorner[1], calib.RightTopCorner[1]),
+                Math.Max(calib.LeftBottomCorner[1], calib.RightBottomCorner[1]));
+
+            // 范围有效性检查 + 5% 边距，避免轮廓贴边或零范围报错
+            double yRange = yMax - yMin;
+            double zRange = zMax - zMin;
+            if (yRange <= 0.001 || zRange <= 0.001) return;
+
+            double yPad = yRange * 0.05;
+            double zPad = zRange * 0.05;
+            _contourYMin = yMin - yPad;
+            _contourYMax = yMax + yPad;
+            _contourZMin = zMin - zPad;
+            _contourZMax = zMax + zPad;
+            _contourAxisLocked = true;
+            _pendingAxisLock = true;
         }
 
         /// <summary>
@@ -330,6 +385,105 @@ namespace AdaWeldSystem.Sub1UI
         private void MainPage_Shown(object sender, EventArgs e)
         {
             AfterInitializeUI();
+        }
+        #endregion
+
+        #region 整机状态标签（LabelStatus）
+        /// <summary>
+        /// 主设备运行态变更回调（承接原 FormMain 左下角整机状态标签）
+        /// </summary>
+        /// <param name="sender">事件源</param>
+        /// <param name="e">运行态变更参数</param>
+        private void OnMainDeviceStatusChanged(object sender, MainDeviceStatusChangedEventArgs e)
+        {
+            // 事件可能来自后台线程：封送到 UI 线程（[[lessons/UI-Thread-Safety]]）
+            if (LabelStatus.InvokeRequired)
+            {
+                LabelStatus.BeginInvoke(new Action(() => ApplyDeviceStatus(e.NewStatus)));
+                return;
+            }
+            ApplyDeviceStatus(e.NewStatus);
+        }
+
+        /// <summary>
+        /// 应用整机状态到 LabelStatus：文本「设备状态：{状态值}」，背景色按设备颜色映射
+        /// </summary>
+        /// <remarks>颜色映射（2026-09-08 用户二次定义）：Running=绿 / Reseting=黄 / Alarm=橙 /
+        /// EStop(急停)=红闪(0.5s 红↔白) / Stop=蓝(不闪) / NoReset=灰。
+        /// EStop 闪烁由 _statusBlinkTimer 每 0.5s 翻转相位实现。</remarks>
+        /// <param name="state">整机运行态</param>
+        private void ApplyDeviceStatus(MainDeviceStatus state)
+        {
+            _currentStatus = state;
+            string text;
+            System.Drawing.Color back;
+            System.Drawing.Color fore;
+            switch (state)
+            {
+                case MainDeviceStatus.Running:
+                    text = "设备状态：运行中";
+                    back = System.Drawing.Color.Green;
+                    fore = System.Drawing.Color.White;
+                    break;
+                case MainDeviceStatus.Reseting:
+                    text = "设备状态：复位中";
+                    back = System.Drawing.Color.Yellow;
+                    fore = System.Drawing.Color.Black;
+                    break;
+                case MainDeviceStatus.Stop:
+                    text = "设备状态：已停止";
+                    back = System.Drawing.Color.Blue;
+                    fore = System.Drawing.Color.White;
+                    break;
+                case MainDeviceStatus.Alarm:
+                    text = "设备状态：报警";
+                    back = System.Drawing.Color.Orange;
+                    fore = System.Drawing.Color.Black;
+                    break;
+                case MainDeviceStatus.EStop:
+                    // 亮相位固定红底；暗相位（白）由闪烁定时器翻转
+                    text = "设备状态：急停";
+                    back = System.Drawing.Color.Red;
+                    fore = System.Drawing.Color.White;
+                    break;
+                case MainDeviceStatus.NoReset:
+                    text = "设备状态：未复位";
+                    back = System.Drawing.Color.Gray;
+                    fore = System.Drawing.Color.White;
+                    break;
+                default:
+                    text = "设备状态：" + state.ToString();
+                    back = System.Drawing.Color.Gray;
+                    fore = System.Drawing.Color.White;
+                    break;
+            }
+            LabelStatus.Text = text;
+            LabelStatus.BackColor = back;
+            LabelStatus.ForeColor = fore;
+
+            // 仅 EStop 态跑闪烁表，其余态停表并保持固定底色
+            if (state == MainDeviceStatus.EStop)
+            {
+                _blinkOn = true;
+                _statusBlinkTimer.Start();
+            }
+            else
+            {
+                _statusBlinkTimer.Stop();
+            }
+        }
+
+        /// <summary>
+        /// EStop 态红闪定时器：每 0.5s 翻转一次背景相位（红 ↔ 白）
+        /// </summary>
+        /// <param name="sender">事件源</param>
+        /// <param name="e">事件参数</param>
+        private void StatusBlinkTimer_Tick(object sender, EventArgs e)
+        {
+            // 防御式守卫：非 EStop 态不启表，此处理论上不会命中
+            if (_currentStatus != MainDeviceStatus.EStop) return;
+            _blinkOn = !_blinkOn;
+            LabelStatus.BackColor = _blinkOn ? System.Drawing.Color.Red : System.Drawing.Color.White;
         }
         #endregion
 
@@ -509,12 +663,17 @@ namespace AdaWeldSystem.Sub1UI
         public void DisposeComponents()
         {
             GlobalCommData.EventInfoHandler -= CommenData_EventInfoHandler;
-            // 取消英莱相机轮廓事件订阅（防止内存泄漏）
-            if (_contourCamera != null)
+            // 退订整机运行态（防内存泄漏）+ 释放闪烁定时器
+            DeviceControlWork.Instance.StatusChanged -= OnMainDeviceStatusChanged;
+            if (_statusBlinkTimer != null)
             {
-                _contourCamera.ContourDataReady -= IlCamera_ContourDataReady;
-                _contourCamera = null;
+                _statusBlinkTimer.Stop();
+                _statusBlinkTimer.Tick -= StatusBlinkTimer_Tick;
+                _statusBlinkTimer.Dispose();
+                _statusBlinkTimer = null;
             }
+            // 停止轮廓轮询线程（防止后台线程继续引用已销毁页面）
+            StopProfilePolling();
             // 释放 Tooltip 组件
             if (_tooltip != null)
             {
@@ -554,7 +713,7 @@ namespace AdaWeldSystem.Sub1UI
                 System.Drawing.Color.FromArgb(128, 0, 128), "轮廓");
             _contourSignalPlot.LineWidth = 2;
             // 初始不可见：未连接相机/无有效数据时，_contourSignalData 全为 0，若直接渲染会画出一条 Z=0 的
-            // 假轮廓线。故初始 IsVisible=false，首帧有效数据到达（IlCamera_ContourDataReady）后才置 true。
+            // 假轮廓线。故初始 IsVisible=false，首帧有效数据到达（ApplyProfileSnapshot）后才置 true。
             _contourSignalPlot.IsVisible = false;
 
             // ② 特征点散点（红色实心圆，markerSize=8，初始 IsVisible=false 隐藏）
@@ -570,8 +729,8 @@ namespace AdaWeldSystem.Sub1UI
             formsPlot1.Plot.SetAxisLimits(_contourYMin, _contourYMax, _contourZMin, _contourZMax);
             formsPlot1.Refresh();
 
-            // 订阅英莱相机轮廓数据事件（回调驱动）
-            SubscribeContourCamera();
+            // 启动轮廓轮询线程：从线激光管理器按节拍取点刷新（ADR-039）
+            StartProfilePolling();
         }
 
         /// <summary>

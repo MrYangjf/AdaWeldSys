@@ -3,15 +3,14 @@ using System.Threading;
 using AdaWeldSystem.Comm;
 using AdaWeldSystem.MainDeviceControl.DeviceState;
 using AdaWeldSystem.MainDeviceControl.FlowState;
-using AdaWeldSystem.LineLaserCamApi;
-using AdaWeldSystem.EmguALG.EmguConfiger;
+using AdaWeldSystem.LineLaserCam;
+using AdaWeldSystem.LineLaserCam.ILineLaser;
 using AdaWeldSystem.WeldParamControl;
-using AdaWeldSystem.LineLaserCam.IntelligentLaserCam;
 
 namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
 {
     /// <summary>线激光工作流（单例）。</summary>
-    /// <remarks>两层状态：连接态 State 与焊接过程态 WeldStatus；焊缝特征结果经 PipelineManager 上报焊接工艺流程。</remarks>
+    /// <remarks>两层状态：连接态 State 与焊接过程态 WeldStatus；焊缝特征由线激光 Manager 直接产出，不再经算法层中转上报。</remarks>
     public class LineLaserWorkflow : DeviceWorkflowBase
     {
         #region 常量
@@ -53,7 +52,6 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         private int _startingValidFrameCount;
 
         // Working 态字段
-        private IntelligentLaserCameraRun _ilCamera;
         private volatile bool _adjustmentPending;
         private volatile bool _lastResultValid;
         private double _measuredFps;
@@ -117,33 +115,26 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
                 if (DeviceControlWork.Instance.IsSimulationEnabled
                     && !DeviceControlWork.Instance.ShouldUseVirtualCamera)
                 {
-                    CameraSelector.SelectIntelligentLaser();
+                    LineLaserManager.Instance.SelectIntelligentLaser();
                 }
-                var camera = CameraSelector.Active;
-                if (camera is IntelligentLaserCameraRun)
+                LineLaserCameraBase camera = LineLaserManager.Instance.Active;
+                if (camera == null)
                 {
-                    var ilCamera = (IntelligentLaserCameraRun)camera;
-                    // 统一初始化三步：connect → readConfiguration → verifyHardwareStatus（复位职责归 ResetProcess）
-                    return RunInitializeSteps(
-                        connect: () => ilCamera.IsConnected || ilCamera.ConnectManual(IntelligentLaserCameraRun.LoadSavedIp()),
-                        readConfiguration: () => true,
-                        verifyHardwareStatus: () =>
-                        {
-                            if (!ilCamera.IsConnected) return false;
-                            ilCamera.ConfigureDefaultCommPeriod();
-                            return true;
-                        });
+                    Log("线激光相机未选择，初始化失败", MessageLevel.Error);
+                    return false;
                 }
 
-                if (CameraSelector.IsVirtual)
-                {
-                    return RunInitializeSteps(
-                        connect: () => true, readConfiguration: () => true,
-                        verifyHardwareStatus: () => true);
-                }
-
-                Log("线激光相机未正确选择/未连接，初始化失败", MessageLevel.Error);
-                return false;
+                // 统一初始化三步：connect → readConfiguration → verifyHardwareStatus（复位职责归 ResetProcess）
+                // 相机实例一律经 LineLaserManager 代理取用，工作流不持有厂商实现类型
+                return RunInitializeSteps(
+                    connect: () => LineLaserManager.Instance.Connect(),
+                    readConfiguration: () => true,
+                    verifyHardwareStatus: () =>
+                    {
+                        if (!camera.IsConnected) return false;
+                        LineLaserManager.Instance.ConfigureDefaultCommPeriod();
+                        return true;
+                    });
             }
             catch (Exception ex)
             {
@@ -206,7 +197,6 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         /// <remarks>取当前激活相机并订阅轮廓数据事件，Start 时调用一次。</remarks>
         private void BindCamera()
         {
-            _ilCamera = CameraSelector.Active as IntelligentLaserCameraRun;
             SubscribeCameraEvents();
         }
 
@@ -216,9 +206,8 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         {
             UnsubscribeCameraEvents();
             SafeShutdownPeripherals();
-            _ilCamera = null;
             _isWorkflowActive = false;
-            CameraSelector.SetWorking(false);
+            LineLaserManager.Instance.SetWorking(false);
         }
 
         /// <summary>执行步 10：PreWork 清理。</summary>
@@ -246,16 +235,19 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         /// <returns>动作完成返回 true</returns>
         private bool DoPreWorkOn()
         {
-            if (_ilCamera == null)
+            if (LineLaserManager.Instance.IsVirtual)
             {
+                LineLaserManager.Instance.StartAcquisition();
                 _dataStable = true;
                 Log("虚拟相机 PreWork 数据稳定默认通过", MessageLevel.Info);
                 return true;
             }
-            if (!_ilCamera.IsCameraOn()) _ilCamera.SetSensor(true);
-            if (!_ilCamera.IsLaserOn()) _ilCamera.SetLaser(true);
+            if (!LineLaserManager.Instance.IsCameraOn()) LineLaserManager.Instance.SetSensor(true);
+            if (!LineLaserManager.Instance.IsLaserOn()) LineLaserManager.Instance.SetLaser(true);
+            // 补启动连续采集：此前工作流从未调用，相机连上也不出图，PreWork 必然等待数据稳定超时
+            LineLaserManager.Instance.StartAcquisition();
             _startingValidFrameCount = 0;
-            Log("PreWork 激光与传感器已开启，等待数据稳定", MessageLevel.Info);
+            Log("PreWork 激光与传感器已开启并启动采集，等待数据稳定", MessageLevel.Info);
             return true;
         }
 
@@ -307,7 +299,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
                 return false;
             }
 
-            if (_ilCamera == null)
+            if (LineLaserManager.Instance.IsVirtual)
             {
                 _lastResultValid = true;
                 return false;
@@ -359,15 +351,14 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
 
         private void SafeShutdownPeripherals()
         {
-            if (_ilCamera == null) return;
-            try { if (_ilCamera.IsLaserOn()) _ilCamera.SetLaser(false); } catch { }
-            try { if (_ilCamera.IsCameraOn()) _ilCamera.SetSensor(false); } catch { }
+            // 停采集 → 关激光 → 关传感器，由 LineLaserManager 统一代理
+            LineLaserManager.Instance.ShutdownPeripherals();
         }
 
         private void SubscribeCameraEvents()
         {
-            if (_ilCamera == null) return;
-            _ilCamera.ContourDataReady += IlCamera_ContourDataReady;
+            // 业务处理已上提 LineLaserManager，工作流订阅其转发的结果事件（ADR-039）
+            LineLaserManager.Instance.ResultReady += ManagerResultReady;
             _adjustmentPending = false;
             _lastResultValid = false;
             _consecutiveSuccessCount = 0;
@@ -375,18 +366,17 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
 
         private void UnsubscribeCameraEvents()
         {
-            if (_ilCamera != null)
-                _ilCamera.ContourDataReady -= IlCamera_ContourDataReady;
+            LineLaserManager.Instance.ResultReady -= ManagerResultReady;
         }
 
-        private void IlCamera_ContourDataReady(object sender, ContourDataEventArgs e)
+        private void ManagerResultReady(object sender, LineLaserResultEventArgs e)
         {
-            _lastResultValid = e.HasValidResult;
+            _lastResultValid = e.Result.Valid;
             _measuredFps = e.MeasuredFps;
 
             if (WeldStatus == SubDeviceWeldStatus.PreWork)
             {
-                if (e.HasValidResult)
+                if (e.Result.Valid)
                 {
                     _startingValidFrameCount++;
                     if (_startingValidFrameCount >= DataStableFrameCount)
@@ -396,27 +386,13 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
                     _startingValidFrameCount = 0;
             }
 
-            if (e.HasValidResult)
+            if (e.Result.Valid)
             {
                 _consecutiveSuccessCount++;
                 if (_consecutiveSuccessCount >= _adjustTriggerSuccessCount && !_adjustmentPending)
                 {
-                    try
-                    {
-                        var ir = e.Inspect;
-                        var sf = new SeamFeatureResult();
-                        sf.CenterY = ir.FeatureY;
-                        sf.CenterX = ir.FeatureZ;
-                        sf.SeamWidth = (ir.Width0 + ir.Width1) * 0.5;
-                        sf.SeamArea = ir.Area;
-                        double robotX = GetCurrentRobotX();
-                        PipelineManager.Instance.ReportExternalResult(sf, robotX, null);
-                        _lastAnalysisSuccess = true;
-                    }
-                    catch
-                    {
-                        _lastAnalysisSuccess = false;
-                    }
+                    // 焊缝特征由线激光 Manager 直接产出（ADR-039），不再经算法 Pipeline 中转上报
+                    _lastAnalysisSuccess = true;
                     _adjustmentPending = true;
                 }
             }
@@ -439,8 +415,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             try
             {
                 // 焊接工艺计算与下发收敛到 WeldParamControlWorkflow。
-                // 焊缝特征与机器人 X 由 WeldProcess 在 PipelineManager.AlgorithmCompleted 中暂存，
-                // 故此处无需传参，由工艺工作流统一执行计算与下发
+                // 焊缝特征由线激光 Manager 直接产出，故此处无需传参，由工艺工作流统一执行计算与下发
                 _lastAdjustSuccess = WeldParamControlWorkflow.Instance.ComputeAndOutput();
             }
             catch (Exception ex)
@@ -550,13 +525,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             try
             {
                 Log("断开开始", MessageLevel.Info);
-                var camera = CameraSelector.Active;
-                if (camera is IntelligentLaserCameraRun)
-                {
-                    var ilCamera = (IntelligentLaserCameraRun)camera;
-                    if (ilCamera.IsConnected)
-                        ilCamera.DisconnectManual();
-                }
+                LineLaserManager.Instance.Disconnect();
                 SafeShutdownPeripherals();
                 ReleaseCameraBinding();
                 SetState(SubDeviceState.Disconnected, "线激光断开");
@@ -594,12 +563,12 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             }
 
             if (DeviceControlWork.Instance.IsSimulationEnabled && DeviceControlWork.Instance.ShouldUseVirtualCamera)
-                CameraSelector.SelectVirtual();
+                LineLaserManager.Instance.SelectVirtual();
             else
-                CameraSelector.SelectIntelligentLaser();
+                LineLaserManager.Instance.SelectIntelligentLaser();
 
             _isWorkflowActive = true;
-            CameraSelector.SetWorking(true);
+            LineLaserManager.Instance.SetWorking(true);
             _measuredFps = 0.0;
 
             BindCamera();
@@ -755,13 +724,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             try
             {
                 Log("初始化断开开始", MessageLevel.Info);
-                var camera = CameraSelector.Active;
-                if (camera is IntelligentLaserCameraRun)
-                {
-                    var ilCamera = (IntelligentLaserCameraRun)camera;
-                    if (ilCamera.IsConnected)
-                        ilCamera.DisconnectManual();
-                }
+                LineLaserManager.Instance.Disconnect();
                 SafeShutdownPeripherals();
                 ReleaseCameraBinding();
                 SetState(SubDeviceState.Disconnected, "线激光初始化断开");
@@ -890,12 +853,8 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             try
             {
                 UnsubscribeCameraEvents();
-                if (_ilCamera != null)
-                {
-                    _ilCamera.Dispose();
-                    _ilCamera = null;
-                }
-                CameraSelector.SetWorking(false);
+                // 相机实例由 LineLaserManager 持有并统一释放，工作流不再自行 Dispose
+                LineLaserManager.Instance.SetWorking(false);
             }
             catch (Exception ex)
             {

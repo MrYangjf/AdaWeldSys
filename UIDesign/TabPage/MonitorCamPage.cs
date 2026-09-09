@@ -1,8 +1,9 @@
-using AdaWeldSystem.Comm;
+﻿using AdaWeldSystem.Comm;
 using AdaWeldSystem.MainDeviceControl.DeviceState;
 using AdaWeldSystem.MainDeviceControl.DeviceWorkflow;
 using AdaWeldSystem.MonitorCam;
-using AdaWeldSystem.MonitorCam.Api;
+using AdaWeldSystem.MonitorCam.IMonitorCam;
+using AdaWeldSystem.EmguALG.Manager;
 using Emgu.CV;
 using System;
 using System.Windows.Forms;
@@ -12,10 +13,10 @@ namespace AdaWeldSystem.Sub2UI
     /// <summary>
     /// 监控相机页面 - 监控画面显示与算法调试
     /// 提供：实时预览、焊前对中检测、焊中质量检测、算法参数编辑。
-    /// 订阅 MonitorCameraRun 实时帧（图像归相机）与 MonitorCameraWorkflow 基类 StateChanged（流程态归流程）。
+    /// 订阅 MonitorCamManager 实时帧（图像归相机）与 MonitorCameraWorkflow 基类 StateChanged（流程态归流程）。
     /// 检测结果在流程态转 Completed 后由本页向流程只读属性拉取（权责边界）。
     /// 所有事件处理均检查 InvokeRequired 以跨线程安全刷新（ADR / Lessons）。
-    /// 算法参数内联于右侧面板，由 MonitorAlgorithmManager 单例持久化（ADR-014）。
+    /// 算法参数内联于右侧面板，由 AlgorithmManager 单例持久化（ADR-014）。
     /// </summary>
     public partial class MonitorCamPage : UserControl
     {
@@ -45,7 +46,7 @@ namespace AdaWeldSystem.Sub2UI
         {
             UnsubscribeEvents();
             StopStatusTimer();
-            try { MonitorCameraRun.Instance.SensorStop(); } catch { }
+            try { MonitorCamManager.Instance.SensorStop(); } catch { }
             try { MonitorCameraWorkflow.Instance.Stop(); } catch { }
         }
 
@@ -60,30 +61,30 @@ namespace AdaWeldSystem.Sub2UI
         }
 
         /// <summary>
-        /// 从 MonitorAlgorithmManager 单例填充右侧算法参数框。
+        /// 从 AlgorithmManager 单例填充右侧算法参数框。
         /// 单例 Load() 已在 FormMain 启动期调用，此处仅读取（参见 Lessons/StartupSingletonInitialization）。
         /// </summary>
         private void InitializeAlgorithmControls()
         {
-            var mgr = MonitorAlgorithmManager.Instance;
-            txtTolX.Text = mgr.AlignmentConfig.ToleranceX.ToString("F1");
-            txtTolY.Text = mgr.AlignmentConfig.ToleranceY.ToString("F1");
-            txtTolAngle.Text = mgr.AlignmentConfig.ToleranceAngle.ToString("F1");
-            txtPassScore.Text = mgr.QualityConfig.PassScore.ToString("F1");
+            var mgr = AlgorithmManager.Instance;
+            txtTolX.Text = mgr.WireFeed.ToleranceX.ToString("F1");
+            txtTolY.Text = mgr.WireFeed.ToleranceY.ToString("F1");
+            txtTolAngle.Text = mgr.WireFeed.ToleranceAngle.ToString("F1");
+            txtPassScore.Text = mgr.Quality.PassScore.ToString("F1");
         }
 
         private void SubscribeEvents()
         {
             // 图像由监控相机自身输出（权责边界 R1），流程态由基类统一通知（R3）
-            MonitorCameraRun.FrameCompletedEvent += MonitorCameraRun_FrameCompletedEvent;
-            MonitorCameraRun.Instance.StatusChanged += MonitorCameraRun_StatusChanged;
+            MonitorCamManager.FrameCompletedEvent += MonitorCamManager_FrameCompletedEvent;
+            MonitorCamManager.Instance.StatusChanged += MonitorCamManager_StatusChanged;
             MonitorCameraWorkflow.Instance.WeldStatusChanged += Workflow_StateChanged;
         }
 
         private void UnsubscribeEvents()
         {
-            MonitorCameraRun.FrameCompletedEvent -= MonitorCameraRun_FrameCompletedEvent;
-            MonitorCameraRun.Instance.StatusChanged -= MonitorCameraRun_StatusChanged;
+            MonitorCamManager.FrameCompletedEvent -= MonitorCamManager_FrameCompletedEvent;
+            MonitorCamManager.Instance.StatusChanged -= MonitorCamManager_StatusChanged;
             MonitorCameraWorkflow.Instance.WeldStatusChanged -= Workflow_StateChanged;
         }
 
@@ -117,10 +118,10 @@ namespace AdaWeldSystem.Sub2UI
         private void UpdateStatusDisplay()
         {
             string camState = "未连接";
-            if (MonitorCameraRun.Instance.ConnectionState == MonitorCameraConnectionState.Connected)
-                camState = MonitorCameraRun.Instance.IsLiveMode ? "监控实时中" : "已连接";
+            if (MonitorCamManager.Instance.ConnectionState == MonitorCameraConnectionState.Connected)
+                camState = MonitorCamManager.Instance.IsLiveMode ? "监控实时中" : "已连接";
 
-            MonitorSupervisionState health = MonitorCameraRun.Instance.SupervisionState;
+            MonitorSupervisionState health = MonitorCamManager.Instance.SupervisionState;
             if (health != MonitorSupervisionState.Idle && health != MonitorSupervisionState.Healthy)
                 camState = string.Format("{0}（{1}）", camState, GetHealthText(health));
 
@@ -188,17 +189,17 @@ namespace AdaWeldSystem.Sub2UI
             {
                 if (chkLive.Checked)
                 {
-                    if (MonitorCameraRun.Instance.ConnectionState != MonitorCameraConnectionState.Connected)
+                    if (MonitorCamManager.Instance.ConnectionState != MonitorCameraConnectionState.Connected)
                     {
-                        string ip = MonitorCameraRun.Instance.Config != null ? MonitorCameraRun.Instance.Config.IpAddress : "192.168.1.100";
-                        string port = MonitorCameraRun.Instance.Config != null ? MonitorCameraRun.Instance.Config.Port : "5000";
-                        MonitorCameraRun.Instance.OpenSensor(ip, port);
+                        string ip = MonitorCamManager.Instance.Config != null ? MonitorCamManager.Instance.Config.IpAddress : "192.168.1.100";
+                        string port = MonitorCamManager.Instance.Config != null ? MonitorCamManager.Instance.Config.Port : "5000";
+                        MonitorCamManager.Instance.OpenSensor(ip, port);
                     }
-                    MonitorCameraRun.Instance.ChangeMode(true);
+                    MonitorCamManager.Instance.ChangeMode(true);
                 }
                 else
                 {
-                    MonitorCameraRun.Instance.ChangeMode(false);
+                    MonitorCamManager.Instance.ChangeMode(false);
                 }
             }
             catch (Exception ex)
@@ -208,18 +209,19 @@ namespace AdaWeldSystem.Sub2UI
         }
 
         /// <summary>
-        /// 保存右侧算法参数：写回 MonitorAlgorithmManager 单例并持久化到 INI。
+        /// 保存右侧算法参数：写回 AlgorithmManager 单例并持久化到 INI。
         /// 解析失败时回退到原值，避免误清空配置。
         /// </summary>
         private void btnSaveAlgorithm_Click(object sender, EventArgs e)
         {
             try
             {
-                var mgr = MonitorAlgorithmManager.Instance;
-                mgr.AlignmentConfig.ToleranceX = ParseDouble(txtTolX.Text, mgr.AlignmentConfig.ToleranceX);
-                mgr.AlignmentConfig.ToleranceY = ParseDouble(txtTolY.Text, mgr.AlignmentConfig.ToleranceY);
-                mgr.AlignmentConfig.ToleranceAngle = ParseDouble(txtTolAngle.Text, mgr.AlignmentConfig.ToleranceAngle);
-                mgr.QualityConfig.PassScore = ParseDouble(txtPassScore.Text, mgr.QualityConfig.PassScore);
+                var mgr = AlgorithmManager.Instance;
+                mgr.WireFeed.ToleranceX = ParseDouble(txtTolX.Text, mgr.WireFeed.ToleranceX);
+                mgr.WireFeed.ToleranceY = ParseDouble(txtTolY.Text, mgr.WireFeed.ToleranceY);
+                mgr.WireFeed.ToleranceAngle = ParseDouble(txtTolAngle.Text, mgr.WireFeed.ToleranceAngle);
+                mgr.Quality.PassScore = ParseDouble(txtPassScore.Text, mgr.Quality.PassScore);
+                mgr.ApplyConfig();
                 mgr.Save();
                 MessageBox.Show("算法参数已保存", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
@@ -246,11 +248,11 @@ namespace AdaWeldSystem.Sub2UI
 
         #region 事件处理（跨线程）
 
-        private void MonitorCameraRun_FrameCompletedEvent(object sender, MonitorCameraFrameCompletedEventArgs e)
+        private void MonitorCamManager_FrameCompletedEvent(object sender, MonitorCameraFrameCompletedEventArgs e)
         {
             if (InvokeRequired)
             {
-                Invoke(new Action<object, MonitorCameraFrameCompletedEventArgs>(MonitorCameraRun_FrameCompletedEvent), sender, e);
+                Invoke(new Action<object, MonitorCameraFrameCompletedEventArgs>(MonitorCamManager_FrameCompletedEvent), sender, e);
                 return;
             }
             if (e.Frame != null && !e.Frame.IsEmpty)
@@ -258,11 +260,11 @@ namespace AdaWeldSystem.Sub2UI
         }
 
         /// <summary>相机健康状态变更：收敛到统一刷新入口 UpdateStatusDisplay（[[lessons/UiRefreshUnifiedEntry]]）</summary>
-        private void MonitorCameraRun_StatusChanged(object sender, MonitorSupervisionStatusChangedEventArgs e)
+        private void MonitorCamManager_StatusChanged(object sender, MonitorSupervisionStatusChangedEventArgs e)
         {
             if (InvokeRequired)
             {
-                Invoke(new Action<object, MonitorSupervisionStatusChangedEventArgs>(MonitorCameraRun_StatusChanged), sender, e);
+                Invoke(new Action<object, MonitorSupervisionStatusChangedEventArgs>(MonitorCamManager_StatusChanged), sender, e);
                 return;
             }
             UpdateStatusDisplay();
