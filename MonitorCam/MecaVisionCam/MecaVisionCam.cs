@@ -1,4 +1,4 @@
-using AdaWeldSystem.Comm;
+﻿using AdaWeldSystem.Comm;
 using AdaWeldSystem.MonitorCam.IMonitorCam;
 using Emgu.CV;
 using Emgu.CV.CvEnum;
@@ -13,7 +13,7 @@ namespace AdaWeldSystem.MonitorCam.MecaVisionCam
 {
     /// <summary>
     /// 麦格威（MecaVision）面阵相机实现：以 MVCAMSDK 原生接口（Native/MVSDK.cs，静态类 MvApi 动态加载）落地 IMonitorCamApi。
-    /// 职责边界（ADR-039）：实现层只负责「按契约取帧并把帧抛出去」，
+    /// 职责边界（ADR-035）：实现层只负责「按契约取帧并把帧抛出去」，
     /// 阶段语义、健康巡检、配置持久化等全部由 MonitorCamManager 承担，本类不做业务判断。
     /// </summary>
     /// <remarks>
@@ -334,7 +334,7 @@ namespace AdaWeldSystem.MonitorCam.MecaVisionCam
             GlobalCommData.ShowLog(_tag, string.Format("相机连接状态变更 消息 {0} 参数 {1}", msg, uParam));
         }
 
-        /// <summary>更新连接态（状态切换本身不打日志，日志由调用点负责，遵循 ADR-035）</summary>
+        /// <summary>更新连接态（状态切换本身不打日志，日志由调用点负责，遵循 ADR-031）</summary>
         private void SetState(MonitorCameraConnectionState newState)
         {
             _state = newState;

@@ -1,4 +1,4 @@
-using AdaWeldSystem.EmguALG.Abstractions;
+﻿using AdaWeldSystem.EmguALG.Abstractions;
 using Emgu.CV;
 using System;
 using System.Diagnostics;
@@ -7,7 +7,7 @@ namespace AdaWeldSystem.EmguALG.WeldQuality
 {
     /// <summary>
     /// 焊接质量检测（焊中）：识别焊道成形与缺陷，输出质量分与合格判定。
-    /// 纯算子实现仍在 ImageAlgorithm（ADR-003：算子库唯一文件），本类只做契约封装与计时。
+    /// 纯算子实现仍在 ImageAlgorithm（ADR-038：算子库唯一文件），本类只做契约封装与计时。
     /// </summary>
     public sealed class WeldQualityAlgorithm : IAlgorithm<WeldQualityResult>, IConfigurableAlgorithm<WeldQualityConfig>
     {

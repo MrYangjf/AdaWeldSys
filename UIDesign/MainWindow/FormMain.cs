@@ -81,9 +81,9 @@ namespace AdaWeldSystem
             // 关闭前询问
             this.FormClosing += FormMain_FormClosing;
 
-            // ── 设备初始化（新主控设计：主设备独立管控类，ADR-028）──
+            // ── 设备初始化（新主控设计：主设备独立管控类，ADR-024）──
             // 初始化归 DeviceControlWork 管控，FormMain 不打印初始化结果；
-            // 移至 Shown：界面先行呈现，Modal 提示等待，初始化结束事件自动关闭（ADR-032）
+            // 移至 Shown：界面先行呈现，Modal 提示等待，初始化结束事件自动关闭（ADR-028）
             this.Shown += FormMain_Shown;
         }
         #endregion

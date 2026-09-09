@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Threading;
 using AdaWeldSystem.Comm;
@@ -10,7 +10,7 @@ using S7.Net;
 namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
 {
     /// <summary>设备安全/IO/状态管控（单例，三常驻线程）。</summary>
-    /// <remarks>thIOWork 安全互锁与 IO 轮询、thEMGWork 急停处置、thLightStatusWork 三色灯反射；异常经 DeviceControlWork 单一控制源变更运行态（ADR-027）。</remarks>
+    /// <remarks>thIOWork 安全互锁与 IO 轮询、thEMGWork 急停处置、thLightStatusWork 三色灯反射；异常经 DeviceControlWork 单一控制源变更运行态（ADR-023）。</remarks>
     public class DeviceStatusWork
     {
         #region 常量
@@ -254,7 +254,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         /// <summary>运控总线健康电平扫描：OK→NG 上升沿置虚拟 IO 并同步执行报警动作链。</summary>
         /// <remarks>
         /// 用户 2026-09-08 裁定：总线故障属普通 Alarm，检查放 IOWork（EMGWork 专责急停）；
-        /// 控制器状态变量注册成电平型虚拟 IO——持续 NG 期间 IoMotionBusFault 常置，天然闭锁不重复报（ADR-035 D1）；
+        /// 控制器状态变量注册成电平型虚拟 IO——持续 NG 期间 IoMotionBusFault 常置，天然闭锁不重复报（ADR-031 D1）；
         /// NG→OK 不自动消警，归 ClearAlarm 链；消警（状态离开 Alarm）后闭锁自动解除，若仍 NG 在下一拍重新触发。
         /// 未初始化（IsInitialized=false）不检测，避免启动阶段误报。
         /// </remarks>
@@ -355,7 +355,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
                     {
                         last = status;
                         DriveTricolorLamp(status);
-                        // 状态切换不记日志（ADR-032 报错分层：三色灯动作本身即对外呈现）
+                        // 状态切换不记日志（ADR-028 报错分层：三色灯动作本身即对外呈现）
                     }
                 }
                 catch (Exception ex)

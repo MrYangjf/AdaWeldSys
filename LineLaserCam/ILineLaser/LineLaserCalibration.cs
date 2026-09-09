@@ -1,10 +1,10 @@
-namespace AdaWeldSystem.LineLaserCam.ILineLaser
+﻿namespace AdaWeldSystem.LineLaserCam.ILineLaser
 {
     /// <summary>线激光校准数据快照（厂商无关的中性结构）</summary>
     /// <remarks>
     /// 校准数据由厂商实现层（英莱）在 SDK 回调中捕获并存储，业务层生成轮廓 Mat 时经
     /// <see cref="LineLaserCameraBase.Calibration"/> 读取，故抽象层必须提供中性载体，
-    /// 不得让业务层直接依赖厂商结构体（[[decisions/ADR-038-LineLaserThreeLayerRefactor]] D1 铁律）。
+    /// 不得让业务层直接依赖厂商结构体（[[decisions/ADR-034-LineLaserThreeLayerRefactor]] D1 铁律）。
     /// 四个角点与中心点单位均为毫米，索引 0 为横向、1 为高度。
     /// </remarks>
     public class LineLaserCalibration

@@ -201,7 +201,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         }
 
         /// <summary>执行步 20：等待采集完成信号。</summary>
-        /// <remarks>WaitOne(0) 只做非阻塞探测，等待由外部编排线程重入完成，超时由步骤计时判定， 超时即转失败收尾，不留在原步死等（ADR-005 有界可失败语义）。</remarks>
+        /// <remarks>WaitOne(0) 只做非阻塞探测，等待由外部编排线程重入完成，超时由步骤计时判定， 超时即转失败收尾，不留在原步死等（ADR-003 有界可失败语义）。</remarks>
         /// <returns>采集到有效图像返回 true</returns>
         private bool DoAcquireWait()
         {

@@ -16,7 +16,7 @@ namespace AdaWeldSystem.Sub2UI
     /// 订阅 MonitorCamManager 实时帧（图像归相机）与 MonitorCameraWorkflow 基类 StateChanged（流程态归流程）。
     /// 检测结果在流程态转 Completed 后由本页向流程只读属性拉取（权责边界）。
     /// 所有事件处理均检查 InvokeRequired 以跨线程安全刷新（ADR / Lessons）。
-    /// 算法参数内联于右侧面板，由 AlgorithmManager 单例持久化（ADR-014）。
+    /// 算法参数内联于右侧面板，由 AlgorithmManager 单例持久化（ADR-012）。
     /// </summary>
     public partial class MonitorCamPage : UserControl
     {

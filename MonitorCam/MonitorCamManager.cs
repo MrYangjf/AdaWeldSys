@@ -1,4 +1,4 @@
-using AdaWeldSystem.Comm;
+﻿using AdaWeldSystem.Comm;
 using AdaWeldSystem.MonitorCam.IMonitorCam;
 using AdaWeldSystem.MonitorCam.MecaVisionCam;
 using Emgu.CV;
@@ -10,7 +10,7 @@ namespace AdaWeldSystem.MonitorCam
 {
     /// <summary>
     /// 监控相机业务中枢（单例，对外唯一入口）。
-    /// 三层职责（ADR-039）：实现层（MecaVisionCam）只抛帧，本类承担连接编排、模式切换、
+    /// 三层职责（ADR-035）：实现层（MecaVisionCam）只抛帧，本类承担连接编排、模式切换、
     /// 帧分发与健康巡检；抽象层契约见 IMonitorCamApi。
     /// 相机自身的健康巡检（连接态 + 近期有效采集）归属本类，不属工作流职责（权责边界 R1）。
     /// </summary>
@@ -46,7 +46,7 @@ namespace AdaWeldSystem.MonitorCam
 
         #region 公共变量
 
-        /// <summary>采集完成信号（Workflow 回调等待模式，参考 ADR-005）</summary>
+        /// <summary>采集完成信号（Workflow 回调等待模式，参考 ADR-003）</summary>
         public readonly AutoResetEvent AcquisitionCompletedSignal = new AutoResetEvent(false);
 
         /// <summary>是否处于 Live（持续采集）模式</summary>

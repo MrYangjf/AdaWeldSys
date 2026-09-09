@@ -1,4 +1,4 @@
-using AdaWeldSystem.EmguALG.Abstractions;
+﻿using AdaWeldSystem.EmguALG.Abstractions;
 using Emgu.CV;
 using System;
 using System.Diagnostics;
@@ -7,7 +7,7 @@ namespace AdaWeldSystem.EmguALG.WireFeedDistance
 {
     /// <summary>
     /// 送丝距离检测（焊前对中）：检测激光光斑与焊丝尖端，输出偏差与是否对中。
-    /// 纯算子实现仍在 ImageAlgorithm（ADR-003：算子库唯一文件），本类只做契约封装与计时。
+    /// 纯算子实现仍在 ImageAlgorithm（ADR-038：算子库唯一文件），本类只做契约封装与计时。
     /// </summary>
     public sealed class WireFeedDistanceAlgorithm : IAlgorithm<WireFeedResult>, IConfigurableAlgorithm<WireFeedConfig>
     {

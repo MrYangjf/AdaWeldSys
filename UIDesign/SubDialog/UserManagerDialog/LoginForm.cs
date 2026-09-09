@@ -1,4 +1,4 @@
-using AdaWeldSystem.Comm;
+﻿using AdaWeldSystem.Comm;
 using AdaWeldSystem.Sub2UI;
 using AntdUI;
 using System;
@@ -11,7 +11,7 @@ namespace AdaWeldSystem.Sub1UI
     /// ⚠ 与原任务简报不一致：原基类为 SunnyUI 的 UILoginForm 登录窗体基类（含内置用户名/密码框、
     /// 登录/取消按钮及 ButtonLoginClick / ButtonCancelClick / UserName / Password /
     /// IsLogin / ShowSuccessDialog / ShowAskDialog2 / SubText / Title 等专属成员），
-    /// 无干净 1:1 映射。故重建为 AntdUI 迁移版；2026-07-30 经 ADR-019 由 AntdUI.Window 改为
+    /// 无干净 1:1 映射。故重建为 AntdUI 迁移版；2026-07-30 经 ADR-016 由 AntdUI.Window 改为
     /// System.Windows.Forms.UserControl，以 AntdUI.Modal 承载（取消 PageHeader，标题由 Modal 提供），
     /// 交互逻辑（校验、权限切换）保持不变。
     /// </summary>

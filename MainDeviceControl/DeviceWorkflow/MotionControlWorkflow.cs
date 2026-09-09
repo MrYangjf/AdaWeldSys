@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using AdaWeldSystem.Comm;
 using AdaWeldSystem.MainDeviceControl.DeviceState;
 using AdaWeldSystem.MainDeviceControl.FlowState;
@@ -329,7 +329,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
                 string msg = "";
                 if (!MontionManager.Instance.Initialization("台达运控", ref msg))
                 {
-                    // 根因已由 DeltaMontionControl 记录（ADR-035 D1），此处只推进状态不复述错误
+                    // 根因已由 DeltaMontionControl 记录（ADR-031 D1），此处只推进状态不复述错误
                     SetPhase(MotionControlPhase.Error, "运控初始化失败");
                     MarkConnectFailed("运控初始化失败 " + msg);
                     return false;
@@ -457,7 +457,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         }
 
         /// <summary>释放钩子。</summary>
-        /// <remarks>基类 Dispose 调用（ADR-023）；关闭台达总线。</remarks>
+        /// <remarks>基类 Dispose 调用（ADR-020）；关闭台达总线。</remarks>
         protected override void DisposeManaged()
         {
             lock (_lock)

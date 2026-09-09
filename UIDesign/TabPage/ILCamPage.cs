@@ -1,4 +1,4 @@
-using AdaWeldSystem.Comm;
+﻿using AdaWeldSystem.Comm;
 using AdaWeldSystem.MainDeviceControl.DeviceWorkflow;
 using AdaWeldSystem.MainDeviceControl.DeviceState;
 using AdaWeldSystem.EmguALG;
@@ -53,11 +53,11 @@ namespace AdaWeldSystem.Sub2UI
 
             // 统一刷新入口：连接态 + 模式（覆盖原 UpdateConnectionUi/UpdateModeUi 两处直调）
             RefreshUi(RefreshUiScope.Connection | RefreshUiScope.Mode);
-            // 订阅线激光管理器的 Mat 更新事件（显示处理由管理器承担，ADR-039）
+            // 订阅线激光管理器的 Mat 更新事件（显示处理由管理器承担，ADR-035）
             LineLaserManager.Instance.MatUpdated += OnMatUpdated;
             // 订阅 Job 参数变更（切 JOB/改参数，可能来自 ILAlgoPage 算法编辑页或工作流）→ 同步主 UI 下拉
             if (_ilCamera != null) _ilCamera.JobParamsChanged += OnIlJobParamsChanged;
-            // ADR-022：订阅「线激光」设备态切换 StateSwitched（设备状态外发），统一驱动刷新状态标签
+            // ADR-019：订阅「线激光」设备态切换 StateSwitched（设备状态外发），统一驱动刷新状态标签
             LineLaserWorkflow.Instance.StateSwitched += OnIlStateChanged;
             // 若相机已连接（如启动检测/子设备初始化已连接），直接同步一次硬件状态到 UI
             // （"第一次正确"：连接后本地状态与硬件一致，之后按钮点击本地生效）
@@ -187,7 +187,7 @@ namespace AdaWeldSystem.Sub2UI
         private void btnConnect_Click(object sender, EventArgs e)
         {
             if (_ilCamera == null) return;
-            // ADR-022：手动连接/断开驱动「线激光」工作流（英莱是线激光的厂商实例），
+            // ADR-019：手动连接/断开驱动「线激光」工作流（英莱是线激光的厂商实例），
             // 不在此维护连接布尔；连接态由 LineLaserWorkflow 的 ConnectOn/ConnectOff 承载（内部自起后台线程，非阻塞）。
             if (_ilCamera.IsConnected)
             {
@@ -509,10 +509,10 @@ namespace AdaWeldSystem.Sub2UI
             bool running = IsWorkflowRunning(LineLaserWorkflow.Instance.WeldStatus);
 
             // 设置显示处理：手动/空闲模式下按需开启轮廓 Mat 生成，自动运行时关闭以节省 CPU/GPU。
-            // 生成动作由 LineLaserManager 承担（ADR-039），本页只切换开关。
+            // 生成动作由 LineLaserManager 承担（ADR-035），本页只切换开关。
             LineLaserManager.Instance.SetDisplayOptions(!running, LineLaserManager.Instance.DisplayFps, true);
 
-            // ADR-022：状态标签统一由 Connection 分支刷新（基于状态机识别），本函数只管模式可用性。
+            // ADR-019：状态标签统一由 Connection 分支刷新（基于状态机识别），本函数只管模式可用性。
             if (running)
             {
                 btnConnect.Enabled = false;

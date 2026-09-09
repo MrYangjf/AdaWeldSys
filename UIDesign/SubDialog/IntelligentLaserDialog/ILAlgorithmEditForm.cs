@@ -1,4 +1,4 @@
-using AdaWeldSystem.EmguALG;
+﻿using AdaWeldSystem.EmguALG;
 using AdaWeldSystem.LineLaserCam.IntelligentLaserCam;
 using AdaWeldSystem.LineLaserCam;
 using AntdUI;
@@ -11,7 +11,7 @@ namespace AdaWeldSystem.Sub3UI
     /// 算法编辑窗体（AntdUI 迁移版）。
     /// 按当前激活相机的接口（LineLaserManager.Instance.Active 类型）只挂载对应的算法编辑页，
     /// 另一页根本不 AddTabSelect，从而「只显示并编辑对应算法、隐藏另一套」——满足接口分隔要求。
-    /// 迁移要点（ADR-018 / AntdUI-DesignParadigm）：
+    /// 迁移要点（ADR-015 / AntdUI-DesignParadigm）：
     /// 子页（EmguAlgoPage / ILAlgoPage）为 UserControl，需包进 AntdUI.TabPage 再 AddTabSelect（Dock=Fill 加入 Controls）。
     /// 底部 确定/取消 按钮始终可见（位于 Tabs 之外）。
     /// </summary>

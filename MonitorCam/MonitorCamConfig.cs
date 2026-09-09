@@ -1,4 +1,4 @@
-using AdaWeldSystem.FileOperate;
+﻿using AdaWeldSystem.FileOperate;
 using System.IO;
 
 namespace AdaWeldSystem.MonitorCam
@@ -6,7 +6,7 @@ namespace AdaWeldSystem.MonitorCam
     /// <summary>
     /// 监控相机硬件配置（IP/端口/曝光/图像尺寸）。
     /// 算法阈值（对中容差 / 质量合格分）不在此处，由算法层配置承载（见 EmguALG 各检测配置）。
-    /// 持久化到 Config/INI/MonitorCamera.ini（遵循 ADR-007）。
+    /// 持久化到 Config/INI/MonitorCamera.ini（遵循 ADR-005）。
     /// </summary>
     public class MonitorCamConfig
     {

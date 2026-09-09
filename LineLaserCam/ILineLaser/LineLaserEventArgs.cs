@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using AdaWeldSystem.PCLOperate.Models;
 using Emgu.CV;
 
@@ -7,7 +7,7 @@ namespace AdaWeldSystem.LineLaserCam.ILineLaser
     /// <summary>线激光焊缝识别结果快照（厂商无关的中性结构）</summary>
     /// <remarks>
     /// 由厂商实现层（英莱）在 SDK 回调中把自身算法结果映射为本结构后外传，
-    /// 业务层与工作流只认本结构，不感知厂商 SDK 类型（ADR-038 D1 铁律）。
+    /// 业务层与工作流只认本结构，不感知厂商 SDK 类型（ADR-034 D1 铁律）。
     /// 反例：此前业务层直接消费英莱 <c>IlInspectResult</c>，导致线激光业务被单一厂商绑死。
     /// </remarks>
     public struct LineLaserSeamResult

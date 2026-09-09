@@ -1,6 +1,6 @@
-namespace AdaWeldSystem.EmguALG
+﻿namespace AdaWeldSystem.EmguALG
 {
-    // 预处理算子域枚举（2026-09-09 自已删除的 EmguConfiger/AlgorithmManager.cs 迁入，ADR-042 收尾；ADR-020 单一定义点）。
+    // 预处理算子域枚举（2026-09-09 自已删除的 EmguConfiger/AlgorithmManager.cs 迁入，ADR-038 收尾；ADR-017 单一定义点）。
     // 命名空间取 AdaWeldSystem.EmguALG：Stages（EmguALG）与 Core/*（EmguALG.Core）均可直接可见，零 using 变更。
     #region 算子枚举
 

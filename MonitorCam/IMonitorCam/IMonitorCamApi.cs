@@ -1,4 +1,4 @@
-using Emgu.CV;
+﻿using Emgu.CV;
 using System;
 
 namespace AdaWeldSystem.MonitorCam.IMonitorCam
@@ -6,7 +6,7 @@ namespace AdaWeldSystem.MonitorCam.IMonitorCam
     /// <summary>
     /// 监控相机 SDK 抽象接口（抽象层，实现层与业务层之间的唯一契约）。
     /// 实现层只负责「按契约取帧并把帧抛出去」，不承载阶段、健康巡检、配置等业务语义，
-    /// 后者全部由 MonitorCamManager 承担（ADR-039 三层职责分工）。
+    /// 后者全部由 MonitorCamManager 承担（ADR-035 三层职责分工）。
     /// 当前实现：MecaVisionCam（麦格威 MecaVision，MVCAMSDK 原生动态加载）。
     /// </summary>
     public interface IMonitorCamApi

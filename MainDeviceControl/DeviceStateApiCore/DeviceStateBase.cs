@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using AdaWeldSystem.Comm;
 
 namespace AdaWeldSystem.MainDeviceControl.DeviceState
@@ -10,7 +10,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceState
         Connected = 1
     }
 
-    /// <summary>子设备焊接过程态（7 态，ADR-030 裁定 C2）。</summary>
+    /// <summary>子设备焊接过程态（7 态，ADR-026 裁定 C2）。</summary>
     public enum SubDeviceWeldStatus
     {
         NoReset = 0,
@@ -242,7 +242,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceState
                         Timestamp = DateTime.Now
                     });
                 }
-                // 状态切换不记日志（ADR-032 报错分层：连接态经事件/状态栏呈现）
+                // 状态切换不记日志（ADR-028 报错分层：连接态经事件/状态栏呈现）
             }
 
         /// <summary>焊接过程态变更钩子：触发 WeldStatusChanged 事件并记录日志。</summary>
@@ -261,7 +261,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceState
                         Timestamp = DateTime.Now
                     });
                 }
-                // 状态切换不记日志（ADR-032 报错分层：焊接过程态经事件/状态栏呈现）
+                // 状态切换不记日志（ADR-028 报错分层：焊接过程态经事件/状态栏呈现）
             }
 
         #endregion

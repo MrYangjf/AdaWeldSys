@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
@@ -121,7 +121,7 @@ namespace AdaWeldSystem.LineLaserCam
     /// <remarks>
     /// 原为英莱相机实现层内部的私有绘制逻辑（ConvertContourToMatDemo），2026-09-08 上提至业务层：
     /// 实现层只负责在 SDK 回调中捕获并存储校准数据（<see cref="LineLaserCalibration"/>），
-    /// 显示用的 Mat 由业务层按需生成（ADR-039 线激光职责二次分工）。
+    /// 显示用的 Mat 由业务层按需生成（ADR-035 线激光职责二次分工）。
     /// 画布与 Bitmap 一次分配后终身复用，每帧只 Clear 后重绘，消除 GC 抖动。
     /// </remarks>
     public class ProfileMatRenderer : IDisposable
@@ -431,7 +431,7 @@ namespace AdaWeldSystem.LineLaserCam
     /// 依赖注入面只有 <see cref="IPVTMotion"/> 一个能力抽象，不感知控制器型号、不做脉冲换算
     /// （换算在运控 L3 完成）；未实现 PVT 的轴返回 NotSupported，不会连坐编译。
     /// 时间基准与速度前馈为待实测参数：Time 取相邻帧实测间隔（相对时间模式），
-    /// Vel 取位置一阶差分，现场标定后再固化（ADR-039）。
+    /// Vel 取位置一阶差分，现场标定后再固化（ADR-035）。
     /// </remarks>
     public class SeamPvtFeeder
     {
@@ -636,7 +636,7 @@ namespace AdaWeldSystem.LineLaserCam
     /// <remarks>
     /// 面向抽象层编程，具体相机类型（英莱 / 虚拟）仅在本文件的惰性创建处出现，
     /// 全系统取相机实例一律走本管理器，禁止在业务层自行 new 或持有厂商实现类型。
-    /// 2026-09-08 职责再分工（ADR-039）：
+    /// 2026-09-08 职责再分工（ADR-035）：
     /// ① 注册与选中、连接态派生、配置持久化；
     /// ② 承担全部业务处理——实现层只发 ResultReady / ProfileReady 两个回调，
     ///    结果侧本类换算 Y 轴 PVT 点并下载，轮廓侧维护轮廓点快照与显示 Mat；
@@ -843,7 +843,7 @@ namespace AdaWeldSystem.LineLaserCam
             }
         }
 
-        /// <summary>把相机切换为当前选中项，无日志（属状态切换，ADR-035）</summary>
+        /// <summary>把相机切换为当前选中项，无日志（属状态切换，ADR-031）</summary>
         /// <param name="camera">相机对象</param>
         private void SetActive(LineLaserCameraBase camera)
         {

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading;
@@ -252,7 +252,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         public static DeviceControlWork Instance { get { return _lazyInstance.Value; } }
 
         /// <summary>对中偏差数据中枢（原档 §7.4.5 只读）。</summary>
-        /// <remarks>OffsetX/Y 供控制器驱动振镜，WireStickoutDeviation 供机器人调送丝；ADR-027 产出方持有，消费方取用。</remarks>
+        /// <remarks>OffsetX/Y 供控制器驱动振镜，WireStickoutDeviation 供机器人调送丝；ADR-023 产出方持有，消费方取用。</remarks>
         public MonitorResult AlignDatum
         {
             get { return _monitorCam.LastResult; }
@@ -450,7 +450,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
                         Timestamp = DateTime.Now
                     });
                 }
-                // 状态切换不记日志（ADR-032 报错分层：内部态迁移由状态栏/事件呈现）
+                // 状态切换不记日志（ADR-028 报错分层：内部态迁移由状态栏/事件呈现）
             }
 
         /// <summary>驱动 5 个子流程各自执行焊接工作态迁移。</summary>
@@ -1672,7 +1672,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
 
         /// <summary>执行运控总线故障报警（由 thIOWork 总线监督扫描在 OK→NG 上升沿调用）。</summary>
         /// <remarks>纯状态迁移动作（µs 级，无阻塞调用），与急停同属同步例外——
-        /// 报警不允许被 DispatchAction 的忙丢弃机制拒绝；根因 Error 已由检测点归口记一次（ADR-035 D1），此处只推进状态。</remarks>
+        /// 报警不允许被 DispatchAction 的忙丢弃机制拒绝；根因 Error 已由检测点归口记一次（ADR-031 D1），此处只推进状态。</remarks>
         public void DoMotionBusFault()
         {
             SetStatus(MainDeviceStatus.Alarm, "运控总线故障");

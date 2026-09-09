@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Threading;
 using AdaWeldSystem.Comm;
 using AdaWeldSystem.MainDeviceControl.DeviceState;
@@ -34,7 +34,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
 
         #region 私有变量
 
-        /// <summary>公共方法互斥锁（ADR-023 ④-3：禁止 lock(this)，用私有锁对象）。</summary>
+        /// <summary>公共方法互斥锁（ADR-020 ④-3：禁止 lock(this)，用私有锁对象）。</summary>
         private readonly object _syncRoot = new object();
 
         private int _consecutiveFailureCount;
@@ -357,7 +357,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
 
         private void SubscribeCameraEvents()
         {
-            // 业务处理已上提 LineLaserManager，工作流订阅其转发的结果事件（ADR-039）
+            // 业务处理已上提 LineLaserManager，工作流订阅其转发的结果事件（ADR-035）
             LineLaserManager.Instance.ResultReady += ManagerResultReady;
             _adjustmentPending = false;
             _lastResultValid = false;
@@ -391,7 +391,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
                 _consecutiveSuccessCount++;
                 if (_consecutiveSuccessCount >= _adjustTriggerSuccessCount && !_adjustmentPending)
                 {
-                    // 焊缝特征由线激光 Manager 直接产出（ADR-039），不再经算法 Pipeline 中转上报
+                    // 焊缝特征由线激光 Manager 直接产出（ADR-035），不再经算法 Pipeline 中转上报
                     _lastAnalysisSuccess = true;
                     _adjustmentPending = true;
                 }

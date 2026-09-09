@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using AdaWeldSystem.Comm;
 using AdaWeldSystem.MotionControl.DeltaEtherCAT;
 using AdaWeldSystem.MotionControl.IMotion;
@@ -152,7 +152,7 @@ namespace AdaWeldSystem.MotionControl
             MontionControl = new DeltaMontionControl(devName);
             if (!MontionControl.Initialization(ref msg))
             {
-                // 根因已由 DeltaMontionControl 记录（ADR-035 D1 报错三层归口），此处不复述
+                // 根因已由 DeltaMontionControl 记录（ADR-031 D1 报错三层归口），此处不复述
                 return false;
             }
 

@@ -1,4 +1,4 @@
-namespace AdaWeldSystem.LineLaserCam.ILineLaser
+﻿namespace AdaWeldSystem.LineLaserCam.ILineLaser
 {
     /// <summary>线激光相机种类</summary>
     /// <remarks>
@@ -20,7 +20,7 @@ namespace AdaWeldSystem.LineLaserCam.ILineLaser
     /// <summary>线激光相机连接状态</summary>
     /// <remarks>
     /// 相机自身只关心「是否已连上硬件 / 是否正在出图」，
-    /// 与工作流程状态相互独立（[[decisions/ADR-015-CameraConnectionStateDecoupled]]）。
+    /// 与工作流程状态相互独立（[[decisions/ADR-013-CameraConnectionStateDecoupled]]）。
     /// </remarks>
     public enum LineLaserConnectionState
     {

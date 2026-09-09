@@ -1,8 +1,8 @@
-using System;
+﻿using System;
 
 namespace AdaWeldSystem.MainDeviceControl.DeviceState
 {
-    /// <summary>机器人指令协议常量（ADR-030 裁定 C3）。</summary>
+    /// <summary>机器人指令协议常量（ADR-026 裁定 C3）。</summary>
     /// <remarks>指令一律字符串常量、禁调用方自定义赋值；不监控机器人 pose；报文格式待协议细化，消费方以 // todo 占位。</remarks>
     public static class CommandCore
     {

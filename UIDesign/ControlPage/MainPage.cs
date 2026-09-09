@@ -1,4 +1,4 @@
-using AdaWeldSystem.Comm;
+﻿using AdaWeldSystem.Comm;
 using AdaWeldSystem.MainDeviceControl.DeviceState;
 using AdaWeldSystem.MainDeviceControl.DeviceWorkflow;
 using AdaWeldSystem.WeldParamControl;
@@ -40,7 +40,7 @@ namespace AdaWeldSystem.Sub1UI
         private double[] _featureXs = new double[1];  // 特征点 X 数组（复用，避免每帧分配）
         private double[] _featureYs = new double[1];  // 特征点 Y 数组（复用，避免每帧分配）
 
-        // 轮廓轮询：主页面用独立线程按固定节拍从 LineLaserManager 拉取最新快照（ADR-039），
+        // 轮廓轮询：主页面用独立线程按固定节拍从 LineLaserManager 拉取最新快照（ADR-035），
         // 取代原先「回调逐帧驱动 UI」的方式——界面刷新不必跟随相机帧率，且手动/自动模式可各自取舍。
         private const int ProfilePollIntervalMs = 33;   // 约 30Hz
         private Thread _profilePollThread;
@@ -729,7 +729,7 @@ namespace AdaWeldSystem.Sub1UI
             formsPlot1.Plot.SetAxisLimits(_contourYMin, _contourYMax, _contourZMin, _contourZMax);
             formsPlot1.Refresh();
 
-            // 启动轮廓轮询线程：从线激光管理器按节拍取点刷新（ADR-039）
+            // 启动轮廓轮询线程：从线激光管理器按节拍取点刷新（ADR-035）
             StartProfilePolling();
         }
 
