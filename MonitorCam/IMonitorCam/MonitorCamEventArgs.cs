@@ -32,19 +32,8 @@ namespace AdaWeldSystem.MonitorCam.IMonitorCam
     }
 
     /// <summary>
-    /// 监控相机帧数据事件参数（实现层 → 业务层，Live 模式实时流）
-    /// </summary>
-    public class MonitorFrameEventArgs : EventArgs
-    {
-        /// <summary>采集到的图像帧（已 Clone，调用方持有独立副本）</summary>
-        public Mat Frame { get; set; }
-
-        /// <summary>帧序号（从 0 递增）</summary>
-        public int FrameIndex { get; set; }
-    }
-
-    /// <summary>
-    /// 监控相机帧采集完成事件参数（业务层 → 工作流/UI 订阅）
+    /// 监控相机帧采集完成事件参数（业务层 → 工作流/UI 订阅）。
+    /// 监控相机为 2D 面阵相机，无 LIVE/PIL 模式区分，所有帧均为单次触发产出（ADR-039）。
     /// </summary>
     public class MonitorCameraFrameCompletedEventArgs : EventArgs
     {
@@ -56,9 +45,6 @@ namespace AdaWeldSystem.MonitorCam.IMonitorCam
 
         /// <summary>采集是否成功</summary>
         public bool Success { get; set; }
-
-        /// <summary>是否 Live 模式产出（false 为 PIL 单次触发产出）</summary>
-        public bool IsLive { get; set; }
 
         /// <summary>产出时间戳</summary>
         public DateTime Timestamp { get; set; }

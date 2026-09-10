@@ -13,15 +13,16 @@ namespace AdaWeldSystem.MonitorCam.MecaVisionCam
 {
     /// <summary>
     /// 麦格威（MecaVision）面阵相机实现：以 MVCAMSDK 原生接口（Native/MVSDK.cs，静态类 MvApi 动态加载）落地 IMonitorCamApi。
-    /// 职责边界（ADR-035）：实现层只负责「按契约取帧并把帧抛出去」，
+    /// 职责边界（ADR-035/039）：实现层只负责「按契约取帧并把帧抛出去」，
     /// 阶段语义、健康巡检、配置持久化等全部由 MonitorCamManager 承担，本类不做业务判断。
+    /// 监控相机为 2D 面阵相机，无 LIVE/PIL 模式，仅提供单次触发取帧 CaptureSingleFrame。
     /// </summary>
     /// <remarks>
     /// 关键事实（均取自 SDK 原文 Demo/C#/MVSDK/MVSDK.cs，非推测）：
     /// ① 原生库 MVCAMSDK.dll（x86）/ MVCAMSDK_X64.dll（x64）由 MvApi 静态构造按进程位数动态加载；
     /// ② 相机输出默认自底向上，需 CameraFlipFrameBuffer 垂直镜像后再建图；
     /// ③ 成功调用 CameraGetImageBuffer 后必须 CameraReleaseImageBuffer，否则后续取帧失败；
-    /// ④ 回调委托必须在本类持有引用（字段），否则会被 GC 回收导致回调崩溃。
+    /// ④ 断联回调委托必须在本类持有引用（字段），否则会被 GC 回收导致回调崩溃。
     /// </remarks>
     public class MecaVisionCam : IMonitorCamApi
     {
@@ -36,7 +37,6 @@ namespace AdaWeldSystem.MonitorCam.MecaVisionCam
         private int _bufferBytes;
 
         // 回调委托必须持引用，防止被 GC 回收（SDK 只保存函数指针）
-        private MVSDK.CAMERA_SNAP_PROC _snapProc;
         private MVSDK.CAMERA_CONNECTION_STATUS_CALLBACK _connProc;
 
         private MonitorCameraConnectionState _state = MonitorCameraConnectionState.Disconnected;
@@ -53,13 +53,6 @@ namespace AdaWeldSystem.MonitorCam.MecaVisionCam
         {
             get { return _state; }
         }
-
-        #endregion
-
-        #region 事件
-
-        /// <summary>实时流（Live 模式）帧回调，在 SDK 采集线程抛出</summary>
-        public event EventHandler<MonitorFrameEventArgs> FrameReceived;
 
         #endregion
 
@@ -133,7 +126,7 @@ namespace AdaWeldSystem.MonitorCam.MecaVisionCam
                     _bufferBytes = w * h * 3 + 1024;
                     _processBuffer = Marshal.AllocHGlobal(_bufferBytes);
 
-                    // 0 = 连续采集（非触发）
+                    // 0 = 连续采集（非触发），CaptureSingleFrame 使用 CameraGetImageBuffer 取帧
                     MvApi.CameraSetTriggerMode(_handle, 0);
 
                     _connProc = OnConnectionStatusChanged;
@@ -158,7 +151,6 @@ namespace AdaWeldSystem.MonitorCam.MecaVisionCam
         {
             lock (_sync)
             {
-                try { StopAcquisition(); } catch { }
                 try
                 {
                     if (_handle != 0)
@@ -174,41 +166,8 @@ namespace AdaWeldSystem.MonitorCam.MecaVisionCam
             }
         }
 
-        /// <summary>开始持续采集（Live 模式）：挂回调 → CameraPlay</summary>
-        public void StartAcquisition()
-        {
-            lock (_sync)
-            {
-                if (_state != MonitorCameraConnectionState.Connected || _handle == 0)
-                    return;
-
-                _snapProc = OnSnapCallback;
-                MVSDK.CAMERA_SNAP_PROC oldProc = null;
-                CameraSdkStatus status = MvApi.CameraSetCallbackFunction(_handle, _snapProc, IntPtr.Zero, ref oldProc);
-                if (status != CameraSdkStatus.CAMERA_STATUS_SUCCESS)
-                {
-                    GlobalCommData.ShowLog(_tag, string.Format("挂载帧回调失败 错误码 {0}", (int)status));
-                    return;
-                }
-
-                status = MvApi.CameraPlay(_handle);
-                if (status != CameraSdkStatus.CAMERA_STATUS_SUCCESS)
-                    GlobalCommData.ShowLog(_tag, string.Format("启动采集失败 错误码 {0}", (int)status));
-            }
-        }
-
-        /// <summary>停止持续采集</summary>
-        public void StopAcquisition()
-        {
-            lock (_sync)
-            {
-                if (_handle == 0) return;
-                try { MvApi.CameraStop(_handle); } catch { }
-            }
-        }
-
         /// <summary>
-        /// 触发一次采集并同步返回帧（PIL 模式）：取缓冲 → ISP 处理 → 建图 → 释放缓冲。
+        /// 触发一次采集并同步返回帧（2D 面阵相机唯一取帧方式）：取缓冲 → ISP 处理 → 建图 → 释放缓冲。
         /// </summary>
         /// <returns>采集到的图像帧（独立副本）；失败返回 null</returns>
         public Mat CaptureSingleFrame()
@@ -230,6 +189,7 @@ namespace AdaWeldSystem.MonitorCam.MecaVisionCam
                 {
                     MvApi.CameraImageProcess(_handle, rawBuffer, _processBuffer, ref frameHead);
                     MvApi.CameraFlipFrameBuffer(_processBuffer, ref frameHead, 1);
+                    _frameIndex++;
                     return BuildMat(_processBuffer, frameHead);
                 }
                 finally
@@ -298,33 +258,6 @@ namespace AdaWeldSystem.MonitorCam.MecaVisionCam
             Mat clone = mat.Clone();
             mat.Dispose();
             return clone;
-        }
-
-        /// <summary>SDK 采集回调：垂直镜像 → 建图 → 抛帧（实现层不做任何业务判断）</summary>
-        private void OnSnapCallback(CameraHandle hCamera, IntPtr pFrameBuffer, ref tSdkFrameHead pFrameHead, IntPtr pContext)
-        {
-            try
-            {
-                if (pFrameBuffer == IntPtr.Zero) return;
-
-                MvApi.CameraFlipFrameBuffer(pFrameBuffer, ref pFrameHead, 1);
-                Mat frame = BuildMat(pFrameBuffer, pFrameHead);
-                if (frame == null) return;
-
-                _frameIndex++;
-                EventHandler<MonitorFrameEventArgs> handler = FrameReceived;
-                if (handler != null)
-                {
-                    MonitorFrameEventArgs args = new MonitorFrameEventArgs();
-                    args.Frame = frame;
-                    args.FrameIndex = _frameIndex;
-                    handler(this, args);
-                }
-            }
-            catch (Exception ex)
-            {
-                GlobalCommData.ShowLog(_tag, string.Format("帧回调异常 原因 {0}", ex.Message));
-            }
         }
 
         /// <summary>SDK 断联回调：仅更新连接态并记一次日志，状态推进由业务层负责</summary>

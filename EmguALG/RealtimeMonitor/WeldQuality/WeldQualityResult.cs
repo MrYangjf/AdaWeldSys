@@ -2,7 +2,7 @@ using AdaWeldSystem.EmguALG.Core;
 using Emgu.CV;
 using System.Collections.Generic;
 
-namespace AdaWeldSystem.EmguALG.WeldQuality
+namespace AdaWeldSystem.EmguALG.RealtimeMonitor.WeldQuality
 {
     /// <summary>
     /// 焊接质量检测结果：缺陷列表 + 质量分 + 合格判定。

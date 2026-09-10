@@ -1,4 +1,4 @@
-namespace AdaWeldSystem.EmguALG.WireFeedDistance
+namespace AdaWeldSystem.EmguALG.RealtimeMonitor.WireFeedDistance
 {
     /// <summary>
     /// 送丝距离检测配置（焊前对中/焊丝尖端相对参考点判定）。

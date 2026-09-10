@@ -12,11 +12,12 @@ namespace AdaWeldSystem.Sub2UI
 {
     /// <summary>
     /// 监控相机页面 - 监控画面显示与算法调试
-    /// 提供：实时预览、焊前对中检测、焊中质量检测、算法参数编辑。
-    /// 订阅 MonitorCamManager 实时帧（图像归相机）与 MonitorCameraWorkflow 基类 StateChanged（流程态归流程）。
+    /// 提供：焊前对中检测、焊中质量检测、算法参数编辑。
+    /// 订阅 MonitorCamManager 帧完成事件（图像归相机）与 MonitorCameraWorkflow 基类 StateChanged（流程态归流程）。
     /// 检测结果在流程态转 Completed 后由本页向流程只读属性拉取（权责边界）。
     /// 所有事件处理均检查 InvokeRequired 以跨线程安全刷新（ADR / Lessons）。
     /// 算法参数内联于右侧面板，由 AlgorithmManager 单例持久化（ADR-012）。
+    /// 监控相机为 2D 面阵相机，无 LIVE/PIL 模式，画面由单次/连续检测触发后刷新（ADR-039）。
     /// </summary>
     public partial class MonitorCamPage : UserControl
     {
@@ -119,7 +120,7 @@ namespace AdaWeldSystem.Sub2UI
         {
             string camState = "未连接";
             if (MonitorCamManager.Instance.ConnectionState == MonitorCameraConnectionState.Connected)
-                camState = MonitorCamManager.Instance.IsLiveMode ? "监控实时中" : "已连接";
+                camState = "已连接";
 
             MonitorSupervisionState health = MonitorCamManager.Instance.SupervisionState;
             if (health != MonitorSupervisionState.Idle && health != MonitorSupervisionState.Healthy)
@@ -181,31 +182,6 @@ namespace AdaWeldSystem.Sub2UI
             MonitorCameraWorkflow.Instance.Stop();
             _userStopPending = true;
             _isMonitoring = false;
-        }
-
-        private void chkLive_CheckedChanged(object sender, AntdUI.BoolEventArgs e)
-        {
-            try
-            {
-                if (chkLive.Checked)
-                {
-                    if (MonitorCamManager.Instance.ConnectionState != MonitorCameraConnectionState.Connected)
-                    {
-                        string ip = MonitorCamManager.Instance.Config != null ? MonitorCamManager.Instance.Config.IpAddress : "192.168.1.100";
-                        string port = MonitorCamManager.Instance.Config != null ? MonitorCamManager.Instance.Config.Port : "5000";
-                        MonitorCamManager.Instance.OpenSensor(ip, port);
-                    }
-                    MonitorCamManager.Instance.ChangeMode(true);
-                }
-                else
-                {
-                    MonitorCamManager.Instance.ChangeMode(false);
-                }
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show("实时预览切换失败: " + ex.Message, "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            }
         }
 
         /// <summary>

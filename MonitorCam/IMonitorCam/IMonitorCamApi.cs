@@ -8,14 +8,12 @@ namespace AdaWeldSystem.MonitorCam.IMonitorCam
     /// 实现层只负责「按契约取帧并把帧抛出去」，不承载阶段、健康巡检、配置等业务语义，
     /// 后者全部由 MonitorCamManager 承担（ADR-035 三层职责分工）。
     /// 当前实现：MecaVisionCam（麦格威 MecaVision，MVCAMSDK 原生动态加载）。
+    /// 监控相机为 2D 面阵相机，无 LIVE/PIL 模式切换语义，仅支持单次触发采集（ADR-039）。
     /// </summary>
     public interface IMonitorCamApi
     {
         /// <summary>当前连接状态</summary>
         MonitorCameraConnectionState ConnectionState { get; }
-
-        /// <summary>实时流（Live 模式）帧回调，由实现层在采集线程抛出</summary>
-        event EventHandler<MonitorFrameEventArgs> FrameReceived;
 
         /// <summary>
         /// 连接相机
@@ -28,14 +26,8 @@ namespace AdaWeldSystem.MonitorCam.IMonitorCam
         /// <summary>断开连接并释放 SDK 资源</summary>
         void Disconnect();
 
-        /// <summary>开始持续采集（Live 模式）</summary>
-        void StartAcquisition();
-
-        /// <summary>停止持续采集</summary>
-        void StopAcquisition();
-
         /// <summary>
-        /// 触发一次采集并同步返回帧（PIL 模式）
+        /// 触发一次采集并同步返回帧（2D 面阵相机唯一取帧方式）。
         /// </summary>
         /// <returns>采集到的图像帧（独立副本）；失败返回 null</returns>
         Mat CaptureSingleFrame();

@@ -10,8 +10,9 @@ namespace AdaWeldSystem.MonitorCam
 {
     /// <summary>
     /// 监控相机业务中枢（单例，对外唯一入口）。
-    /// 三层职责（ADR-035）：实现层（MecaVisionCam）只抛帧，本类承担连接编排、模式切换、
-    /// 帧分发与健康巡检；抽象层契约见 IMonitorCamApi。
+    /// 三层职责（ADR-035/039）：实现层（MecaVisionCam）只按契约取帧，本类承担连接编排、
+    /// 单次触发采集、帧分发与健康巡检；抽象层契约见 IMonitorCamApi。
+    /// 监控相机为 2D 面阵相机，无 LIVE/PIL 模式，所有采集均为单次触发。
     /// 相机自身的健康巡检（连接态 + 近期有效采集）归属本类，不属工作流职责（权责边界 R1）。
     /// </summary>
     public class MonitorCamManager
@@ -48,9 +49,6 @@ namespace AdaWeldSystem.MonitorCam
 
         /// <summary>采集完成信号（Workflow 回调等待模式，参考 ADR-003）</summary>
         public readonly AutoResetEvent AcquisitionCompletedSignal = new AutoResetEvent(false);
-
-        /// <summary>是否处于 Live（持续采集）模式</summary>
-        public bool IsLiveMode = false;
 
         /// <summary>全局唯一实例</summary>
         public static MonitorCamManager Instance
@@ -152,7 +150,6 @@ namespace AdaWeldSystem.MonitorCam
             _config = new MonitorCamConfig();
             _config.LoadFromIni(MonitorCamConfig.DefaultConfigPath);
             _api = new MecaVisionCam.MecaVisionCam();
-            _api.FrameReceived += OnApiFrameReceived;
         }
 
         #endregion
@@ -184,36 +181,21 @@ namespace AdaWeldSystem.MonitorCam
         }
 
         /// <summary>
-        /// 切换 Live / PIL 模式
-        /// </summary>
-        /// <param name="enableLive">true 进入持续采集，false 停止</param>
-        public void ChangeMode(bool enableLive)
-        {
-            IsLiveMode = enableLive;
-            if (IsLiveMode)
-                _api.StartAcquisition();
-            else
-                _api.StopAcquisition();
-        }
-
-        /// <summary>
-        /// 触发一次采集（PIL 模式）。Live 模式下不响应。
+        /// 触发一次采集（2D 面阵相机唯一采集方式）。
+        /// 监控相机无 LIVE/PIL 模式，本方法仅启动单次异步取帧任务（ADR-039）。
         /// </summary>
         public void SensorRunContinue()
         {
             if (ConnectionState != MonitorCameraConnectionState.Connected)
                 return;
-            if (IsLiveMode)
-                return;
             Task t = new Task(AcquireOnce);
             t.Start();
         }
 
-        /// <summary>停止采集并退出 Live 模式</summary>
+        /// <summary>停止采集</summary>
         public void SensorStop()
         {
-            IsLiveMode = false;
-            _api.StopAcquisition();
+            // 单次触发任务由 Task 自行结束，此处仅做占位以兼容既有调用方。
         }
 
         /// <summary>启动健康巡检</summary>
@@ -242,7 +224,6 @@ namespace AdaWeldSystem.MonitorCam
             if (_isDisposed) return;
             _isDisposed = true;
             StopSupervision();
-            try { _api.FrameReceived -= OnApiFrameReceived; } catch { }
             try { _api.Dispose(); } catch { }
         }
 
@@ -250,23 +231,11 @@ namespace AdaWeldSystem.MonitorCam
 
         #region 私有函数
 
-        /// <summary>实现层帧回调：缓存当前帧 → 标记健康 → 向上抛帧</summary>
-        private void OnApiFrameReceived(object sender, MonitorFrameEventArgs e)
-        {
-            lock (_matLock)
-            {
-                _currentMat = e.Frame;
-            }
-            MarkHealthy();
-            RaiseFrameCompleted(e.Frame, true, true);
-        }
-
-        /// <summary>PIL 模式单次采集（异步任务体）</summary>
+        /// <summary>单次采集（异步任务体）</summary>
         private void AcquireOnce()
         {
             try
             {
-                _api.StopAcquisition();
                 Mat frame = _api.CaptureSingleFrame();
                 lock (_matLock)
                 {
@@ -274,18 +243,18 @@ namespace AdaWeldSystem.MonitorCam
                 }
                 LastAcquisitionSuccess = (frame != null && !frame.IsEmpty);
                 AcquisitionCompletedSignal.Set();
-                RaiseFrameCompleted(frame, LastAcquisitionSuccess, false);
+                RaiseFrameCompleted(frame, LastAcquisitionSuccess);
             }
             catch (Exception)
             {
                 LastAcquisitionSuccess = false;
                 AcquisitionCompletedSignal.Set();
-                RaiseFrameCompleted(null, false, false);
+                RaiseFrameCompleted(null, false);
             }
         }
 
         /// <summary>统一抛帧出口</summary>
-        private void RaiseFrameCompleted(Mat frame, bool success, bool isLive)
+        private void RaiseFrameCompleted(Mat frame, bool success)
         {
             if (success) MarkHealthy();
             MonitorCameraFrameCompletedHandler handler = FrameCompletedEvent;
@@ -295,7 +264,6 @@ namespace AdaWeldSystem.MonitorCam
                 args.Frame = frame;
                 args.Phase = _currentPhase;
                 args.Success = success;
-                args.IsLive = isLive;
                 args.Timestamp = DateTime.Now;
                 handler(this, args);
             }

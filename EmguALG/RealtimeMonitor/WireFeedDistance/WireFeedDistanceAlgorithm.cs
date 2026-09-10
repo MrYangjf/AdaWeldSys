@@ -3,7 +3,7 @@ using Emgu.CV;
 using System;
 using System.Diagnostics;
 
-namespace AdaWeldSystem.EmguALG.WireFeedDistance
+namespace AdaWeldSystem.EmguALG.RealtimeMonitor.WireFeedDistance
 {
     /// <summary>
     /// 送丝距离检测（焊前对中）：检测激光光斑与焊丝尖端，输出偏差与是否对中。

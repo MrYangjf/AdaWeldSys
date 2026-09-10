@@ -31,7 +31,6 @@
             this.components = new System.ComponentModel.Container();
             this.tableLayoutPanel1 = new System.Windows.Forms.TableLayoutPanel();
             this.panelRight = new System.Windows.Forms.Panel();
-            this.chkLive = new AntdUI.Checkbox();
             this.txtResult = new AntdUI.Input();
             this.btnStopMonitor = new AntdUI.Button();
             this.btnStartMonitor = new AntdUI.Button();
@@ -76,7 +75,6 @@
             // panelRight
             // 
             this.panelRight.Controls.Add(this.uiGroupBoxAlgorithm);
-            this.panelRight.Controls.Add(this.chkLive);
             this.panelRight.Controls.Add(this.txtResult);
             this.panelRight.Controls.Add(this.btnStopMonitor);
             this.panelRight.Controls.Add(this.btnStartMonitor);
@@ -94,16 +92,6 @@
             this.panelRight.TabIndex = 0;
             this.panelRight.Text = "监控调试";
             // 
-            // chkLive
-            // 
-            this.chkLive.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
-            this.chkLive.Location = new System.Drawing.Point(10, 410);
-            this.chkLive.MinimumSize = new System.Drawing.Size(1, 1);
-            this.chkLive.Name = "chkLive";
-            this.chkLive.Size = new System.Drawing.Size(296, 29);
-            this.chkLive.TabIndex = 18;
-            this.chkLive.Text = "实时预览";
-            this.chkLive.CheckedChanged += this.chkLive_CheckedChanged;
             // 
             // txtResult
             // 
@@ -353,7 +341,6 @@
         private AntdUI.Button btnStartMonitor;
         private AntdUI.Button btnStopMonitor;
         private AntdUI.Input txtResult;
-        private AntdUI.Checkbox chkLive;
         private System.Windows.Forms.GroupBox uiGroupBoxAlgorithm;
         private System.Windows.Forms.TableLayoutPanel tableLayoutAlgorithm;
         private AntdUI.Label lblTolX;

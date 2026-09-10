@@ -1,4 +1,4 @@
-namespace AdaWeldSystem.EmguALG.WeldQuality
+namespace AdaWeldSystem.EmguALG.RealtimeMonitor.WeldQuality
 {
     /// <summary>
     /// 焊接质量检测配置（成形质量合格判定阈值）。

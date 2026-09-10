@@ -6,8 +6,8 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
-using AdaWeldSystem.EmguALG.WireFeedDistance;
-using AdaWeldSystem.EmguALG.WeldQuality;
+using AdaWeldSystem.EmguALG.RealtimeMonitor.WireFeedDistance;
+using AdaWeldSystem.EmguALG.RealtimeMonitor.WeldQuality;
 
 namespace AdaWeldSystem.EmguALG
 {

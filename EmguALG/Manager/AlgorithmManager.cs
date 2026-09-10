@@ -1,7 +1,7 @@
 using AdaWeldSystem.Comm;
 using AdaWeldSystem.EmguALG.Abstractions;
-using AdaWeldSystem.EmguALG.WeldQuality;
-using AdaWeldSystem.EmguALG.WireFeedDistance;
+using AdaWeldSystem.EmguALG.RealtimeMonitor.WeldQuality;
+using AdaWeldSystem.EmguALG.RealtimeMonitor.WireFeedDistance;
 using AdaWeldSystem.FileOperate;
 using Emgu.CV;
 using System;

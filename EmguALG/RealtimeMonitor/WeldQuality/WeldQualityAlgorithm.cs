@@ -3,7 +3,7 @@ using Emgu.CV;
 using System;
 using System.Diagnostics;
 
-namespace AdaWeldSystem.EmguALG.WeldQuality
+namespace AdaWeldSystem.EmguALG.RealtimeMonitor.WeldQuality
 {
     /// <summary>
     /// 焊接质量检测（焊中）：识别焊道成形与缺陷，输出质量分与合格判定。

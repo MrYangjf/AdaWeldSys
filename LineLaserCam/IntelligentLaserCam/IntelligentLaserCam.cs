@@ -916,7 +916,7 @@ namespace AdaWeldSystem.LineLaserCam.IntelligentLaserCam
                 using (var calib = IntelligentCalibrationInfo.__GetOrCreateInstance(fRegioninfo))
                 {
                     if (calib == null) return;
-                    // 只捕获与存储校准数据，绘制由业务层 ProfileMatRenderer 完成
+                    // 只捕获与存储校准数据，绘制由 EmguALG.LineLaserContour 完成
                     var snap = new LineLaserCalibration(
                         calib.Center,
                         calib.LeftTopCorner,

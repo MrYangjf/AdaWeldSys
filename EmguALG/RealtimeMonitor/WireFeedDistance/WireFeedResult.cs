@@ -2,7 +2,7 @@ using AdaWeldSystem.EmguALG.Core;
 using Emgu.CV;
 using System.Drawing;
 
-namespace AdaWeldSystem.EmguALG.WireFeedDistance
+namespace AdaWeldSystem.EmguALG.RealtimeMonitor.WireFeedDistance
 {
     /// <summary>
     /// 送丝距离检测结果：焊丝尖端相对参考点的像素偏差与是否对中。
