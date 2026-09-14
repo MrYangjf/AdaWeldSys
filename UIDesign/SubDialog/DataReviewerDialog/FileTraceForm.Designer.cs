@@ -1,4 +1,4 @@
-﻿namespace AdaWeldSystem.Sub3UI
+﻿namespace AdaWeldSystem.UIDesign.SubDialog.DataReviewerDialog
 {
     partial class FileTraceForm
     {

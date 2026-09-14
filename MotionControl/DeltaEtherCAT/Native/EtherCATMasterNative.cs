@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using AdaWeldSystem.MotionControl.IMotion;
 
 namespace AdaWeldSystem.MotionControl.DeltaEtherCAT.Native
 {

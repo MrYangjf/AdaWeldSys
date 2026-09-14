@@ -1,4 +1,3 @@
-using AdaWeldSystem.Comm;
 using AdaWeldSystem.EmguALG.Abstractions;
 using AdaWeldSystem.EmguALG.RealtimeMonitor.WeldQuality;
 using AdaWeldSystem.EmguALG.RealtimeMonitor.WireFeedDistance;
@@ -6,6 +5,7 @@ using AdaWeldSystem.FileOperate;
 using Emgu.CV;
 using System;
 using System.IO;
+using AdaWeldSystem.Comm.SystemComm;
 
 namespace AdaWeldSystem.EmguALG.Manager
 {

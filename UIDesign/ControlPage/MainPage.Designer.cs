@@ -1,4 +1,4 @@
-namespace AdaWeldSystem.Sub1UI
+namespace AdaWeldSystem.UIDesign.ControlPage
 {
     partial class MainPage
     {

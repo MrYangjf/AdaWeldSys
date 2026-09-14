@@ -1,4 +1,4 @@
-﻿namespace AdaWeldSystem
+﻿namespace AdaWeldSystem.UIDesign.MainWindow
 {
     partial class FormMain
     {

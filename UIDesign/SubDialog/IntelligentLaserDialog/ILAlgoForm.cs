@@ -1,11 +1,11 @@
-using AdaWeldSystem.Comm;
 using AdaWeldSystem.LineLaserCam.IntelligentLaserCam;
 using AntdUI;
 using System;
 using System.Collections.Generic;
 using System.Windows.Forms;
+using AdaWeldSystem.Comm.SystemComm;
 
-namespace AdaWeldSystem.Sub3UI
+namespace AdaWeldSystem.UIDesign.SubDialog.IntelligentLaserDialog
 {
     /// <summary>英莱相机算法参数编辑页</summary>
     public partial class ILAlgoForm : UserControl

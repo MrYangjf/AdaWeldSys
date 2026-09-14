@@ -1,8 +1,9 @@
-using AdaWeldSystem.Comm;
 using AdaWeldSystem.LineLaserCam.ILineLaser;
 using AdaWeldSystem.PCLOperate.Models;
 using System;
 using System.Threading;
+using AdaWeldSystem.Comm.SystemComm;
+using AdaWeldSystem.FileOperate;
 
 namespace AdaWeldSystem.LineLaserCam.VirtualCam
 {

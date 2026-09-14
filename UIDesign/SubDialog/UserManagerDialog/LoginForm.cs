@@ -1,10 +1,9 @@
-﻿using AdaWeldSystem.Comm;
-using AdaWeldSystem.Sub2UI;
-using AntdUI;
+﻿using AntdUI;
 using System;
 using System.Windows.Forms;
+using AdaWeldSystem.Comm.SystemComm;
 
-namespace AdaWeldSystem.Sub1UI
+namespace AdaWeldSystem.UIDesign.SubDialog.UserManagerDialog
 {
     /// <summary>
     /// 登录窗体（AntdUI 迁移版）。
@@ -54,11 +53,11 @@ namespace AdaWeldSystem.Sub1UI
         {
             try
             {
-                if (GlobalCommData.mAuthManager.ValidateUser(txtUserName.Text, txtPassword.Text))
+                if (GlobalCommData.mAuthHelper.ValidateUser(txtUserName.Text, txtPassword.Text))
                 {
                     IsLogin = true;
                     AntdUI.Message.success(this.Window, "登陆成功！");
-                    GlobalCommData.mOperateLevel = GlobalCommData.mAuthManager.GetUserOperate(txtUserName.Text);
+                    GlobalCommData.mOperateLevel = GlobalCommData.mAuthHelper.GetUserOperate(txtUserName.Text);
                     var host = this.FindForm();
                     if (host != null) host.DialogResult = DialogResult.OK;
                 }

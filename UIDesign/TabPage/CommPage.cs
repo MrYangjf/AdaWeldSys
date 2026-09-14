@@ -1,10 +1,11 @@
-using AdaWeldSystem.Comm;
-using AdaWeldSystem.Comm.Robot.KUKARobot;
+using AdaWeldSystem.Comm.Communication;
 using AntdUI;
 using System;
 using System.Windows.Forms;
+using AdaWeldSystem.Comm.Communication.Implementations;
+using AdaWeldSystem.Comm.SystemComm;
 
-namespace AdaWeldSystem.Sub2UI
+namespace AdaWeldSystem.UIDesign.TabPage
 {
     /// <summary>
     /// 合并通讯页面（三选一模式：PLC / 机器人 / 通用 TCP）。
@@ -15,13 +16,11 @@ namespace AdaWeldSystem.Sub2UI
     /// </summary>
     public partial class CommPage : UserControl
     {
-        private KUKARobotManager _robotManager;
         private bool _isLogVisible = true;
 
         public CommPage()
         {
             InitializeComponent();
-            _robotManager = new KUKARobotManager();
 
             // 加载配置
             LoadConfig();
@@ -194,7 +193,7 @@ namespace AdaWeldSystem.Sub2UI
         private void btnPlcConnect_Click(object sender, EventArgs e)
         {
             AppendLog($"正在连接 PLC {txtPlcIp.Text} ...");
-            // TODO: Phase E 接入 S7NetPlus / Profinet 驱动
+            // TODO: Phase E 接入 S7 驱动（西门子 S7 走 comm.S7Comm）
         }
 
         private void btnPlcDisconnect_Click(object sender, EventArgs e)
@@ -205,8 +204,7 @@ namespace AdaWeldSystem.Sub2UI
 
         private void btnPlcGsdGenerate_Click(object sender, EventArgs e)
         {
-            AppendLog("生成 GSDML 配置文件（Profinet 专用硬件）");
-            // TODO: Phase E 接入 GSDML 生成器
+            AppendLog("Profinet 封装已移除，GSDML 生成器不再提供");
         }
 
         // ================================================================
@@ -223,7 +221,8 @@ namespace AdaWeldSystem.Sub2UI
                     IPNumber = txtRobotIp.Text,
                     Port = int.Parse(txtRobotPort.Text)
                 };
-                bool ok = _robotManager.InitializeRSI(config) && _robotManager.StartRSI();
+                var comm = GlobalCommData.mCommunicationManager;
+                bool ok = comm.RsiComm.Initialize(config) && comm.RsiComm.Start();
                 AppendLog(ok ? "RSI 启动成功" : "RSI 启动失败");
             }
             catch (Exception ex)
@@ -242,7 +241,8 @@ namespace AdaWeldSystem.Sub2UI
                     ExternalIP = txtRobotIp.Text,
                     ExternalPort = int.Parse(txtRobotPort.Text)
                 };
-                bool ok = _robotManager.InitializeEKI(config) && _robotManager.OpenEKI();
+                var comm = GlobalCommData.mCommunicationManager;
+                bool ok = comm.EkiComm.Initialize(config) && comm.EkiComm.Open();
                 AppendLog(ok ? "EKI 连接成功" : "EKI 连接失败");
             }
             catch (Exception ex)
@@ -253,8 +253,9 @@ namespace AdaWeldSystem.Sub2UI
 
         private void btnRobotDisconnect_Click(object sender, EventArgs e)
         {
-            _robotManager.StopRSI();
-            _robotManager.CloseEKI();
+            var comm = GlobalCommData.mCommunicationManager;
+            comm.RsiComm.Stop();
+            comm.EkiComm.Close();
             AppendLog("机器人通讯已断开");
         }
 
@@ -266,9 +267,9 @@ namespace AdaWeldSystem.Sub2UI
         {
             try
             {
-                GlobalCommData.mCommunicationManager.TcpIpComm.Server.ServerIp = txtServerIp.Text;
-                GlobalCommData.mCommunicationManager.TcpIpComm.Server.ServerPort = int.Parse(txtServerPort.Text);
-                GlobalCommData.mCommunicationManager.TcpIpComm.StartServerCommTask();
+                GlobalCommData.mCommunicationManager.EthernetComm.Server.ServerIp = txtServerIp.Text;
+                GlobalCommData.mCommunicationManager.EthernetComm.Server.ServerPort = int.Parse(txtServerPort.Text);
+                GlobalCommData.mCommunicationManager.EthernetComm.StartServer();
                 AppendLog("服务器启动监听");
             }
             catch (Exception ex)
@@ -279,7 +280,7 @@ namespace AdaWeldSystem.Sub2UI
 
         private void btnServerStop_Click(object sender, EventArgs e)
         {
-            GlobalCommData.mCommunicationManager.TcpIpComm.StopServerCommTask();
+            GlobalCommData.mCommunicationManager.EthernetComm.StopServer();
             AppendLog("服务器停止监听");
         }
 
@@ -287,9 +288,9 @@ namespace AdaWeldSystem.Sub2UI
         {
             try
             {
-                GlobalCommData.mCommunicationManager.TcpIpComm.Client.TargetIp = txtClientIp.Text;
-                GlobalCommData.mCommunicationManager.TcpIpComm.Client.TargetPort = int.Parse(txtClientPort.Text);
-                GlobalCommData.mCommunicationManager.TcpIpComm.StartClientCommTask();
+                GlobalCommData.mCommunicationManager.EthernetComm.Client.TargetIp = txtClientIp.Text;
+                GlobalCommData.mCommunicationManager.EthernetComm.Client.TargetPort = int.Parse(txtClientPort.Text);
+                GlobalCommData.mCommunicationManager.EthernetComm.ConnectClient();
                 AppendLog("客户端连接服务器");
             }
             catch (Exception ex)
@@ -300,7 +301,7 @@ namespace AdaWeldSystem.Sub2UI
 
         private void btnClientDisconnect_Click(object sender, EventArgs e)
         {
-            GlobalCommData.mCommunicationManager.TcpIpComm.StopClientCommTask();
+            GlobalCommData.mCommunicationManager.EthernetComm.DisconnectClient();
             AppendLog("客户端断开连接");
         }
 
@@ -309,7 +310,7 @@ namespace AdaWeldSystem.Sub2UI
             string message = txtSend.Text;
             if (!string.IsNullOrEmpty(message))
             {
-                GlobalCommData.mCommunicationManager.TcpIpComm.Client.Send(message);
+                GlobalCommData.mCommunicationManager.EthernetComm.Send(message);
                 AppendLog("发送: " + message);
                 txtSend.Text = string.Empty;
             }
@@ -372,8 +373,6 @@ namespace AdaWeldSystem.Sub2UI
         public void DisposeComponents()
         {
             GlobalCommData.CommunicationCommandReceived -= GlobalCommData_CommunicationCommandReceived;
-            _robotManager?.Dispose();
-            _robotManager = null;
         }
     }
 }

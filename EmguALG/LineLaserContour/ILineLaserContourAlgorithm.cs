@@ -1,4 +1,5 @@
-using AdaWeldSystem.LineLaserCam.Data;
+using AdaWeldSystem.LineLaserCam.ILineLaser;
+using AdaWeldSystem.PCLOperate.Models;
 using Emgu.CV;
 using System;
 

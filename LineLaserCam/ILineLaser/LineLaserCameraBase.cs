@@ -1,8 +1,9 @@
 using System;
 using System.Threading;
-using AdaWeldSystem.Comm;
 using AdaWeldSystem.PCLOperate.Models;
 using Emgu.CV;
+using AdaWeldSystem.Comm.SystemComm;
+using AdaWeldSystem.FileOperate;
 
 namespace AdaWeldSystem.LineLaserCam.ILineLaser
 {

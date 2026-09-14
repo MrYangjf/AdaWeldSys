@@ -1,18 +1,20 @@
-﻿using AdaWeldSystem.Comm;
-using AdaWeldSystem.EmguALG.Manager;
-using AdaWeldSystem.MainDeviceControl.DeviceState;
+﻿using AdaWeldSystem.EmguALG.Manager;
 using AdaWeldSystem.MainDeviceControl.DeviceWorkflow;
 using AdaWeldSystem.MonitorCam;
-using AdaWeldSystem.Sub1UI;
-using AdaWeldSystem.Sub2UI;
-using AdaWeldSystem.Sub3UI;
 using AntdUI;
 using System;
 using System.ComponentModel;
 using System.Windows.Forms;
 using AdaWeldSystem.MotionControl;
+using AdaWeldSystem.Comm.SystemComm;
+using AdaWeldSystem.MainDeviceControl;
+using AdaWeldSystem.MainDeviceControl.DeviceStateApiCore;
+using AdaWeldSystem.UIDesign.ControlPage;
+using AdaWeldSystem.UIDesign.SubDialog.FormMainDialog;
+using AdaWeldSystem.UIDesign.SubDialog.UserManagerDialog;
+using AdaWeldSystem.UIDesign.TabPage;
 
-namespace AdaWeldSystem
+namespace AdaWeldSystem.UIDesign.MainWindow
 {
     /// <summary>
     /// 主窗口

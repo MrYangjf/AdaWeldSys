@@ -1,6 +1,6 @@
 ﻿using System;
-using AdaWeldSystem.MainDeviceControl.DeviceState;
-using AdaWeldSystem.MainDeviceControl.FlowState;
+using AdaWeldSystem.FileOperate;
+using AdaWeldSystem.MainDeviceControl.DeviceStateApiCore;
 
 namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
 {

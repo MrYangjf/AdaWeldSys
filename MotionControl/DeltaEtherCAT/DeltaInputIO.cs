@@ -1,6 +1,6 @@
-using AdaWeldSystem.Comm;
 using AdaWeldSystem.MotionControl.DeltaEtherCAT.Native;
 using AdaWeldSystem.MotionControl.IMotion;
+using AdaWeldSystem.Comm.SystemComm;
 
 namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
 {

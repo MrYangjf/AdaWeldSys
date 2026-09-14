@@ -1,7 +1,7 @@
 ﻿using AdaWeldSystem.FileOperate;
-using AdaWeldSystem.Comm;
 using System;
 using System.IO;
+using AdaWeldSystem.Comm.SystemComm;
 
 namespace AdaWeldSystem.PCLOperate.Render
 {

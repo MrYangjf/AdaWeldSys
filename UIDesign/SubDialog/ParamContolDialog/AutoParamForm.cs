@@ -4,7 +4,7 @@ using System;
 using System.Globalization;
 using System.Windows.Forms;
 
-namespace AdaWeldSystem.Sub3UI
+namespace AdaWeldSystem.UIDesign.SubDialog.ParamContolDialog
 {
     public partial class AutoParamForm : UserControl
     {
@@ -81,7 +81,7 @@ namespace AdaWeldSystem.Sub3UI
             if (autoParam == null)
                 return;
 
-            WeldDataManager.Instance.mAutoParamManage.SelectTable(autoParam);
+            WeldParamManager.Instance.LoadProfileIntoLookupTable(autoParam.identityInfo);
 
             labelK.Text = $"K:{autoParam.KVar}";
             LabelJ.Text = $"J:{autoParam.JVar}";
@@ -90,10 +90,10 @@ namespace AdaWeldSystem.Sub3UI
 
             try
             {
-                var seamWidths = WeldProcess.Instance.SeamWidthList;
-                var robotSpeeds = WeldProcess.Instance.RobotSpeedDic;
-                var feedSpeeds = WeldProcess.Instance.FeedSpeedDic;
-                var laserPowers = WeldProcess.Instance.LaserPowerDic;
+                var seamWidths = WeldParamManager.Instance.SeamWidthList;
+                var robotSpeeds = WeldParamManager.Instance.RobotSpeedDic;
+                var feedSpeeds = WeldParamManager.Instance.FeedSpeedDic;
+                var laserPowers = WeldParamManager.Instance.LaserPowerDic;
 
                 // 重复调用时先清空，避免行累加（AntList 已 Binding，增删即刷新）
                 _rows.Clear();
@@ -124,10 +124,10 @@ namespace AdaWeldSystem.Sub3UI
 
         private void UpdateParamValues()
         {
-            var seamWidths = WeldProcess.Instance.SeamWidthList;
-            var robotSpeeds = WeldProcess.Instance.RobotSpeedDic;
-            var feedSpeeds = WeldProcess.Instance.FeedSpeedDic;
-            var laserPowers = WeldProcess.Instance.LaserPowerDic;
+            var seamWidths = WeldParamManager.Instance.SeamWidthList;
+            var robotSpeeds = WeldParamManager.Instance.RobotSpeedDic;
+            var feedSpeeds = WeldParamManager.Instance.FeedSpeedDic;
+            var laserPowers = WeldParamManager.Instance.LaserPowerDic;
 
             for (int i = 0; i < seamWidths.Count && i < _rows.Count; i++)
             {
@@ -144,7 +144,7 @@ namespace AdaWeldSystem.Sub3UI
                     laserPowers[width] = laserPower;
             }
 
-            WeldDataManager.Instance.mAutoParamManage.UpdateParamValues();
+            WeldParamManager.Instance.SaveCurrentProfile();
         }
 
         private void btnSave_Click(object sender, EventArgs e)

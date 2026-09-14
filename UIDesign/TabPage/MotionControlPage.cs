@@ -1,13 +1,14 @@
-﻿using AdaWeldSystem.Comm;
-using AdaWeldSystem.LineLaserCam.VirtualCam;
-using AdaWeldSystem.MainDeviceControl.DeviceState;
+﻿using AdaWeldSystem.LineLaserCam.VirtualCam;
 using AdaWeldSystem.MainDeviceControl.DeviceWorkflow;
 using AdaWeldSystem.MotionControl;
 using AntdUI;
 using System;
 using System.Windows.Forms;
+using AdaWeldSystem.Comm.SystemComm;
+using AdaWeldSystem.MainDeviceControl;
+using AdaWeldSystem.MainDeviceControl.DeviceStateApiCore;
 
-namespace AdaWeldSystem.Sub2UI
+namespace AdaWeldSystem.UIDesign.TabPage
 {
     /// <summary>
     /// 运控调整参数页（UIPage，接入 NavPage（参数界面）工艺配置节点）：

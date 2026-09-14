@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
   <PropertyGroup>
@@ -90,14 +90,9 @@
     <Reference Include="WindowsFormsIntegration" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Comm\Robot\KUKARobot\EKICommunication.cs" />
-    <Compile Include="Comm\Robot\KUKARobot\KUKADataTypes.cs" />
-    <Compile Include="Comm\Robot\KUKARobot\KUKARobotManager.cs" />
-    <Compile Include="Comm\Robot\KUKARobot\KUKAXMLConfig.cs" />
-    <Compile Include="Comm\Robot\KUKARobot\RSICommunication.cs" />
-    <Compile Include="EmguALG\Stages.cs" />
-    <Compile Include="EmguALG\ImageAlgorithm.cs" />
-    <Compile Include="EmguALG\ImageRoiTools.cs" />
+    <Compile Include="EmguALG\Core\Stages.cs" />
+    <Compile Include="EmguALG\Core\ImageAlgorithm.cs" />
+    <Compile Include="EmguALG\Core\ImageRoiTools.cs" />
     <Compile Include="EmguALG\Abstractions\IAlgorithm.cs" />
     <Compile Include="EmguALG\Abstractions\IResultStore.cs" />
     <Compile Include="EmguALG\RealtimeMonitor\WireFeedDistance\WireFeedConfig.cs" />
@@ -118,29 +113,37 @@
     <Compile Include="EmguALG\Core\UnitAttribute.cs" />
     <Compile Include="EmguALG\Core\RangeAttribute.cs" />
     <Compile Include="EmguALG\RealtimeMonitor\RealtimeMonitorAlgorithm.cs" />
-    <Compile Include="PCLOperate\3DModel\Point3D.cs" />
-    <Compile Include="PCLOperate\3DModel\PointCloudData.cs" />
+    <Compile Include="PCLOperate\Models\Point3D.cs" />
+    <Compile Include="PCLOperate\Models\PointCloudData.cs" />
     <Compile Include="PCLOperate\DataIO\PointCloudReader.cs" />
     <Compile Include="PCLOperate\DataIO\PointCloudWriter.cs" />
     <Compile Include="PCLOperate\Render\PointCloudViewer.cs" />
     <Compile Include="PCLOperate\Render\RenderConfig.cs" />
     <Compile Include="PCLOperate\Render\SurfaceTriangulator.cs" />
-    <Compile Include="Comm\CommunicationManager.cs" />
-    <Compile Include="Comm\CommBase\Profinet\GSDMLGenerator.cs" />
-    <Compile Include="Comm\PLC\Siemens\S7PLCCommunication.cs" />
-    <Compile Include="Comm\SystemComm.cs" />
-    <Compile Include="Comm\CommBase\Ethernet\TCPIPComm.cs" />
-    <Compile Include="Comm\CommBase\Modbus\ModbusTCPCommunication.cs" />
-    <Compile Include="Comm\IntelligentLaserModbus\ILModbusData.cs" />
-    <Compile Include="FileOperate\IniFile.cs" />
+    <Compile Include="Comm\SystemComm\SystemComm.cs" />
+    <Compile Include="Comm\Communication\CommunicationManager.cs" />
+    <Compile Include="Comm\Communication\Abstractions\CommChannelBase.cs" />
+    <Compile Include="Comm\Communication\Implementations\SiemensS7Comm.cs" />
+    <Compile Include="Comm\Communication\Implementations\KukaRsiComm.cs" />
+    <Compile Include="Comm\Communication\Implementations\KukaEkiComm.cs" />
+    <Compile Include="Comm\Communication\Implementations\EthernetXmlComm.cs" />
+    <Compile Include="Comm\Communication\Implementations\InLaserModbusComm.cs" />
+    <Compile Include="FileOperate\INIFile.cs" />
     <Compile Include="FileOperate\Log.cs" />
-    <Compile Include="FileOperate\XMLfile.cs" />
-    <Compile Include="WeldParamControl\WeldDataManager.cs" />
-    <Compile Include="WeldParamControl\WeldProcess.cs" />
-    <Compile Include="ProductFileManager\RecordFrame.cs" />
-    <Compile Include="ProductFileManager\RunRecordManager.cs" />
-    <Compile Include="ProductFileManager\SmartRayConverter.cs" />
-    <Compile Include="ProductFileManager\WeldActionRecord.cs" />
+    <Compile Include="FileOperate\XdocumentReaderWriter.cs" />
+    <Compile Include="WeldParamControl\WeldParamData.cs" />
+    <Compile Include="WeldParamControl\WeldParamManager.cs" />
+    <Compile Include="WeldParamControl\WeldAlgorithmsConfig.cs" />
+    <Compile Include="WeldParamControl\Abstractions\WeldAlgorithmBase.cs" />
+    <Compile Include="WeldParamControl\Algorithms\SeamGuideSample.cs" />
+    <Compile Include="WeldParamControl\Algorithms\WeldParamLookupAlgorithm.cs" />
+    <Compile Include="WeldParamControl\Algorithms\WeldParamAdjustmentAlgorithm.cs" />
+    <Compile Include="WeldParamControl\Algorithms\SeamTrackingAlgorithm.cs" />
+    <Compile Include="ProductFileControl\Abstractions\ProductRecordBase.cs" />
+    <Compile Include="ProductFileControl\Records\SeamTrackRecord.cs" />
+    <Compile Include="ProductFileControl\Records\WeldParamAdjustRecord.cs" />
+    <Compile Include="ProductFileControl\Records\WeldResultRecord.cs" />
+    <Compile Include="ProductFileControl\ProductFileRecordManager.cs" />
     <!-- 设备控制核心（三态模型 + 5 子工作流 + 2 管控类） -->
     <Compile Include="MainDeviceControl\DeviceStateApiCore\CommandCore.cs" />
     <Compile Include="MainDeviceControl\DeviceStateApiCore\DeviceStateBase.cs" />
@@ -199,12 +202,13 @@
     <Compile Include="MotionControl\DeltaEtherCAT\Native\EtherCATEcam2Native.cs" />
     <Compile Include="MotionControl\DeltaEtherCAT\Native\DeltaErrorCode.cs" />
     <Compile Include="LineLaserCam\IntelligentLaserCam\IntelligentLaserCam.cs" />
-    <Compile Include="SqlLiteDatabase\AuthManager.cs" />
-    <Compile Include="SqlLiteDatabase\AutoParamManager.cs" />
-    <Compile Include="SqlLiteDatabase\ConfigManager.cs" />
-    <Compile Include="SqlLiteDatabase\SqliteCore\DatabaseManagerBase.cs" />
-    <Compile Include="SqlLiteDatabase\ProductDatabaseManager.cs" />
-    <Compile Include="SqlLiteDatabase\SqliteCore\SQLiteDataBase.cs" />
+    <Compile Include="SQLiteDBControl\SQLiteCore\SQLiteDataBase.cs" />
+    <Compile Include="SQLiteDBControl\ISQLiteHelper\DatabaseHelperBase.cs" />
+    <Compile Include="SQLiteDBControl\Helpers\AuthHelper.cs" />
+    <Compile Include="SQLiteDBControl\Helpers\AutoParamHelper.cs" />
+    <Compile Include="SQLiteDBControl\Helpers\ConfigHelper.cs" />
+    <Compile Include="SQLiteDBControl\Helpers\ProductDatabaseHelper.cs" />
+    <Compile Include="SQLiteDBControl\SQLiteDatabaseManager.cs" />
     <Compile Include="UIDesign\MainWindow\FormMain.cs">
       <SubType>Form</SubType>
     </Compile>

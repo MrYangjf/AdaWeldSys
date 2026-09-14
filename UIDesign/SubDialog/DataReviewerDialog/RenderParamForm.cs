@@ -3,7 +3,7 @@ using AntdUI;
 using System;
 using System.Windows.Forms;
 
-namespace AdaWeldSystem.Sub3UI
+namespace AdaWeldSystem.UIDesign.SubDialog.DataReviewerDialog
 {
     /// <summary>
     /// 渲染参数配置对话框

@@ -2,16 +2,16 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Xml.Linq;
-using AdaWeldSystem.Comm;
 using AdaWeldSystem.FileOperate;
 using AdaWeldSystem.MotionControl.IMotion;
+using AdaWeldSystem.Comm.SystemComm;
 
 namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
 {
     /// <summary>台达运控配置</summary>
     /// <remarks>
     /// 承载主站参数、轴表、输入表、输出表、PVT 焊缝跟踪参数与线激光标定参数，
-    /// 走 FileOperate/XMLfile.cs 读写，禁止 XmlSerializer。
+    /// 走 FileOperate/XdocumentReaderWriter.cs 读写，禁止 XmlSerializer。
     /// 配置文件为 Config\XML\DeltaMotionConfig.xml，根元素 ROOT。
     /// 本类为普通实例类，由 MoveControlData 持有，全系统只有 MontionManager.MoveData 一处入口。
     /// 非线程安全：只在初始化与停机阶段调用，运行期禁止在流程循环内读写配置。

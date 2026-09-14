@@ -1,11 +1,11 @@
-﻿using AdaWeldSystem.EmguALG;
-using AdaWeldSystem.LineLaserCam.IntelligentLaserCam;
+﻿using AdaWeldSystem.LineLaserCam.IntelligentLaserCam;
 using AdaWeldSystem.LineLaserCam;
 using AntdUI;
 using System;
 using System.Windows.Forms;
+using AdaWeldSystem.EmguALG.Core;
 
-namespace AdaWeldSystem.Sub3UI
+namespace AdaWeldSystem.UIDesign.SubDialog.IntelligentLaserDialog
 {
     /// <summary>
     /// 算法编辑窗体（AntdUI 迁移版）。

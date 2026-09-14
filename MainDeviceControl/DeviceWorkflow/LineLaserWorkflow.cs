@@ -1,11 +1,12 @@
 ﻿using System;
 using System.Threading;
-using AdaWeldSystem.Comm;
-using AdaWeldSystem.MainDeviceControl.DeviceState;
-using AdaWeldSystem.MainDeviceControl.FlowState;
 using AdaWeldSystem.LineLaserCam;
 using AdaWeldSystem.LineLaserCam.ILineLaser;
 using AdaWeldSystem.WeldParamControl;
+using AdaWeldSystem.Comm.SystemComm;
+using AdaWeldSystem.FileOperate;
+using AdaWeldSystem.MainDeviceControl;
+using AdaWeldSystem.MainDeviceControl.DeviceStateApiCore;
 
 namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
 {
@@ -479,7 +480,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
                 return DeviceControlWork.Instance.GetEffectiveRobotX();
             try
             {
-                return WeldProcess.Instance.CurrentRobotX;
+                return WeldParamManager.Instance.CurrentRobotX;
             }
             catch (Exception ex)
             {

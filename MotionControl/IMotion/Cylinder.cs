@@ -1,5 +1,5 @@
 using System.Collections.Generic;
-using AdaWeldSystem.Comm;
+using AdaWeldSystem.Comm.SystemComm;
 
 namespace AdaWeldSystem.MotionControl.IMotion
 {

@@ -1,4 +1,4 @@
-namespace AdaWeldSystem.Sub2UI
+namespace AdaWeldSystem.UIDesign.TabPage
 {
     partial class CommPage
     {
@@ -633,7 +633,7 @@ namespace AdaWeldSystem.Sub2UI
             this.btnPlcGsdGenerate.Name = "btnPlcGsdGenerate";
             this.btnPlcGsdGenerate.Size = new System.Drawing.Size(160, 35);
             this.btnPlcGsdGenerate.TabIndex = 11;
-            this.btnPlcGsdGenerate.Text = "生成 GSDML";
+            this.btnPlcGsdGenerate.Text = "Profinet/GSDML 已移除";
             this.btnPlcGsdGenerate.Click += new System.EventHandler(this.btnPlcGsdGenerate_Click);
             // 
             // btnPlcDisconnect
@@ -723,8 +723,7 @@ namespace AdaWeldSystem.Sub2UI
             // 
             this.cmbPlcType.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.cmbPlcType.Items.AddRange(new object[] {
-            "Siemens S7",
-            "Profinet"});
+            "Siemens S7"});
             this.cmbPlcType.Location = new System.Drawing.Point(56, 42);
             this.cmbPlcType.Margin = new System.Windows.Forms.Padding(4, 5, 4, 5);
             this.cmbPlcType.MinimumSize = new System.Drawing.Size(63, 0);

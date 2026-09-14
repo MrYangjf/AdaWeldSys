@@ -1,14 +1,15 @@
 using System;
 using System.Globalization;
-using AdaWeldSystem.Comm;
 using AdaWeldSystem.FileOperate;
 using AdaWeldSystem.LineLaserCam.ILineLaser;
+using AdaWeldSystem.Comm.SystemComm;
+using AdaWeldSystem.LineLaserCam.VirtualCam;
 
 namespace AdaWeldSystem.LineLaserCam
 {
     /// <summary>线激光配置</summary>
     /// <remarks>
-    /// 承载默认相机种类、英莱相机 IP 与虚拟相机模拟参数，走 FileOperate/XMLfile.cs 读写，禁止 XmlSerializer。
+    /// 承载默认相机种类、英莱相机 IP 与虚拟相机模拟参数，走 FileOperate/XdocumentReaderWriter.cs 读写，禁止 XmlSerializer。
     /// 配置文件为 Config\XML\LineLaserConfig.xml，根元素 ROOT。
     /// 由 LineLaserManager 持有，全系统只有 LineLaserManager.Instance.Config 一处入口。
     /// 非线程安全：只在初始化与停机阶段调用，运行期禁止在流程循环内读写配置。
@@ -58,17 +59,8 @@ namespace AdaWeldSystem.LineLaserCam
         /// <summary>虚拟相机焊缝基准深度（mm）</summary>
         public double SimBaseSeamDepth { get; set; }
 
-        /// <summary>焊缝跟踪 PVT 单批下发点数，攒够即下发</summary>
-        public int PvtBatchSize { get; set; }
-
-        /// <summary>焊缝跟踪轴名，运控初始化成功后按此名取轴并注入 PVT 能力</summary>
+        /// <summary>焊缝跟踪轴名，运控初始化成功后按此名取轴并注入引导轨迹构造器</summary>
         public string SeamTrackAxisName { get; set; }
-
-        /// <summary>实测帧率不可用时的默认帧间隔（秒），PVT 点时间轴基准</summary>
-        public double PvtFrameSeconds { get; set; }
-
-        /// <summary>PVT 剩余缓冲区续喂下限，低于此值暂缓续喂避免点表溢出</summary>
-        public int PvtMinRemainBuffer { get; set; }
 
         /// <summary>显示处理是否开启，界面可按需开启，默认关闭</summary>
         public bool DisplayEnabled { get; set; }
@@ -95,10 +87,7 @@ namespace AdaWeldSystem.LineLaserCam
             SimBaseSeamWidth = 8.0;
             SimBaseSeamDepth = 3.0;
 
-            PvtBatchSize = 16;
             SeamTrackAxisName = "Y轴";
-            PvtFrameSeconds = 1.0 / 60.0;
-            PvtMinRemainBuffer = 200;
             DisplayEnabled = false;
             DisplayFps = 15.0;
             ConvertMatEnabled = true;
@@ -183,10 +172,7 @@ namespace AdaWeldSystem.LineLaserCam
             SimBaseSeamWidth = ReadDouble(reader, SimPath + "/BASE_SEAM_WIDTH", SimBaseSeamWidth);
             SimBaseSeamDepth = ReadDouble(reader, SimPath + "/BASE_SEAM_DEPTH", SimBaseSeamDepth);
 
-            PvtBatchSize = ReadInt(reader, PvtPath + "/BATCH_SIZE", PvtBatchSize);
             SeamTrackAxisName = reader.GetElementValueByPath(PvtPath + "/SEAM_TRACK_AXIS", SeamTrackAxisName);
-            PvtFrameSeconds = ReadDouble(reader, PvtPath + "/FRAME_SECONDS", PvtFrameSeconds);
-            PvtMinRemainBuffer = ReadInt(reader, PvtPath + "/MIN_REMAIN_BUFFER", PvtMinRemainBuffer);
 
             DisplayEnabled = ReadBool(reader, DisplayPath + "/ENABLED", DisplayEnabled);
             DisplayFps = ReadDouble(reader, DisplayPath + "/FPS", DisplayFps);
@@ -216,10 +202,7 @@ namespace AdaWeldSystem.LineLaserCam
             reader.AddElement(sim, "BASE_SEAM_DEPTH", Text(SimBaseSeamDepth));
 
             System.Xml.Linq.XElement pvt = reader.AddElement("PVT");
-            reader.AddElement(pvt, "BATCH_SIZE", PvtBatchSize.ToString(CultureInfo.InvariantCulture));
             reader.AddElement(pvt, "SEAM_TRACK_AXIS", SeamTrackAxisName);
-            reader.AddElement(pvt, "FRAME_SECONDS", Text(PvtFrameSeconds));
-            reader.AddElement(pvt, "MIN_REMAIN_BUFFER", PvtMinRemainBuffer.ToString(CultureInfo.InvariantCulture));
 
             System.Xml.Linq.XElement display = reader.AddElement("DISPLAY");
             reader.AddElement(display, "ENABLED", DisplayEnabled ? "TRUE" : "FALSE");

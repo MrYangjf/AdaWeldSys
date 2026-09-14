@@ -1,4 +1,4 @@
-namespace AdaWeldSystem.Sub2UI
+namespace AdaWeldSystem.UIDesign.TabPage
 {
     partial class FileEditorPage
     {

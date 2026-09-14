@@ -1,7 +1,8 @@
 using System;
 using System.Threading;
-using AdaWeldSystem.Comm;
 using AdaWeldSystem.LaserWeldHead.API;
+using AdaWeldSystem.Comm.SystemComm;
+using AdaWeldSystem.FileOperate;
 
 namespace AdaWeldSystem.LaserWeldHead
 {

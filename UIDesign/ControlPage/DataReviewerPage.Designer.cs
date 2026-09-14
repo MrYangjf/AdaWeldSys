@@ -1,4 +1,4 @@
-namespace AdaWeldSystem.Sub1UI
+namespace AdaWeldSystem.UIDesign.ControlPage
 {
     partial class DataReviewerPage
     {
@@ -329,11 +329,11 @@ namespace AdaWeldSystem.Sub1UI
             this.tableLayoutPanel2.Size = new System.Drawing.Size(1252, 570);
             this.tableLayoutPanel2.TabIndex = 6;
             // 
-            // DataReviewPage
+            // DataReviewerPage
             // 
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.None;
             this.Controls.Add(this.tableLayoutPanel2);
-            this.Name = "DataReviewPage";
+            this.Name = "DataReviewerPage";
             this.Size = new System.Drawing.Size(1252, 570);
             this.Load += new System.EventHandler(this.DataReview_Shown);
             this.panelRight.ResumeLayout(false);

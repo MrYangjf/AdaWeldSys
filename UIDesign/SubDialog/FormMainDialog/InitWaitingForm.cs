@@ -2,7 +2,7 @@ using System;
 using System.Drawing;
 using System.Windows.Forms;
 
-namespace AdaWeldSystem.Sub3UI
+namespace AdaWeldSystem.UIDesign.SubDialog.FormMainDialog
 {
     /// <summary>初始化等待面板：作为 Modal 内容承载，初始化结束事件到达后经 DialogResult 关闭所在 Modal。</summary>
     public class InitWaitingForm : UserControl

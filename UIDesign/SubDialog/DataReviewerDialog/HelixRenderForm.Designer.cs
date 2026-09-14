@@ -1,7 +1,7 @@
 ﻿using HelixToolkit.SharpDX;
 using HelixToolkit.Wpf.SharpDX;
 
-namespace AdaWeldSystem.Sub3UI
+namespace AdaWeldSystem.UIDesign.SubDialog.DataReviewerDialog
 {
     partial class HelixRenderForm
     {

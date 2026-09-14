@@ -1,10 +1,13 @@
 ﻿using System;
-using AdaWeldSystem.Comm;
-using AdaWeldSystem.MainDeviceControl.DeviceState;
-using AdaWeldSystem.MainDeviceControl.FlowState;
+using System.Collections.Generic;
 using AdaWeldSystem.LineLaserCam;
+using AdaWeldSystem.LineLaserCam.ILineLaser;
 using AdaWeldSystem.MotionControl;
 using AdaWeldSystem.MotionControl.IMotion;
+using AdaWeldSystem.WeldParamControl;
+using AdaWeldSystem.Comm.SystemComm;
+using AdaWeldSystem.FileOperate;
+using AdaWeldSystem.MainDeviceControl.DeviceStateApiCore;
 
 namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
 {
@@ -56,6 +59,27 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         private string _failReason = "";
         private int _failStep;
 
+        /// <summary>焊缝跟踪轴，读取轴当前位置用于叠加偏差（运动目标 = 轴当前值 + 偏差）</summary>
+        private MontionAxis _seamAxis;
+
+        /// <summary>焊缝跟踪 PVT 点缓冲区（算法产出 → 控制器写入之间的缓冲）。</summary>
+        private readonly List<PVTPoint> _seamBuffer = new List<PVTPoint>();
+
+        /// <summary>缓冲区锁。</summary>
+        private readonly object _seamBufferLock = new object();
+
+        /// <summary>焊缝跟踪是否已下发起始段。</summary>
+        private bool _seamRunning;
+
+        /// <summary>最近一次 PVT 下发返回码。</summary>
+        private ushort _seamLastErrorCode;
+
+        /// <summary>最近一次 PVT 下发时间。</summary>
+        private DateTime _seamLastOutputTime;
+
+        /// <summary>焊缝跟踪激活标志（上一周期状态，用于起止沿判定），跨线程读。</summary>
+        private volatile bool _seamTrackingActive;
+
         #endregion
 
         #region 单例
@@ -89,6 +113,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         private MotionControlWorkflow()
         {
             Tag = "运动控制工作流";
+            _seamLastOutputTime = DateTime.Now;
         }
 
         #endregion
@@ -178,6 +203,9 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         /// <returns>收尾完成返回 true</returns>
         private bool DoStopping()
         {
+            // 收尾线激光引导：把剩余点作为最后一段下发，避免轴停在半截轨迹上
+            FlushSeamBuffer(true);
+            _seamTrackingActive = false;
             MontionManager.Instance.ServoOffAll();
             _servoOnIssued = false;
             Log("运控工作流已停止");
@@ -252,7 +280,8 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
                     if (DoServoOn()) AdvanceStep(StepReady);
                     break;
                 case StepReady:
-                    // 已使能待机，等相位切换把执行步复位到停止或失败收尾
+                    // 已使能待机：周期驱动线激光引导（起止沿复位/收尾、按节拍输出 PVT 段）
+                    UpdateSeamTracking();
                     break;
                 case StepStopping:
                     if (DoStopping()) AdvanceStep(StepIdle);
@@ -300,8 +329,8 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         }
 
         /// <summary>
-        /// 把焊缝跟踪轴的 PVT 能力注入线激光管理器（依赖注入，只传能力抽象不传控制器）。
-        /// 轴名取自线激光配置 SeamTrackAxisName，未配置到该轴时只记录警告，不影响初始化成功。
+        /// 装配焊缝跟踪：把线激光引导配置注入轨迹算法，并订阅线激光结果。
+        /// 轴名取自线激光配置 SeamTrackAxisName；未找到轴时记录警告。
         /// </summary>
         private void AttachSeamTrackAxis()
         {
@@ -309,11 +338,149 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             MontionAxis axis = MontionManager.Instance.GetAxis(axisName);
             if (axis == null)
             {
-                Log(string.Format("未找到焊缝跟踪轴 {0} 焊缝跟踪 PVT 未启用", axisName), MessageLevel.Warning);
+                Log(string.Format("未找到焊缝跟踪轴 {0} 线激光引导未启用", axisName), MessageLevel.Warning);
                 return;
             }
 
-            LineLaserManager.Instance.AttachYAxis(axis);
+            _seamAxis = axis;
+            LineLaserManager.Instance.ResultReady += OnSeamResultReady;
+            Log(string.Format("焊缝跟踪轴 {0} 已装配 线激光引导就绪", axisName));
+        }
+
+        /// <summary>撤除焊缝跟踪装配：收尾当前段、退订结果、清空缓冲区。</summary>
+        private void DetachSeamTrackAxis()
+        {
+            LineLaserManager.Instance.ResultReady -= OnSeamResultReady;
+            FlushSeamBuffer(true);
+            lock (_seamBufferLock)
+            {
+                _seamBuffer.Clear();
+            }
+            _seamRunning = false;
+            _seamAxis = null;
+            _seamTrackingActive = false;
+        }
+
+        /// <summary>
+        /// 线激光结果回调：焊接工作态下把结果喂入轨迹算法，返回点加入下发缓冲区。
+        /// 运行在相机 SDK 回调线程；轴位置读取失败按 0 处理不中断跟踪。
+        /// </summary>
+        /// <param name="sender">事件源</param>
+        /// <param name="e">线激光结果事件参数</param>
+        private void OnSeamResultReady(object sender, LineLaserResultEventArgs e)
+        {
+            if (!_seamTrackingActive || _seamAxis == null) return;
+
+            try
+            {
+                PVTPoint[] points = WeldParamManager.Instance.FeedSeamTracking(
+                    e.Result, e.MeasuredFps, _seamAxis.GetPosition());
+                EnqueueSeamPoints(points);
+            }
+            catch (Exception ex)
+            {
+                Log("线激光引导轨迹计算异常 " + ex.Message, MessageLevel.Error);
+            }
+        }
+
+        /// <summary>把算法返回的 PVT 点加入下发缓冲区。</summary>
+        /// <param name="points">PVT 点数组</param>
+        private void EnqueueSeamPoints(PVTPoint[] points)
+        {
+            if (points == null || points.Length == 0) return;
+            lock (_seamBufferLock)
+            {
+                _seamBuffer.AddRange(points);
+            }
+        }
+
+        /// <summary>周期驱动焊缝跟踪：按焊接工作态起止沿复位/收尾，按节拍把缓冲区写入控制器。</summary>
+        private void UpdateSeamTracking()
+        {
+            if (_seamAxis == null) return;
+
+            bool active = LineLaserWorkflow.Instance.WeldStatus == SubDeviceWeldStatus.Working;
+
+            if (active && !_seamTrackingActive)
+            {
+                WeldParamManager.Instance.ResetSeamTracking();
+                _seamRunning = false;
+            }
+            if (!active && _seamTrackingActive)
+            {
+                FlushSeamBuffer(true);
+            }
+            _seamTrackingActive = active;
+
+            if (!active) return;
+
+            PVTPoint[] tickPoints = WeldParamManager.Instance.TickSeamTracking();
+            EnqueueSeamPoints(tickPoints);
+
+            TryFlushSeamBuffer(false);
+
+            if (WeldParamManager.Instance.SeamTrackingHasFault)
+            {
+                Fail(WeldParamManager.Instance.SeamTrackingFaultReason);
+            }
+        }
+
+        /// <summary>按水位与节拍条件尝试把缓冲区写入控制器。</summary>
+        /// <param name="isFinal">是否为最后一段</param>
+        private void TryFlushSeamBuffer(bool isFinal)
+        {
+            if (!isFinal)
+            {
+                PVTInformation info;
+                ushort query = _seamAxis.GetInformation(out info);
+                if (query == PVTResult.OK && info.RemainBufferSize >= WeldParamManager.Instance.AlgorithmsConfig.MinRemainBuffer) return;
+            }
+
+            FlushSeamBuffer(isFinal);
+        }
+
+        /// <summary>把缓冲区中的 PVT 点整批写入控制器。</summary>
+        /// <param name="isFinal">是否为最后一段</param>
+        private void FlushSeamBuffer(bool isFinal)
+        {
+            PVTPoint[] segment;
+            lock (_seamBufferLock)
+            {
+                if (_seamBuffer.Count == 0)
+                {
+                    if (!isFinal || !_seamRunning) return;
+                    // 收尾且无待发点：补一个保持点作为最后一段
+                    segment = new PVTPoint[] { new PVTPoint(_seamAxis.GetPosition(), WeldParamManager.Instance.AlgorithmsConfig.DefaultFrameSeconds, 0.0) };
+                }
+                else
+                {
+                    segment = _seamBuffer.ToArray();
+                    _seamBuffer.Clear();
+                }
+            }
+
+            if (!_seamRunning)
+            {
+                _seamLastErrorCode = _seamAxis.BeginMove(segment, PVTTimeMode.Relative, isFinal, false, 0.0);
+                if (_seamLastErrorCode == PVTResult.OK)
+                {
+                    _seamRunning = !isFinal;
+                }
+            }
+            else if (!isFinal || _seamRunning)
+            {
+                _seamLastErrorCode = _seamAxis.ContinueMove(segment, isFinal);
+                if (isFinal && _seamLastErrorCode == PVTResult.OK)
+                {
+                    _seamRunning = false;
+                }
+            }
+
+            _seamLastOutputTime = DateTime.Now;
+            if (_seamLastErrorCode != PVTResult.OK)
+            {
+                Log(string.Format("PVT 点下发失败 返回码 0x{0:X} 点数 {1}", _seamLastErrorCode, segment.Length), MessageLevel.Error);
+            }
         }
 
         /// <summary>设备连接（阻塞）：初始化台达总线，同步等待完成。</summary>
@@ -359,6 +526,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
                 Log("运控初始化断开开始");
                 lock (_lock)
                 {
+                    DetachSeamTrackAxis();
                     MontionManager.Instance.Close();
                     _initialized = false;
                     _servoOnIssued = false;
@@ -462,6 +630,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         {
             lock (_lock)
             {
+                DetachSeamTrackAxis();
                 MontionManager.Instance.Close();
                 _initialized = false;
                 _servoOnIssued = false;

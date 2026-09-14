@@ -1,11 +1,11 @@
-using AdaWeldSystem.ProductFileManager;
+using AdaWeldSystem.ProductFileControl;
 using AntdUI;
 using System;
 using System.IO;
 using System.Windows.Forms;
 
 
-namespace AdaWeldSystem.Sub3UI
+namespace AdaWeldSystem.UIDesign.SubDialog.DataReviewerDialog
 {
     /// <summary>
     /// 记录配置对话框
@@ -32,17 +32,17 @@ namespace AdaWeldSystem.Sub3UI
         /// </summary>
         private void LoadConfig()
         {
-            // 读规范化后的路径（RunRecordManager 已在构造时对空路径回退默认值）
-            string recordDir = RunRecordManager.Instance.RecordDirectory;
-            string tempDir = RunRecordManager.Instance.TempDirectory;
-            bool useObfuscation = RunRecordManager.Instance.UseObfuscation;
+            // 读规范化后的路径（ProductFileRecordManager 已在构造时对空路径回退默认值）
+            string recordDir = ProductFileRecordManager.Instance.RecordDirectory;
+            string tempDir = ProductFileRecordManager.Instance.TempDirectory;
+            bool useObfuscation = ProductFileRecordManager.Instance.UseObfuscation;
 
             txtRecordPath.Text = recordDir;
             txtTempPath.Text = tempDir;
             chkUseObfuscation.Checked = useObfuscation;
 
             // 提示路径回退信息（配置路径为空时已回退默认）
-            string fallback = RunRecordManager.Instance.PathFallbackMessage;
+            string fallback = ProductFileRecordManager.Instance.PathFallbackMessage;
             if (!string.IsNullOrEmpty(fallback))
             {
                 AntdUI.Message.warn(this.Window, fallback);
@@ -55,16 +55,16 @@ namespace AdaWeldSystem.Sub3UI
         private void SaveConfig()
         {
 
-            RunRecordManager.Instance.ConfigFile.WriteString("Paths", "RecordDirectory", txtRecordPath.Text);
-            RunRecordManager.Instance.ConfigFile.WriteString("Paths", "TempDirectory", txtTempPath.Text);
-            RunRecordManager.Instance.ConfigFile.WriteBool("Settings", "UseObfuscation", chkUseObfuscation.Checked);
+            ProductFileRecordManager.Instance.ConfigFile.WriteString("Paths", "RecordDirectory", txtRecordPath.Text);
+            ProductFileRecordManager.Instance.ConfigFile.WriteString("Paths", "TempDirectory", txtTempPath.Text);
+            ProductFileRecordManager.Instance.ConfigFile.WriteBool("Settings", "UseObfuscation", chkUseObfuscation.Checked);
 
-            // 同步更新RunRecordManager
-            RunRecordManager.Instance.RecordDirectory = txtRecordPath.Text;
-            RunRecordManager.Instance.TempDirectory = txtTempPath.Text;
-            RunRecordManager.Instance.UseObfuscation = chkUseObfuscation.Checked;
+            // 同步更新 ProductFileRecordManager
+            ProductFileRecordManager.Instance.RecordDirectory = txtRecordPath.Text;
+            ProductFileRecordManager.Instance.TempDirectory = txtTempPath.Text;
+            ProductFileRecordManager.Instance.UseObfuscation = chkUseObfuscation.Checked;
 
-            RunRecordManager.Instance.ConfigFile.SaveToFile();
+            ProductFileRecordManager.Instance.ConfigFile.SaveToFile();
 
             AntdUI.Message.success(this.Window, "配置已保存！");
         }

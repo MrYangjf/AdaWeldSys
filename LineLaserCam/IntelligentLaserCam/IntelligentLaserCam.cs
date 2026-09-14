@@ -1,5 +1,4 @@
-﻿using AdaWeldSystem.Comm;
-using AdaWeldSystem.LineLaserCam.ILineLaser;
+﻿using AdaWeldSystem.LineLaserCam.ILineLaser;
 using IntelligentLaser_CSharp;
 using AdaWeldSystem.PCLOperate.Models;
 using System;
@@ -10,6 +9,8 @@ using System.Text;
 using System.Threading;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using AdaWeldSystem.Comm.SystemComm;
+using AdaWeldSystem.FileOperate;
 
 namespace AdaWeldSystem.LineLaserCam.IntelligentLaserCam
 {

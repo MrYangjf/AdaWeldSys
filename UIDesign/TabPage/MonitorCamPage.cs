@@ -1,14 +1,13 @@
-﻿using AdaWeldSystem.Comm;
-using AdaWeldSystem.MainDeviceControl.DeviceState;
-using AdaWeldSystem.MainDeviceControl.DeviceWorkflow;
+﻿using AdaWeldSystem.MainDeviceControl.DeviceWorkflow;
 using AdaWeldSystem.MonitorCam;
 using AdaWeldSystem.MonitorCam.IMonitorCam;
 using AdaWeldSystem.EmguALG.Manager;
 using Emgu.CV;
 using System;
 using System.Windows.Forms;
+using AdaWeldSystem.MainDeviceControl.DeviceStateApiCore;
 
-namespace AdaWeldSystem.Sub2UI
+namespace AdaWeldSystem.UIDesign.TabPage
 {
     /// <summary>
     /// 监控相机页面 - 监控画面显示与算法调试

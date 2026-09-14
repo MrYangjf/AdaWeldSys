@@ -1,14 +1,14 @@
 ﻿using System;
 using System.Threading;
-using AdaWeldSystem.Comm;
-using AdaWeldSystem.MainDeviceControl.DeviceState;
-using AdaWeldSystem.MainDeviceControl.FlowState;
 using AdaWeldSystem.EmguALG.Manager;
 using AdaWeldSystem.EmguALG.RealtimeMonitor.WireFeedDistance;
 using AdaWeldSystem.EmguALG.RealtimeMonitor.WeldQuality;
 using AdaWeldSystem.MonitorCam;
 using AdaWeldSystem.MonitorCam.IMonitorCam;
 using Emgu.CV;
+using AdaWeldSystem.Comm.SystemComm;
+using AdaWeldSystem.FileOperate;
+using AdaWeldSystem.MainDeviceControl.DeviceStateApiCore;
 
 namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
 {

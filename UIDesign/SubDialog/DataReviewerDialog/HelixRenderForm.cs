@@ -1,4 +1,4 @@
-using AdaWeldSystem.ProductFileManager;
+using AdaWeldSystem.ProductFileControl;
 using HelixToolkit.SharpDX;
 using HelixToolkit.SharpDX.Assimp;
 using HelixToolkit.SharpDX.Model.Scene;
@@ -14,7 +14,7 @@ using System.Windows.Forms;
 using DrawingColor = System.Drawing.Color;
 using MediaColor = System.Windows.Media.Color;
 
-namespace AdaWeldSystem.Sub3UI
+namespace AdaWeldSystem.UIDesign.SubDialog.DataReviewerDialog
 {
     /// <summary>
     /// Helix 3D 渲染子视图（SubView 模式）
@@ -259,12 +259,12 @@ namespace AdaWeldSystem.Sub3UI
                         if (extension == ".tmp")
                         {
                             // 临时文件：先解析再加载
-                            if (RunRecordManager.Instance.ParseFromTempFile(selectedFile))
+                            if (ProductFileRecordManager.Instance.ParseFromTempFile(selectedFile))
                             {
-                                data = RunRecordManager.Instance.GetFramePointCloud(0);
+                                data = ProductFileRecordManager.Instance.GetFramePointCloud(0);
                                 if (data == null)
                                 {
-                                    var frames = RunRecordManager.Instance.GetAllFrames();
+                                    var frames = ProductFileRecordManager.Instance.GetAllFrames();
                                     if (frames.Count > 0)
                                     {
                                         data = frames[0].PointCloud;

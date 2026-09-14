@@ -1,7 +1,8 @@
 using System;
 using System.Collections.Generic;
-using AdaWeldSystem.Comm;
 using AdaWeldSystem.MotionControl.DeltaEtherCAT;
+using AdaWeldSystem.Comm.SystemComm;
+using AdaWeldSystem.FileOperate;
 
 namespace AdaWeldSystem.MotionControl
 {

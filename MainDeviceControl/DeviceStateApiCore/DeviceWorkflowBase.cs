@@ -1,10 +1,9 @@
 ﻿using System;
 using System.Threading;
-using AdaWeldSystem.Comm;
 using AdaWeldSystem.FileOperate;
-using AdaWeldSystem.MainDeviceControl.DeviceState;
+using AdaWeldSystem.Comm.SystemComm;
 
-namespace AdaWeldSystem.MainDeviceControl.FlowState
+namespace AdaWeldSystem.MainDeviceControl.DeviceStateApiCore
 {
     /// <summary>子设备流程基类（非泛型，17 项契约）。</summary>
     /// <remarks>不自带线程（线程归 DeviceControlWork）；FlowProcess 各 case 内由 bool 判定推进，推进前必须调用 ResetWorkTime()。</remarks>

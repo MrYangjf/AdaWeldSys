@@ -1,10 +1,11 @@
-using AdaWeldSystem.Comm;
 using AdaWeldSystem.LineLaserCam;
-using AdaWeldSystem.LineLaserCam.Data;
+using AdaWeldSystem.LineLaserCam.ILineLaser;
+using AdaWeldSystem.PCLOperate.Models;
 using Emgu.CV;
 using System;
 using System.Drawing;
 using System.Drawing.Drawing2D;
+using AdaWeldSystem.Comm.SystemComm;
 
 namespace AdaWeldSystem.EmguALG.LineLaserContour
 {
@@ -229,7 +230,7 @@ namespace AdaWeldSystem.EmguALG.LineLaserContour
                         g.DrawLines(pen, points);
                     }
 
-                    if (result != null && result.Valid)
+                    if (result.Valid)
                     {
                         PointF fp = trans(result.FeatureY, result.FeatureZ);
                         using (var penFeature = new Pen(Color.Red, 8f))

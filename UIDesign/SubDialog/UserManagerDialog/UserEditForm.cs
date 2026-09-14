@@ -1,18 +1,18 @@
-using AdaWeldSystem.Comm;
-using AdaWeldSystem.SqlLiteDatabase;
 using AntdUI;
 using System;
 using System.Data;
 using System.Windows.Forms;
+using AdaWeldSystem.Comm.SystemComm;
+using AdaWeldSystem.SQLiteDBControl.Helpers;
 
-namespace AdaWeldSystem.Sub2UI
+namespace AdaWeldSystem.UIDesign.SubDialog.UserManagerDialog
 {
     /// <summary>
     /// 用户管理界面 - 支持修改各级用户密码和用户等级
     /// </summary>
     public partial class UserEditForm : UserControl
     {
-        private readonly AuthManager _authManager;
+        private readonly AuthHelper _authHelper;
         // 与 uiDataGridView1.Binding() 绑定的强类型列表（替代原 DataTable + AutoGenerateColumns）
         private AntdUI.AntList<UserRow> _rows;
         private UserRow _selectedUserRow;
@@ -29,7 +29,7 @@ namespace AdaWeldSystem.Sub2UI
             InitTableColumns();
             _rows = new AntdUI.AntList<UserRow>();
             uiDataGridView1.Binding(_rows);
-            _authManager = GlobalCommData.mAuthManager;
+            _authHelper = GlobalCommData.mAuthHelper;
             LoadUserList();
         }
 
@@ -54,7 +54,7 @@ namespace AdaWeldSystem.Sub2UI
         {
             try
             {
-                DataTable userTable = _authManager.GetAllUsers();
+                DataTable userTable = _authHelper.GetAllUsers();
                 _rows.Clear();
                 foreach (DataRow r in userTable.Rows)
                 {
@@ -83,7 +83,7 @@ namespace AdaWeldSystem.Sub2UI
                 return;
             }
 
-            if (!_authManager.IsUserExist(userName))
+            if (!_authHelper.IsUserExist(userName))
             {
                 AntdUI.Message.error(this.Window, "用户不存在");
                 return;
@@ -101,7 +101,7 @@ namespace AdaWeldSystem.Sub2UI
                     return;
                 }
 
-                if (!_authManager.UpdatePassword(userName, password))
+                if (!_authHelper.UpdatePassword(userName, password))
                 {
                     AntdUI.Message.error(this.Window, "密码修改失败");
                     return;
@@ -110,7 +110,7 @@ namespace AdaWeldSystem.Sub2UI
 
             // 修改用户等级
             string newLevel = uiComboBoxLevel.SelectedIndex.ToString();
-            if (!_authManager.UpdateUserLevel(userName, newLevel))
+            if (!_authHelper.UpdateUserLevel(userName, newLevel))
             {
                 AntdUI.Message.error(this.Window, "用户等级修改失败");
                 return;

@@ -8,7 +8,6 @@ using Emgu.CV;
 using Emgu.CV.CvEnum;
 using Emgu.CV.Structure;
 using Emgu.CV.Util;
-using AdaWeldSystem.EmguALG;                 // ImageAlgorithm（算子层静态库）
 using AdaWeldSystem.EmguALG.Core;            // AlgorithmBase / AlgorithmResult
 using AdaWeldSystem.FileOperate;
 using AdaWeldSystem.PCLOperate.Models;

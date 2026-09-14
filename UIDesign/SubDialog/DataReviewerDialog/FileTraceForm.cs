@@ -1,11 +1,11 @@
-using AdaWeldSystem.ProductFileManager;
+using AdaWeldSystem.ProductFileControl;
 using AntdUI;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Windows.Forms;
 
-namespace AdaWeldSystem.Sub3UI
+namespace AdaWeldSystem.UIDesign.SubDialog.DataReviewerDialog
 {
     /// <summary>
     /// 文件追溯对话框
@@ -81,7 +81,7 @@ namespace AdaWeldSystem.Sub3UI
             _selectedTemp = null;
 
             // 加载正常记录文件
-            List<string> recordFiles = RunRecordManager.Instance.GetRecordFiles();
+            List<string> recordFiles = ProductFileRecordManager.Instance.GetRecordFiles();
             int no = 1;
             foreach (var file in recordFiles)
             {
@@ -92,7 +92,7 @@ namespace AdaWeldSystem.Sub3UI
             }
 
             // 加载临时文件
-            List<string> tempFiles = RunRecordManager.Instance.GetTempFiles();
+            List<string> tempFiles = ProductFileRecordManager.Instance.GetTempFiles();
             no = 1;
             foreach (var file in tempFiles)
             {
@@ -188,7 +188,7 @@ namespace AdaWeldSystem.Sub3UI
             try
             {
                 string outputName = string.Format("Recovered_{0:yyyyMMdd_HHmmss}", DateTime.Now);
-                var resultFiles = RunRecordManager.Instance.ConvertTempToNormal(_selectedTemp.FilePath, outputName);
+                var resultFiles = ProductFileRecordManager.Instance.ConvertTempToNormal(_selectedTemp.FilePath, outputName);
 
                 if (resultFiles.Count > 0)
                 {

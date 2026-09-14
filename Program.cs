@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
+using AdaWeldSystem.UIDesign.MainWindow;
 
 namespace AdaWeldSystem
 {

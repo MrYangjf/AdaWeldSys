@@ -4,7 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Windows.Forms;
 
-namespace AdaWeldSystem.Sub3UI
+namespace AdaWeldSystem.UIDesign.SubDialog.IntelligentLaserDialog
 {
     /// <summary>
     /// 英莱相机扫描结果对话框：Table 展示网口扫描到的相机（IP/序列号/软件版本/传感器类型），

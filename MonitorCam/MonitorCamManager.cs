@@ -1,10 +1,10 @@
-﻿using AdaWeldSystem.Comm;
-using AdaWeldSystem.MonitorCam.IMonitorCam;
+﻿using AdaWeldSystem.MonitorCam.IMonitorCam;
 using AdaWeldSystem.MonitorCam.MecaVisionCam;
 using Emgu.CV;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using AdaWeldSystem.Comm.SystemComm;
 
 namespace AdaWeldSystem.MonitorCam
 {

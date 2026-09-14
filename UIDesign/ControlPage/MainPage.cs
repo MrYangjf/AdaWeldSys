@@ -1,6 +1,4 @@
-﻿using AdaWeldSystem.Comm;
-using AdaWeldSystem.MainDeviceControl.DeviceState;
-using AdaWeldSystem.MainDeviceControl.DeviceWorkflow;
+﻿using AdaWeldSystem.MainDeviceControl.DeviceWorkflow;
 using AdaWeldSystem.WeldParamControl;
 using AdaWeldSystem.LineLaserCam;
 using AdaWeldSystem.LineLaserCam.ILineLaser;
@@ -10,9 +8,12 @@ using System;
 using System.Drawing;
 using System.Threading;
 using System.Windows.Forms;
+using AdaWeldSystem.Comm.SystemComm;
+using AdaWeldSystem.MainDeviceControl;
+using AdaWeldSystem.MainDeviceControl.DeviceStateApiCore;
 //using ScottPlot;
 
-namespace AdaWeldSystem.Sub1UI
+namespace AdaWeldSystem.UIDesign.ControlPage
 {
     /// <summary>
     /// 主页面

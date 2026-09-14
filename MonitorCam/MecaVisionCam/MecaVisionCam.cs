@@ -1,10 +1,10 @@
-﻿using AdaWeldSystem.Comm;
-using AdaWeldSystem.MonitorCam.IMonitorCam;
+﻿using AdaWeldSystem.MonitorCam.IMonitorCam;
 using Emgu.CV;
 using Emgu.CV.CvEnum;
 using MVSDK;
 using System;
 using System.Runtime.InteropServices;
+using AdaWeldSystem.Comm.SystemComm;
 
 // CameraHandle 在 MVSDK.cs 中以文件级别名定义（using 别名不跨文件），消费方须自行声明同一别名
 using CameraHandle = System.Int32;

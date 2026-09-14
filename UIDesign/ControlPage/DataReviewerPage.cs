@@ -1,15 +1,15 @@
 using AdaWeldSystem.WeldParamControl;
-using AdaWeldSystem.ProductFileManager;
-using AdaWeldSystem.Sub3UI;
+using AdaWeldSystem.ProductFileControl;
 using AntdUI;
 using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
 using System.Windows.Forms;
+using AdaWeldSystem.UIDesign.SubDialog.DataReviewerDialog;
 
 
-namespace AdaWeldSystem.Sub1UI
+namespace AdaWeldSystem.UIDesign.ControlPage
 {
     /// <summary>
     /// 生产数据界面
@@ -92,7 +92,7 @@ namespace AdaWeldSystem.Sub1UI
         }
 
         /// <summary>
-        /// 根据日历日期，从 RunRecordManager 的记录目录加载当天的 pDat 生产文件列表
+        /// 根据日历日期，从 ProductFileRecordManager 的记录目录加载当天的 pDat 生产文件列表
         /// </summary>
         private void InitPCLDir(DateTime InputDateTime)
         {
@@ -101,7 +101,7 @@ namespace AdaWeldSystem.Sub1UI
             FilestrArray = new string[0];
 
             // 依据所选日期索引 yyyyMMdd 生产数据文件夹
-            string dateDir = RunRecordManager.Instance.GetDateRecordDirectoryPath(InputDateTime);
+            string dateDir = ProductFileRecordManager.Instance.GetDateRecordDirectoryPath(InputDateTime);
             if (!Directory.Exists(dateDir))
             {
                 AntdUI.Message.warn(System.Windows.Forms.Form.ActiveForm, string.Format("未找到 {0} 的生产数据文件夹：\r\n{1}", InputDateTime.ToString("yyyy-MM-dd"), dateDir));
@@ -111,7 +111,7 @@ namespace AdaWeldSystem.Sub1UI
             List<string> files;
             try
             {
-                files = RunRecordManager.Instance.GetWeldActionRecordFiles(InputDateTime);
+                files = ProductFileRecordManager.Instance.GetWeldActionRecordFiles(InputDateTime);
             }
             catch
             {
@@ -278,7 +278,7 @@ namespace AdaWeldSystem.Sub1UI
             if (sel == null) return;
             string path = sel.FileName;
 
-            List<WeldActionRecord> records = RunRecordManager.Instance.ParsePDatRecords(path);
+            List<WeldActionRecord> records = ProductFileRecordManager.Instance.ParsePDatRecords(path);
             if (records == null || records.Count == 0) return;
 
             SeamWidthChartVar = new ChartVar();

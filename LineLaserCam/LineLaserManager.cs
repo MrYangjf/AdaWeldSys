@@ -1,14 +1,14 @@
 ﻿using System;
 using System.Collections.Generic;
-using AdaWeldSystem.Comm;
 using AdaWeldSystem.EmguALG.LineLaserContour;
 using AdaWeldSystem.LineLaserCam.ILineLaser;
 using AdaWeldSystem.LineLaserCam.IntelligentLaserCam;
 using AdaWeldSystem.LineLaserCam.VirtualCam;
-using AdaWeldSystem.MotionControl.IMotion;
 using AdaWeldSystem.PCLOperate.Models;
-using AdaWeldSystem.ProductFileManager;
+using AdaWeldSystem.ProductFileControl;
 using Emgu.CV;
+using AdaWeldSystem.Comm.SystemComm;
+using AdaWeldSystem.FileOperate;
 
 namespace AdaWeldSystem.LineLaserCam
 {
@@ -116,224 +116,18 @@ namespace AdaWeldSystem.LineLaserCam
         #endregion
     }
 
-    /// <summary>焊缝跟踪 PVT 点下发器（Y 轴跟随）</summary>
-    /// <remarks>
-    /// 把线激光识别结果（焊缝特征点横向坐标）换算为 Y 轴 PVT 轨迹点，按台达 **B 套流式**
-    /// 方式持续下载：PVT_Begin_Move 起段 → 按缓冲区水位 PVT_Continue_Move 续喂
-    /// （台达无虚拟轴，ECAM2 SourceType 只有 0/1 两种取值，机器人 X→Y 跟随只能走 PVT B 套）。
-    /// 依赖注入面只有 <see cref="IPVTMotion"/> 一个能力抽象，不感知控制器型号、不做脉冲换算
-    /// （换算在运控 L3 完成）；未实现 PVT 的轴返回 NotSupported，不会连坐编译。
-    /// 时间基准与速度前馈为待实测参数：Time 取相邻帧实测间隔（相对时间模式），
-    /// Vel 取位置一阶差分，现场标定后再固化（ADR-035）。
-    /// </remarks>
-    public class SeamPvtFeeder
-    {
-        #region 私有变量
-
-        private const string Tag = "焊缝跟踪";
-
-        /// <summary>台达 PVT 点表容量上限，超过后必须丢弃最旧点防止内存膨胀</summary>
-        private const int MaxPending = 8000;
-
-        private readonly List<PVTPoint> _pending;
-        private readonly object _lock = new object();
-
-        private IPVTMotion _axis;
-        private bool _running;
-        private double _lastPos;
-        private bool _hasLastPos;
-        private ushort _lastCode;
-
-        #endregion
-
-        #region 公共变量
-
-        /// <summary>单批下发点数，攒够即下发</summary>
-        public int BatchSize { get; private set; }
-
-        /// <summary>实测帧率不可用时的默认帧间隔（秒）</summary>
-        public double DefaultFrameSeconds { get; private set; }
-
-        /// <summary>剩余缓冲区低于此值时不续喂，避免点表溢出</summary>
-        public int MinRemainBuffer { get; private set; }
-
-        /// <summary>PVT 起段后是否处于运动中</summary>
-        public bool IsRunning { get { lock (_lock) { return _running; } } }
-
-        /// <summary>当前待下发的点数</summary>
-        public int PendingCount { get { lock (_lock) { return _pending.Count; } } }
-
-        /// <summary>最近一次下发返回码，0 为成功</summary>
-        public ushort LastErrorCode { get { lock (_lock) { return _lastCode; } } }
-
-        #endregion
-
-        #region 构造函数
-
-        /// <summary>创建 PVT 点下发器</summary>
-        /// <param name="batchSize">单批下发点数</param>
-        /// <param name="defaultFrameSeconds">实测帧率不可用时的默认帧间隔（秒）</param>
-        /// <param name="minRemainBuffer">剩余缓冲区续喂下限</param>
-        public SeamPvtFeeder(int batchSize, double defaultFrameSeconds, int minRemainBuffer)
-        {
-            _pending = new List<PVTPoint>(batchSize * 2);
-            BatchSize = (batchSize < 1) ? 1 : batchSize;
-            DefaultFrameSeconds = (defaultFrameSeconds > 0.0) ? defaultFrameSeconds : 1.0 / 60.0;
-            MinRemainBuffer = (minRemainBuffer < 1) ? 1 : minRemainBuffer;
-        }
-
-        #endregion
-
-        #region 私有函数
-
-        /// <summary>输出日志</summary>
-        /// <param name="message">日志内容</param>
-        /// <param name="level">日志级别</param>
-        private static void Log(string message, MessageLevel level = MessageLevel.Info)
-        {
-            GlobalCommData.ShowLog(Tag, message, level);
-        }
-
-        /// <summary>把待下发点整批下载到轴，水位不足时保留本批继续攒积</summary>
-        /// <param name="isFinal">是否为最后一段</param>
-        private void Flush(bool isFinal)
-        {
-            if (_pending.Count == 0) return;
-            if (_axis == null) return;
-
-            if (_running && !isFinal)
-            {
-                PVTInformation info;
-                ushort query = _axis.GetInformation(out info);
-                if (query == PVTResult.OK && info.RemainBufferSize < MinRemainBuffer) return;
-            }
-
-            PVTPoint[] segment = _pending.ToArray();
-            _pending.Clear();
-
-            ushort code = _running
-                ? _axis.ContinueMove(segment, isFinal)
-                : _axis.BeginMove(segment, PVTTimeMode.Relative, isFinal, false, 0.0);
-
-            _lastCode = code;
-            if (code == PVTResult.OK)
-            {
-                _running = !isFinal;
-                return;
-            }
-
-            _running = false;
-            Log(string.Format("PVT 点下发失败 返回码 0x{0:X} 点数 {1}", code, segment.Length), MessageLevel.Error);
-        }
-
-        #endregion
-
-        #region 公共函数
-
-        /// <summary>注入 Y 轴的 PVT 能力，由运控工作流初始化成功后调用</summary>
-        /// <param name="axis">具备 PVT 能力的轴，传 null 表示撤除注入</param>
-        public void Attach(IPVTMotion axis)
-        {
-            lock (_lock)
-            {
-                Detach();
-                _axis = axis;
-                if (axis != null)
-                {
-                    Log(string.Format("Y 轴 PVT 已注入 批次 {0} 点 帧间隔 {1:F4} 秒", BatchSize, DefaultFrameSeconds));
-                }
-            }
-        }
-
-        /// <summary>收尾下发并撤除注入，停止采集时必须调用</summary>
-        public void Detach()
-        {
-            lock (_lock)
-            {
-                if (_axis != null) Flush(true);
-                _axis = null;
-                _running = false;
-            }
-        }
-
-        /// <summary>清空待下发点与运动状态，不向轴发送任何指令</summary>
-        public void Reset()
-        {
-            lock (_lock)
-            {
-                _pending.Clear();
-                _running = false;
-                _hasLastPos = false;
-                _lastPos = 0.0;
-                _lastCode = PVTResult.OK;
-            }
-        }
-
-        /// <summary>把剩余点标记为最后一段并下发，结束本轮跟踪但保留轴注入</summary>
-        public void FinishSegment()
-        {
-            lock (_lock)
-            {
-                if (_axis == null) return;
-                Flush(true);
-                _running = false;
-                _hasLastPos = false;
-            }
-        }
-
-        /// <summary>更新下发参数，配置重新加载后调用</summary>
-        /// <param name="batchSize">单批下发点数</param>
-        /// <param name="defaultFrameSeconds">实测帧率不可用时的默认帧间隔（秒）</param>
-        /// <param name="minRemainBuffer">剩余缓冲区续喂下限</param>
-        public void SetParameters(int batchSize, double defaultFrameSeconds, int minRemainBuffer)
-        {
-            lock (_lock)
-            {
-                BatchSize = (batchSize < 1) ? 1 : batchSize;
-                DefaultFrameSeconds = (defaultFrameSeconds > 0.0) ? defaultFrameSeconds : 1.0 / 60.0;
-                MinRemainBuffer = (minRemainBuffer < 1) ? 1 : minRemainBuffer;
-            }
-        }
-
-        /// <summary>喂入一帧识别结果，换算为 PVT 点并在满足条件时下发</summary>
-        /// <param name="result">本帧焊缝识别结果，无效帧直接丢弃</param>
-        /// <param name="measuredFps">实测帧率，不可用传 0</param>
-        public void Feed(LineLaserSeamResult result, double measuredFps)
-        {
-            if (!result.Valid) return;
-
-            lock (_lock)
-            {
-                if (_axis == null) return;
-
-                double dt = (measuredFps > 1.0) ? (1.0 / measuredFps) : DefaultFrameSeconds;
-                double pos = result.FeatureY;
-                double vel = _hasLastPos ? ((pos - _lastPos) / dt) : 0.0;
-                _lastPos = pos;
-                _hasLastPos = true;
-
-                if (_pending.Count >= MaxPending)
-                {
-                    _pending.RemoveAt(0);
-                }
-                _pending.Add(new PVTPoint(pos, dt, vel));
-
-                if (_pending.Count >= BatchSize) Flush(false);
-            }
-        }
-
-        #endregion
-    }
-
     /// <summary>线激光管理器</summary>
     /// <remarks>
     /// 面向抽象层编程，具体相机类型（英莱 / 虚拟）仅在本文件的惰性创建处出现，
     /// 全系统取相机实例一律走本管理器，禁止在业务层自行 new 或持有厂商实现类型。
     /// 2026-09-08 职责再分工（ADR-035）：
     /// ① 注册与选中、连接态派生、配置持久化；
-    /// ② 承担全部业务处理——实现层只发 ResultReady / ProfileReady 两个回调，
-    ///    结果侧本类换算 Y 轴 PVT 点并下载，轮廓侧维护轮廓点快照与显示 Mat；
+    /// ② 承担结果与轮廓的业务处理——实现层只发 ResultReady / ProfileReady 两个回调，
+    ///    结果侧本类只缓存并转发，轮廓侧维护轮廓点快照与显示 Mat；
     /// ③ 相机外设（连接 / 激光 / 传感器）由本类代理，工作流不直接接触相机对象。
+    /// 2026-09-11 第三次分工（ADR-044）：
+    /// 结果 → Y 轴轨迹的滤波、标定转换与 PVT 写入迁至 WeldParamControl 的
+    /// SeamTrackingAlgorithm，由运控工作流在控制器流程中调用，本类不再直接写 PVT。
     /// </remarks>
     public class LineLaserManager : IDisposable
     {
@@ -350,8 +144,6 @@ namespace AdaWeldSystem.LineLaserCam
         private bool _working;
         private bool _disposed;
 
-        // 结果处理链路：Y 轴 PVT 点计算与流式下载
-        private readonly SeamPvtFeeder _pvtFeeder;
         private LineLaserSeamResult _lastResult;
 
         // 轮廓处理链路：点缓冲（双缓冲快照）+ 显示 Mat 渲染
@@ -489,7 +281,6 @@ namespace AdaWeldSystem.LineLaserCam
             Config = new LineLaserConfig();
             Config.LoadConfig();
 
-            _pvtFeeder = new SeamPvtFeeder(Config.PvtBatchSize, Config.PvtFrameSeconds, Config.PvtMinRemainBuffer);
             _renderer = new LineLaserContourAlgorithm();
             _front = new ProfileSnapshot();
             _back = new ProfileSnapshot();
@@ -515,8 +306,6 @@ namespace AdaWeldSystem.LineLaserCam
         /// <summary>把配置套用到已创建的相机实例</summary>
         private void ApplyConfig()
         {
-            _pvtFeeder.SetParameters(Config.PvtBatchSize, Config.PvtFrameSeconds, Config.PvtMinRemainBuffer);
-
             DisplayEnabled = Config.DisplayEnabled;
             DisplayFps = Config.DisplayFps;
             ConvertMatEnabled = Config.ConvertMatEnabled;
@@ -552,13 +341,12 @@ namespace AdaWeldSystem.LineLaserCam
             if (handler != null) handler(this, e);
         }
 
-        /// <summary>结果处理：缓存结果、换算 Y 轴 PVT 点并下载，随后向外转发事件</summary>
+        /// <summary>结果处理：缓存结果并向外转发事件（Y 轴 PVT 由运控工作流经 WeldParamControl 轨迹构造器写入）</summary>
         /// <param name="sender">事件源相机</param>
         /// <param name="e">结果事件参数</param>
         private void OnCameraResultReady(object sender, LineLaserResultEventArgs e)
         {
             _lastResult = e.Result;
-            _pvtFeeder.Feed(e.Result, e.MeasuredFps);
 
             EventHandler<LineLaserResultEventArgs> handler = ResultReady;
             if (handler != null) handler(this, e);
@@ -572,7 +360,7 @@ namespace AdaWeldSystem.LineLaserCam
             if (e.Cloud != null)
             {
                 // 数据记录：AddFrame 内部已有 ClonePointCloud + lock，未录制时直接返回零开销
-                RunRecordManager.Instance.AddFrame(e.Cloud);
+                ProductFileRecordManager.Instance.AddFrame(e.Cloud);
                 UpdateProfileSnapshot(e.Cloud, e.MeasuredFps);
                 if (DisplayEnabled) RenderDisplayFrame(e.Cloud);
             }
@@ -782,27 +570,6 @@ namespace AdaWeldSystem.LineLaserCam
         {
             if (_working == working) return;
             _working = working;
-
-            if (working)
-            {
-                _pvtFeeder.Reset();
-            }
-            else
-            {
-                // 收尾：把剩余点标记为最后一段下发，避免轴停在半截轨迹上
-                _pvtFeeder.FinishSegment();
-            }
-        }
-
-        /// <summary>注入 Y 轴的 PVT 能力，由运控工作流初始化成功后调用</summary>
-        /// <remarks>
-        /// 依赖注入面只有一个能力抽象 <see cref="IPVTMotion"/>，不持有控制器与轴配置对象，
-        /// 未实现 PVT 的轴由抽象层默认实现返回 NotSupported，不影响编译与运行。
-        /// </remarks>
-        /// <param name="yAxis">具备 PVT 能力的 Y 轴，传 null 表示撤除注入</param>
-        public void AttachYAxis(IPVTMotion yAxis)
-        {
-            _pvtFeeder.Attach(yAxis);
         }
 
         /// <summary>设置显示处理开关，界面按需开启，默认关闭</summary>
@@ -848,7 +615,6 @@ namespace AdaWeldSystem.LineLaserCam
             if (_disposed) return;
             _disposed = true;
 
-            _pvtFeeder.Detach();
             _renderer.Dispose();
 
             foreach (LineLaserCameraBase camera in Cameras.GetAll())

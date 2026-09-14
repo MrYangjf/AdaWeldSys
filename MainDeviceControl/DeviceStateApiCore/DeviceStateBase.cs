@@ -1,7 +1,7 @@
 ﻿using System;
-using AdaWeldSystem.Comm;
+using AdaWeldSystem.Comm.SystemComm;
 
-namespace AdaWeldSystem.MainDeviceControl.DeviceState
+namespace AdaWeldSystem.MainDeviceControl.DeviceStateApiCore
 {
     /// <summary>子设备连接态（两态，ConnectOn/ConnectOff 联动）。</summary>
     public enum SubDeviceState

@@ -3,7 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Windows.Forms;
 
-namespace AdaWeldSystem.Sub1UI
+namespace AdaWeldSystem.UIDesign.ControlPage
 {
     /// <summary>
     /// 统一导航页面（替代 ImagePage / ParamPage）。
@@ -90,7 +90,7 @@ namespace AdaWeldSystem.Sub1UI
             }
 
             uiTabControl1.SelectedIndex = 0;
-            uiNavMenu1.SelectIndex(0, 0, true);
+            uiNavMenu1.SelectIndex(0,  true);
         }
 
         /// <summary>
@@ -109,7 +109,7 @@ namespace AdaWeldSystem.Sub1UI
                 LoadTabsWithItems(tabs[i].text, tabs[i].control, icon, i);
             }
             uiTabControl1.SelectedIndex = 0;
-            uiNavMenu1.SelectIndex(0, 0, true);
+            uiNavMenu1.SelectIndex(0,  true);
         }
 
         /// <summary>

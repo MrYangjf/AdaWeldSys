@@ -1,5 +1,4 @@
-using AdaWeldSystem.Comm;
-using AdaWeldSystem.Comm.Robot.KUKARobot;
+using AdaWeldSystem.Comm.Communication;
 using AdaWeldSystem.FileOperate;
 using AntdUI;
 using System;
@@ -8,8 +7,10 @@ using System.IO;
 using System.Linq;
 using System.Windows.Forms;
 using System.Xml.Linq;
+using AdaWeldSystem.Comm.Communication.Implementations;
+using AdaWeldSystem.Comm.SystemComm;
 
-namespace AdaWeldSystem.Sub2UI
+namespace AdaWeldSystem.UIDesign.TabPage
 {
     /// <summary>
     /// 文件编辑器页面，提供对服务器、客户端、发送及接收XML文件的树形浏览与属性编辑功能。

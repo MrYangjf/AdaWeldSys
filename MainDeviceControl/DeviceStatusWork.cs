@@ -1,13 +1,16 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Threading;
-using AdaWeldSystem.Comm;
-using AdaWeldSystem.Comm.PLC.Siemens;
-using AdaWeldSystem.MainDeviceControl.DeviceState;
+using AdaWeldSystem.Comm.Communication;
 using AdaWeldSystem.MotionControl;
 using S7.Net;
+using AdaWeldSystem.Comm.Communication.Implementations;
+using AdaWeldSystem.Comm.SystemComm;
+using AdaWeldSystem.FileOperate;
+using AdaWeldSystem.MainDeviceControl.DeviceStateApiCore;
+using AdaWeldSystem.MainDeviceControl.DeviceWorkflow;
 
-namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
+namespace AdaWeldSystem.MainDeviceControl
 {
     /// <summary>设备安全/IO/状态管控（单例，三常驻线程）。</summary>
     /// <remarks>thIOWork 安全互锁与 IO 轮询、thEMGWork 急停处置、thLightStatusWork 三色灯反射；异常经 DeviceControlWork 单一控制源变更运行态（ADR-023）。</remarks>
@@ -162,7 +165,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         {
             var cfg = _checker.Thresholds;
             var comm = GlobalCommData.mCommunicationManager;
-            var plc = comm != null && comm.IsPlcEnabled ? comm.PlcManager : null;
+            var plc = comm != null && comm.IsPlcEnabled ? comm.S7Comm : null;
             if (plc == null) return false;
             return !plc.ReadBit(DataType.DataBlock, cfg.PlcDb, 0, cfg.EmergencyStopBit);
         }
@@ -374,7 +377,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             var cfg = _checker.Thresholds;
             if (cfg.StatusLampDb <= 0) return;
             var comm = GlobalCommData.mCommunicationManager;
-            var plc = comm != null && comm.IsPlcEnabled ? comm.PlcManager : null;
+            var plc = comm != null && comm.IsPlcEnabled ? comm.S7Comm : null;
             if (plc == null) return;
 
             bool green = false, yellow = false, red = false, buzzer = false;
@@ -646,7 +649,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         /// <param name="db">数据块号</param>
         /// <param name="word">字节地址</param>
         /// <returns>该地址的 WORD 值</returns>
-        private static ushort ReadWord(S7PLCCommunication plc, int db, int word)
+        private static ushort ReadWord(SiemensS7Comm plc, int db, int word)
         {
             return plc.Read<ushort>(string.Format("DB{0}.DBW{1}", db, word));
         }
@@ -680,7 +683,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         /// <summary>检查硬件互锁项（急停除外，由 EMGWork 专责）</summary>
         /// <param name="plc">PLC 通讯实例</param>
         /// <param name="result">待写入的检查结果</param>
-        private void CheckPlc(S7PLCCommunication plc, SafetyInterlockResult result)
+        private void CheckPlc(SiemensS7Comm plc, SafetyInterlockResult result)
         {
             var t = _thresholds;
             try
@@ -722,8 +725,8 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
 
             if (!GlobalCommData.mCommunicationManager.IsRobotEnabled) return;
 
-            var robot = GlobalCommData.mCommunicationManager.RobotManager;
-            bool online = robot != null && (robot.IsRSIConnected || robot.IsEKIConnected);
+            var commMgr = GlobalCommData.mCommunicationManager;
+            bool online = commMgr != null && commMgr.RobotConnected;
             if (!online)
             {
                 result.FailedItems.Add("机器人未在线");
@@ -759,7 +762,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             result.CheckTime = DateTime.Now;
 
             var comm = GlobalCommData.mCommunicationManager;
-            var plc = comm != null ? comm.PlcManager : null;
+            var plc = comm != null ? comm.S7Comm : null;
             if (plc != null && comm.IsPlcEnabled)
             {
                 CheckPlc(plc, result);

@@ -4,17 +4,18 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
-using AdaWeldSystem.Comm;
-using AdaWeldSystem.Comm.Robot.KUKARobot;
+using AdaWeldSystem.Comm.Communication;
 using AdaWeldSystem.FileOperate;
 using AdaWeldSystem.LaserWeldHead;
 using AdaWeldSystem.LineLaserCam.VirtualCam;
 using AdaWeldSystem.LineLaserCam;
-using AdaWeldSystem.MainDeviceControl.DeviceState;
-using AdaWeldSystem.MainDeviceControl.FlowState;
 using AdaWeldSystem.MotionControl;
+using AdaWeldSystem.Comm.Communication.Implementations;
+using AdaWeldSystem.Comm.SystemComm;
+using AdaWeldSystem.MainDeviceControl.DeviceStateApiCore;
+using AdaWeldSystem.MainDeviceControl.DeviceWorkflow;
 
-namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
+namespace AdaWeldSystem.MainDeviceControl
 {
     /// <summary>主设备运行态变更事件参数。</summary>
     public class MainDeviceStatusChangedEventArgs : EventArgs
@@ -189,8 +190,6 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         private double _coordOffsetY;
         private double _coordOffsetZ;
 
-        /// <summary>机器人通讯管理器（上电初始化第 5 步就绪后赋值，来自顶层 Comm）。</summary>
-        private KUKARobotManager RobotManager { get; set; }
 
         /// <summary>运动管理器（构造函数获取，供第 2 步初始化使用，原档 R013）。</summary>
         private MontionManager Motion { get; set; }
@@ -546,9 +545,9 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         {
             while (!IsCloseWork)
             {
-                var robot = RobotManager;
+                var comm = GlobalCommData.mCommunicationManager;
                 // 通讯未开启成功：静默等待，不检测心跳
-                if (robot == null || !(robot.IsRSIConnected || robot.IsEKIConnected))
+                if (comm == null || !comm.IsRobotEnabled || !comm.RobotConnected)
                 {
                     _robotOnline = false;
                     Thread.Sleep(HeartBeatIntervalMs);
@@ -560,7 +559,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
                 Thread.Sleep(HeartBeatIntervalMs);
 
                 // 在线期间连接断开：心跳失效，停检 + 重连
-                if (robot.IsRSIConnected || robot.IsEKIConnected) continue;
+                if (comm.RobotConnected) continue;
                 Log("机器人通讯心跳失效 停止心跳检测 触发通讯重连", MessageLevel.Warning);
                 if (TryReconnectRobotComm())
                 {
@@ -577,16 +576,14 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         private bool TryReconnectRobotComm()
         {
             var comm = GlobalCommData.mCommunicationManager;
-            if (comm == null || !comm.IsRobotEnabled || comm.RobotManager == null) return false;
+            if (comm == null || !comm.IsRobotEnabled) return false;
             for (int i = 1; i <= 3; i++)
             {
                 if (IsCloseWork) return false;
                 Thread.Sleep(HeartReconnectIntervalMs);
                 try
                 {
-                    bool ok = comm.RobotCommMode == CommunicationManager.RobotCommModeType.RSI
-                        ? comm.RobotManager.StartRSI()
-                        : comm.RobotManager.OpenEKI();
+                    bool ok = comm.ConnectRobot();
                     if (ok)
                     {
                         _robotOnline = true;
@@ -726,26 +723,10 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             {
                 comm.InitializeRobotComm();
 
-                RobotManager = comm.RobotManager;
-                if (RobotManager == null)
-                {
-                    Log("RobotManager 未就绪", MessageLevel.Warning);
-                    Log("机器人通讯初始化失败", MessageLevel.Warning);
-                    return;
-                }
-
-                RobotManager.DataReceived += OnRobotDataReceived;
-                bool connected;
-                if (comm.RobotCommMode == CommunicationManager.RobotCommModeType.RSI)
-                {
-                    connected = RobotManager.StartRSI();
-                    Log(string.Format("机器人通讯模式 RSI 连接结果 {0}", connected));
-                }
-                else
-                {
-                    connected = RobotManager.OpenEKI();
-                    Log(string.Format("机器人通讯模式 EKI 连接结果 {0}", connected));
-                }
+                comm.RobotDataReceived += OnRobotDataReceived;
+                bool connected = comm.ConnectRobot();
+                Log(string.Format("机器人通讯模式 {0} 连接结果 {1}",
+                    comm.RobotCommMode == CommunicationManager.RobotCommModeType.RSI ? "RSI" : "EKI", connected));
 
                 _robotOnline = connected;
                 if (connected)
@@ -767,8 +748,8 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             {
                 var comm = GlobalCommData.mCommunicationManager;
                 if (comm == null) return;
-                if (comm.IsRobotEnabled && comm.RobotManager != null)
-                    comm.RobotManager.SendRobotData(new KUKARobotData { EStr = command });
+                if (comm.IsRobotEnabled)
+                    comm.SendRobotData(new KUKARobotData { EStr = command });
             }
             catch (Exception ex)
             {
@@ -881,7 +862,8 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         /// <returns>在位返回 true；管理器未就绪视为不在位</returns>
         private bool IsRobotReachable()
         {
-            return RobotManager != null && (RobotManager.IsRSIConnected || RobotManager.IsEKIConnected);
+            var comm = GlobalCommData.mCommunicationManager;
+            return comm != null && comm.IsRobotEnabled && comm.RobotConnected;
         }
 
         /// <summary>长动作链中止判定：运行态已被抢占则记一次中止日志（范式 M5 状态前置问询）。</summary>
@@ -1968,7 +1950,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             ClearAllVirtualIo();
             SimTestWorkClose();
             GlobalCommData.CommunicationCommandReceived -= OnCommRecived;
-            if (RobotManager != null) RobotManager.DataReceived -= OnRobotDataReceived;
+            GlobalCommData.mCommunicationManager.RobotDataReceived -= OnRobotDataReceived;
         }
 
         #endregion

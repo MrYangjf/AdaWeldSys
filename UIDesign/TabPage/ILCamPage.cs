@@ -1,11 +1,7 @@
-﻿using AdaWeldSystem.Comm;
-using AdaWeldSystem.MainDeviceControl.DeviceWorkflow;
-using AdaWeldSystem.MainDeviceControl.DeviceState;
-using AdaWeldSystem.EmguALG;
+﻿using AdaWeldSystem.MainDeviceControl.DeviceWorkflow;
 using AdaWeldSystem.LineLaserCam.IntelligentLaserCam;
 using AdaWeldSystem.LineLaserCam;
 using AdaWeldSystem.LineLaserCam.ILineLaser;
-using AdaWeldSystem.Sub3UI;
 using AntdUI;
 using Emgu.CV;
 using System;
@@ -13,8 +9,12 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Threading;
 using System.Windows.Forms;
+using AdaWeldSystem.Comm.SystemComm;
+using AdaWeldSystem.EmguALG.Core;
+using AdaWeldSystem.MainDeviceControl.DeviceStateApiCore;
+using AdaWeldSystem.UIDesign.SubDialog.IntelligentLaserDialog;
 
-namespace AdaWeldSystem.Sub2UI
+namespace AdaWeldSystem.UIDesign.TabPage
 {
     /// <summary>英莱线激光相机页面</summary>
     public partial class ILCamPage : UserControl

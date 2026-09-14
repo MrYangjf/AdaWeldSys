@@ -1,4 +1,5 @@
 using System;
+using AdaWeldSystem.LaserWeldHead;
 
 namespace AdaWeldSystem.LaserWeldHead.API
 {

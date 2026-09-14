@@ -3,8 +3,9 @@ using AntdUI;
 using System;
 using System.Data;
 using System.Windows.Forms;
+using AdaWeldSystem.SQLiteDBControl.Helpers;
 
-namespace AdaWeldSystem.Sub3UI
+namespace AdaWeldSystem.UIDesign.SubDialog.ParamContolDialog
 {
     public partial class ConfigForm : UserControl
     {
@@ -64,7 +65,7 @@ namespace AdaWeldSystem.Sub3UI
 
             try
             {
-                _allConfigs = WeldDataManager.Instance.mConfigManager.GetAllConfigs();
+                _allConfigs = WeldParamManager.Instance.ConfigHelper.GetAllConfigs();
                 uiPagination1.Total = _allConfigs.Rows.Count;
                 uiPagination1.PageSize = DefaultPageSize;
                 BindPageData(1, DefaultPageSize);
@@ -119,13 +120,13 @@ namespace AdaWeldSystem.Sub3UI
             if (string.IsNullOrWhiteSpace(configId))
                 return;
 
-            if (!WeldDataManager.Instance.mConfigManager.IsConfigExist(configId))
+            if (!WeldParamManager.Instance.ConfigHelper.IsConfigExist(configId))
             {
                 AntdUI.Message.error(this.Window, "当前配置为空！");
                 return;
             }
 
-            WeldDataManager.Instance.SwitchConfig(configId);
+            WeldParamManager.Instance.SwitchConfig(configId);
             var host = this.FindForm();
             if (host != null) host.DialogResult = DialogResult.OK;
         }
@@ -145,19 +146,19 @@ namespace AdaWeldSystem.Sub3UI
             if (AntdUI.Modal.open(new Modal.Config(this.Window, "确认删除", $"请确认需要删除选定配置：{configId}", TType.Info)) != DialogResult.OK)
                 return;
 
-            if (!WeldDataManager.Instance.mConfigManager.IsConfigExist(configId))
+            if (!WeldParamManager.Instance.ConfigHelper.IsConfigExist(configId))
             {
                 AntdUI.Message.error(this.Window, "当前配置为空！");
                 return;
             }
 
-            if (configId == WeldDataManager.Instance.CurrentAutoParamId)
+            if (configId == WeldParamManager.Instance.CurrentAutoParamId)
             {
                 AntdUI.Message.error(this.Window, "不能删除正在使用的配置！");
                 return;
             }
 
-            WeldDataManager.Instance.DeleteConfig(configId);
+            WeldParamManager.Instance.DeleteConfig(configId);
             var host = this.FindForm();
             if (host != null) host.DialogResult = DialogResult.OK;
         }

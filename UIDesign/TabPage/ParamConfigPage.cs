@@ -1,10 +1,11 @@
-using AdaWeldSystem.Sub3UI;
 using AdaWeldSystem.WeldParamControl;
 using AntdUI;
 using System;
 using System.Windows.Forms;
+using AdaWeldSystem.SQLiteDBControl.Helpers;
+using AdaWeldSystem.UIDesign.SubDialog.ParamContolDialog;
 
-namespace AdaWeldSystem.Sub2UI
+namespace AdaWeldSystem.UIDesign.TabPage
 {
     public partial class ParamConfigPage : UserControl
     {
@@ -18,7 +19,7 @@ namespace AdaWeldSystem.Sub2UI
 
         private void ParamAutoPage_Shown(object sender, EventArgs e)
         {
-            if (WeldDataManager.Instance.mAutoParam != null)
+            if (WeldParamManager.Instance.CurrentAutoParam != null)
                 LoadParamOnForm();
         }
 
@@ -33,7 +34,7 @@ namespace AdaWeldSystem.Sub2UI
                 });
             }
 
-            string currentConfig = WeldDataManager.Instance.CurrentAutoParamId;
+            string currentConfig = WeldParamManager.Instance.CurrentAutoParamId;
             if (_paramIdName != currentConfig)
             {
                 _paramIdName = currentConfig;
@@ -49,26 +50,26 @@ namespace AdaWeldSystem.Sub2UI
             if (!this.ShowInputStringDialog(ref configName, "请输入配置名称"))
                 return;
 
-            if (WeldDataManager.Instance.mConfigManager.IsConfigExist(configName))
+            if (WeldParamManager.Instance.ConfigHelper.IsConfigExist(configName))
             {
                 AntdUI.Message.error(System.Windows.Forms.Form.ActiveForm, "已存在当前命名配置");
                 return;
             }
 
-            WeldDataManager.Instance.AddConfig(configName);
+            WeldParamManager.Instance.AddConfig(configName);
             _paramIdName = configName;
 
             LoadAutoParam();
-            if (WeldDataManager.Instance.mAutoParam != null)
+            if (WeldParamManager.Instance.CurrentAutoParam != null)
                 LoadParamOnForm();
         }
 
         private void LoadParamOnForm()
         {
-            if (WeldDataManager.Instance.mAutoParam == null)
+            if (WeldParamManager.Instance.CurrentAutoParam == null)
                 return;
 
-            AutoParam param = WeldDataManager.Instance.mAutoParam;
+            AutoParam param = WeldParamManager.Instance.CurrentAutoParam;
 
             uiComboBox1.Text = param.WeldType.ToString();
             mAutoParamName.Text = param.identityInfo;
@@ -89,10 +90,10 @@ namespace AdaWeldSystem.Sub2UI
 
         private void CollectParamFromForm()
         {
-            if (WeldDataManager.Instance.mAutoParam == null)
+            if (WeldParamManager.Instance.CurrentAutoParam == null)
                 return;
 
-            AutoParam param = WeldDataManager.Instance.mAutoParam;
+            AutoParam param = WeldParamManager.Instance.CurrentAutoParam;
             param.WeldType = (SeamType)uiComboBox1.SelectedIndex;
             param.WireType = WireType.Text;
             param.PlateType = PlateType.Text;
@@ -111,19 +112,19 @@ namespace AdaWeldSystem.Sub2UI
 
         private void RefreshParam()
         {
-            WeldDataManager.Instance.ReloadCurrentParamValues();
+            WeldParamManager.Instance.ReloadCurrentParamValues();
             LoadParamOnForm();
         }
 
         private void SaveParamToDatabase()
         {
-            WeldDataManager.Instance.SaveCurrentAutoParam();
+            WeldParamManager.Instance.SaveCurrentAutoParam();
         }
 
         private void LoadAutoParam()
         {
-            _paramIdName = WeldDataManager.Instance.CurrentAutoParamId;
-            // WeldDataManager 单例已在构造时完成当前配置的加载
+            _paramIdName = WeldParamManager.Instance.CurrentAutoParamId;
+            // WeldParamManager 单例已在构造时完成当前配置的加载
         }
 
         private void btnCorAutoParam_Click(object sender, EventArgs e)
@@ -137,7 +138,7 @@ namespace AdaWeldSystem.Sub2UI
         {
             using (AutoParamForm autoValueForm = new AutoParamForm(this.FindForm() as AntdUI.Window))
             {
-                autoValueForm.LoadConfigData(WeldDataManager.Instance.mAutoParam);
+                autoValueForm.LoadConfigData(WeldParamManager.Instance.CurrentAutoParam);
                 AntdUI.Modal.open(new AntdUI.Modal.Config(this.FindForm(), "自动参数配置", autoValueForm, TType.Info)
                 {
                     CloseIcon = true,

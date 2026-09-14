@@ -1,8 +1,9 @@
 ﻿using System;
-using AdaWeldSystem.Comm;
-using AdaWeldSystem.MainDeviceControl.DeviceState;
-using AdaWeldSystem.MainDeviceControl.FlowState;
 using AdaWeldSystem.WeldParamControl;
+using AdaWeldSystem.Comm.Communication.Implementations;
+using AdaWeldSystem.Comm.SystemComm;
+using AdaWeldSystem.FileOperate;
+using AdaWeldSystem.MainDeviceControl.DeviceStateApiCore;
 
 namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
 {
@@ -97,8 +98,8 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         /// <summary>工艺参数是否已就绪（等价于设备态 Connect）。</summary>
         public bool IsParamReady { get { return _paramReady; } }
 
-        /// <summary>连续失败次数（直通 WeldProcess）。</summary>
-        public int ConsecutiveFailureCount { get { return WeldProcess.Instance.ConsecutiveFailureCount; } }
+        /// <summary>连续失败次数（直通 WeldParamManager）。</summary>
+        public int ConsecutiveFailureCount { get { return WeldParamManager.Instance.ConsecutiveFailureCount; } }
 
         /// <summary>最近一次计算结果（类级复用实例，供 UI 折线图读取）。</summary>
         public WeldParamOutput LastOutput { get { return _output; } }
@@ -113,6 +114,8 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         private WeldParamControlWorkflow()
         {
             Tag = "焊接工艺控制工作流";
+            // 构造即载入本流程配置；线激光引导配置由 WeldParamManager 自持，随其单例构造即就绪
+            LoadConfig();
         }
 
         #endregion
@@ -121,7 +124,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
 
         /// <summary>组装工艺参数输出（功率 / 送丝 / 速度 / 振镜摆幅）。</summary>
         /// <param name="wp">焊接工艺管理器（读取最近一次调整结果）</param>
-        private void FillOutput(WeldProcess wp)
+        private void FillOutput(WeldParamManager wp)
         {
             _output.LaserPower = wp.LaserPowerOutput;
             _output.FeedSpeed = wp.FeedSpeedOutput;
@@ -133,10 +136,10 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         }
 
         /// <summary>计算振镜摆幅。</summary>
-        /// <remarks>TODO 待实现：规划在 AutoParamManager 新增 WeaveWidth 分段表， 落地后改为按焊缝宽度查表取值，与送丝速度/焊接速度/激光功率三张表同样的匹配方式。 当前为占位实现，返回 0（不摆动），不影响其余三项工艺参数下发。</remarks>
+        /// <remarks>TODO 待实现：规划在 AutoParamHelper 新增 WeaveWidth 分段表， 落地后改为按焊缝宽度查表取值，与送丝速度/焊接速度/激光功率三张表同样的匹配方式。 当前为占位实现，返回 0（不摆动），不影响其余三项工艺参数下发。</remarks>
         /// <param name="wp">焊接工艺参数对象</param>
         /// <returns>摆幅值；当前为占位实现，恒返回 0 表示不摆动</returns>
-        private static double CalcGalvoAmplitude(WeldProcess wp)
+        private static double CalcGalvoAmplitude(WeldParamManager wp)
         {
             // TODO 待 WeaveWidth 查找表落地后改为查表匹配
             return 0.0;
@@ -151,7 +154,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             try
             {
                 var comm = GlobalCommData.mCommunicationManager;
-                if (comm == null || !comm.IsRobotEnabled || comm.RobotManager == null)
+                if (comm == null || !comm.IsRobotEnabled)
                 {
                     // 机器人未启用时视为无需下发，不判定为失败
                     return true;
@@ -161,7 +164,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
                 string payload = string.Format("P{0} S{1} V{2} G{3}",
                     output.LaserPower, output.FeedSpeed, output.RobotSpeed, output.GalvoAmplitude);
 
-                comm.RobotManager.SendRobotData(new Comm.Robot.KUKARobot.KUKARobotData { EStr = payload });
+                comm.SendRobotData(new Comm.Communication.KUKARobotData { EStr = payload });
                 return true;
             }
             catch (Exception ex)
@@ -226,7 +229,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         private bool DoCompute()
         {
             SetPhase(WeldParamControlWorkflowState.Computing, "焊接工艺参数计算中");
-            var wp = WeldProcess.Instance;
+            var wp = WeldParamManager.Instance;
 
             if (wp.CurrentAutoParam == null)
             {
@@ -294,9 +297,9 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             SetPhase(WeldParamControlWorkflowState.Initializing, "焊接工艺参数载入开始");
             try
             {
-                WeldDataManager.Instance.ReloadCurrentParamValues();
+                WeldParamManager.Instance.ReloadCurrentParamValues();
 
-                var wp = WeldProcess.Instance;
+                var wp = WeldParamManager.Instance;
                 if (wp.CurrentAutoParam == null)
                 {
                     SetPhase(WeldParamControlWorkflowState.Uninitialized, "未载入有效工艺参数");
@@ -334,7 +337,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         {
             try
             {
-                WeldDataManager.Instance.SwitchConfig(configId);
+                WeldParamManager.Instance.SwitchConfig(configId);
                 return LoadParameters();
             }
             catch (Exception ex)
@@ -444,7 +447,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             TimeOutSeconds = ReadInt("TimeOutSeconds", 30);
         }
 
-        /// <summary>保存本子设备的配置。</summary>
+        /// <summary>保存本子设备的配置，末尾落盘。</summary>
         public override void SaveConfig()
         {
             Config.SetElementValue("TimeOutSeconds", TimeOutSeconds.ToString());
