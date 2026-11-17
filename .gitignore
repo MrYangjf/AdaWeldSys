@@ -25,3 +25,14 @@ Desktop.ini
 # ===== Logs / temp =====
 *.log
 ~$*
+
+# ===== 本地备份/交付包（快照，不入库）=====
+# output 包由 LLMWiki/tools/backup_adaweld.py --output 生成，
+# 是「本轮定稿快照」而非源码 —— 每轮 Phase 3 都会重新生成，不应入库。
+AdaWeldSystem_output_*.tar.gz
+*_backup_*.tar.gz
+
+# ===== 一次性临时产物 =====
+_tmp_*.py
+_tmp_*.txt
+*_out.txt
