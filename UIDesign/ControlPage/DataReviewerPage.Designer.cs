@@ -28,35 +28,30 @@ namespace AdaWeldSystem.UIDesign.ControlPage
         /// </summary>
         private void InitializeComponent()
         {
-            this.components = new System.ComponentModel.Container();
             this.panelRight = new AntdUI.Panel();
-            this.uiContextMenuStrip2 = new System.Windows.Forms.ContextMenuStrip(this.components);
-            this.SetRange = new System.Windows.Forms.ToolStripMenuItem();
             this.uiGridPanelRight = new AntdUI.GridPanel();
             this.btnRenerView = new AntdUI.Button();
-            this.uiTrackBar1 = new AntdUI.Slider();
             this.uiSymbolLabel1 = new AntdUI.Label();
             this.formsPlotData = new ScottPlot.FormsPlot();
-            this.uiFlowLayoutPanel1 = new AntdUI.FlowPanel();
-            this.chkSeamWidth = new AntdUI.Checkbox();
-            this.chkRobotSpeed = new AntdUI.Checkbox();
-            this.chkFeedSpeed = new AntdUI.Checkbox();
-            this.chkLaserPower = new AntdUI.Checkbox();
+            this.SelectFlowPanel = new AntdUI.FlowPanel();
+            this.selSeriesGroup = new AntdUI.Select();
             this.uiDataGridView1 = new AntdUI.Table();
-            this.uiContextMenuStrip1 = new System.Windows.Forms.ContextMenuStrip(this.components);
-            this.ShowData = new System.Windows.Forms.ToolStripMenuItem();
             this.pagination1 = new AntdUI.Pagination();
             this.panelLeft = new AntdUI.Panel();
-            this.divider2 = new AntdUI.Divider();
-            this.uiCalendar1 = new AntdUI.DatePicker();
+            this.gridPanel1 = new AntdUI.GridPanel();
             this.BtnRecordSetting = new AntdUI.Button();
+            this.divider2 = new AntdUI.Divider();
+            this.btnSelectInvert = new AntdUI.Button();
+            this.btnSelectNone = new AntdUI.Button();
+            this.btnSelectAll = new AntdUI.Button();
+            this.btnRefreshDate = new AntdUI.Button();
+            this.uiDateRange = new AntdUI.DatePickerRange();
             this.tableLayoutPanel2 = new System.Windows.Forms.TableLayoutPanel();
             this.panelRight.SuspendLayout();
-            this.uiContextMenuStrip2.SuspendLayout();
             this.uiGridPanelRight.SuspendLayout();
-            this.uiFlowLayoutPanel1.SuspendLayout();
-            this.uiContextMenuStrip1.SuspendLayout();
+            this.SelectFlowPanel.SuspendLayout();
             this.panelLeft.SuspendLayout();
+            this.gridPanel1.SuspendLayout();
             this.tableLayoutPanel2.SuspendLayout();
             this.SuspendLayout();
             // 
@@ -64,84 +59,53 @@ namespace AdaWeldSystem.UIDesign.ControlPage
             // 
             this.panelRight.Back = System.Drawing.Color.FromArgb(((int)(((byte)(255)))), ((int)(((byte)(255)))), ((int)(((byte)(255)))));
             this.panelRight.BorderColor = System.Drawing.Color.FromArgb(((int)(((byte)(217)))), ((int)(((byte)(217)))), ((int)(((byte)(217)))));
-            this.panelRight.ContextMenuStrip = this.uiContextMenuStrip2;
             this.panelRight.Controls.Add(this.uiGridPanelRight);
             this.panelRight.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.panelRight.Location = new System.Drawing.Point(253, 3);
+            this.panelRight.Location = new System.Drawing.Point(387, 3);
             this.panelRight.Name = "panelRight";
             this.panelRight.Padding = new System.Windows.Forms.Padding(5);
             this.panelRight.Shadow = 5;
             this.panelRight.ShadowColor = System.Drawing.Color.FromArgb(((int)(((byte)(0)))), ((int)(((byte)(0)))), ((int)(((byte)(0)))));
             this.panelRight.ShadowOpacity = 0.2F;
             this.panelRight.ShadowOpacityAnimation = true;
-            this.panelRight.Size = new System.Drawing.Size(996, 564);
+            this.panelRight.Size = new System.Drawing.Size(1530, 914);
             this.panelRight.TabIndex = 3;
             this.panelRight.Text = "panelRight";
-            // 
-            // uiContextMenuStrip2
-            // 
-            this.uiContextMenuStrip2.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(243)))), ((int)(((byte)(249)))), ((int)(((byte)(255)))));
-            this.uiContextMenuStrip2.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
-            this.uiContextMenuStrip2.ImageScalingSize = new System.Drawing.Size(20, 20);
-            this.uiContextMenuStrip2.Items.AddRange(new System.Windows.Forms.ToolStripItem[] {
-            this.SetRange});
-            this.uiContextMenuStrip2.Name = "uiContextMenuStrip1";
-            this.uiContextMenuStrip2.Size = new System.Drawing.Size(199, 28);
-            // 
-            // SetRange
-            // 
-            this.SetRange.Name = "SetRange";
-            this.SetRange.Size = new System.Drawing.Size(198, 24);
-            this.SetRange.Text = "设置显示区间";
-            this.SetRange.Click += new System.EventHandler(this.SetRange_Click);
             // 
             // uiGridPanelRight
             // 
             this.uiGridPanelRight.Controls.Add(this.btnRenerView);
-            this.uiGridPanelRight.Controls.Add(this.uiTrackBar1);
             this.uiGridPanelRight.Controls.Add(this.uiSymbolLabel1);
             this.uiGridPanelRight.Controls.Add(this.formsPlotData);
-            this.uiGridPanelRight.Controls.Add(this.uiFlowLayoutPanel1);
+            this.uiGridPanelRight.Controls.Add(this.SelectFlowPanel);
             this.uiGridPanelRight.Dock = System.Windows.Forms.DockStyle.Fill;
             this.uiGridPanelRight.Location = new System.Drawing.Point(11, 11);
             this.uiGridPanelRight.Name = "uiGridPanelRight";
-            this.uiGridPanelRight.Size = new System.Drawing.Size(974, 542);
-            this.uiGridPanelRight.Span = "fill;fill;fill;fill 120;-35 fill 35 35";
+            this.uiGridPanelRight.Size = new System.Drawing.Size(1508, 892);
+            this.uiGridPanelRight.Span = "fill;fill;fill 120;-35 fill 35";
             this.uiGridPanelRight.TabIndex = 0;
             // 
             // btnRenerView
             // 
             this.btnRenerView.BackHover = System.Drawing.Color.FromArgb(((int)(((byte)(3)))), ((int)(((byte)(169)))), ((int)(((byte)(244)))));
-            this.btnRenerView.Font = new System.Drawing.Font("微软雅黑", 10.8F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.btnRenerView.Font = new System.Drawing.Font("Microsoft YaHei UI", 10.8F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.btnRenerView.Ghost = true;
             this.btnRenerView.IconRatio = 1F;
             this.btnRenerView.IconSvg = "YoutubeOutlined";
-            this.btnRenerView.Location = new System.Drawing.Point(827, 501);
+            this.btnRenerView.Location = new System.Drawing.Point(1361, 851);
             this.btnRenerView.Name = "btnRenerView";
             this.btnRenerView.Size = new System.Drawing.Size(144, 38);
             this.btnRenerView.TabIndex = 14;
             this.btnRenerView.Text = "3D数据回溯";
             this.btnRenerView.Click += new System.EventHandler(this.btnRenerView_Click);
             // 
-            // uiTrackBar1
-            // 
-            this.uiTrackBar1.FillHover = System.Drawing.Color.FromArgb(((int)(((byte)(5)))), ((int)(((byte)(99)))), ((int)(((byte)(232)))));
-            this.uiTrackBar1.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
-            this.uiTrackBar1.Location = new System.Drawing.Point(3, 501);
-            this.uiTrackBar1.Name = "uiTrackBar1";
-            this.uiTrackBar1.ShowValue = true;
-            this.uiTrackBar1.Size = new System.Drawing.Size(818, 38);
-            this.uiTrackBar1.TabIndex = 4;
-            // 
             // uiSymbolLabel1
             // 
-            this.uiSymbolLabel1.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.uiSymbolLabel1.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
-            this.uiSymbolLabel1.Location = new System.Drawing.Point(3, 457);
+            this.uiSymbolLabel1.Font = new System.Drawing.Font("Microsoft YaHei UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.uiSymbolLabel1.Location = new System.Drawing.Point(3, 851);
             this.uiSymbolLabel1.Name = "uiSymbolLabel1";
-            this.uiSymbolLabel1.Size = new System.Drawing.Size(968, 38);
+            this.uiSymbolLabel1.Size = new System.Drawing.Size(1352, 38);
             this.uiSymbolLabel1.TabIndex = 12;
-            this.uiSymbolLabel1.Text = "进度：";
             // 
             // formsPlotData
             // 
@@ -150,112 +114,45 @@ namespace AdaWeldSystem.UIDesign.ControlPage
             this.formsPlotData.Location = new System.Drawing.Point(5, 47);
             this.formsPlotData.Margin = new System.Windows.Forms.Padding(5, 3, 5, 3);
             this.formsPlotData.Name = "formsPlotData";
-            this.formsPlotData.Size = new System.Drawing.Size(964, 404);
+            this.formsPlotData.Size = new System.Drawing.Size(1498, 798);
             this.formsPlotData.TabIndex = 2;
             // 
-            // uiFlowLayoutPanel1
+            // SelectFlowPanel
             // 
-            this.uiFlowLayoutPanel1.Controls.Add(this.chkSeamWidth);
-            this.uiFlowLayoutPanel1.Controls.Add(this.chkRobotSpeed);
-            this.uiFlowLayoutPanel1.Controls.Add(this.chkFeedSpeed);
-            this.uiFlowLayoutPanel1.Controls.Add(this.chkLaserPower);
-            this.uiFlowLayoutPanel1.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.uiFlowLayoutPanel1.Font = new System.Drawing.Font("宋体", 11F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
-            this.uiFlowLayoutPanel1.Location = new System.Drawing.Point(3, 3);
-            this.uiFlowLayoutPanel1.Name = "uiFlowLayoutPanel1";
-            this.uiFlowLayoutPanel1.Padding = new System.Windows.Forms.Padding(6, 2, 6, 2);
-            this.uiFlowLayoutPanel1.Size = new System.Drawing.Size(968, 38);
-            this.uiFlowLayoutPanel1.TabIndex = 13;
+            this.SelectFlowPanel.Controls.Add(this.selSeriesGroup);
+            this.SelectFlowPanel.Font = new System.Drawing.Font("Microsoft YaHei UI", 11F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.SelectFlowPanel.Location = new System.Drawing.Point(3, 3);
+            this.SelectFlowPanel.Name = "SelectFlowPanel";
+            this.SelectFlowPanel.Padding = new System.Windows.Forms.Padding(6, 2, 6, 2);
+            this.SelectFlowPanel.Size = new System.Drawing.Size(1502, 38);
+            this.SelectFlowPanel.TabIndex = 13;
             // 
-            // chkSeamWidth
+            // selSeriesGroup
             // 
-            this.chkSeamWidth.Checked = true;
-            this.chkSeamWidth.CheckState = System.Windows.Forms.CheckState.Checked;
-            this.chkSeamWidth.Cursor = System.Windows.Forms.Cursors.Hand;
-            this.chkSeamWidth.Font = new System.Drawing.Font("宋体", 11F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
-            this.chkSeamWidth.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(48)))), ((int)(((byte)(48)))), ((int)(((byte)(48)))));
-            this.chkSeamWidth.Location = new System.Drawing.Point(407, 5);
-            this.chkSeamWidth.Name = "chkSeamWidth";
-            this.chkSeamWidth.Size = new System.Drawing.Size(120, 28);
-            this.chkSeamWidth.TabIndex = 14;
-            this.chkSeamWidth.Text = "焊缝宽度";
-            // 
-            // chkRobotSpeed
-            // 
-            this.chkRobotSpeed.Checked = true;
-            this.chkRobotSpeed.CheckState = System.Windows.Forms.CheckState.Checked;
-            this.chkRobotSpeed.Cursor = System.Windows.Forms.Cursors.Hand;
-            this.chkRobotSpeed.Font = new System.Drawing.Font("宋体", 11F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
-            this.chkRobotSpeed.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(48)))), ((int)(((byte)(48)))), ((int)(((byte)(48)))));
-            this.chkRobotSpeed.Location = new System.Drawing.Point(261, 5);
-            this.chkRobotSpeed.Name = "chkRobotSpeed";
-            this.chkRobotSpeed.Size = new System.Drawing.Size(140, 28);
-            this.chkRobotSpeed.TabIndex = 15;
-            this.chkRobotSpeed.Text = "机器人运动速度";
-            // 
-            // chkFeedSpeed
-            // 
-            this.chkFeedSpeed.Checked = true;
-            this.chkFeedSpeed.CheckState = System.Windows.Forms.CheckState.Checked;
-            this.chkFeedSpeed.Cursor = System.Windows.Forms.Cursors.Hand;
-            this.chkFeedSpeed.Font = new System.Drawing.Font("宋体", 11F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
-            this.chkFeedSpeed.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(48)))), ((int)(((byte)(48)))), ((int)(((byte)(48)))));
-            this.chkFeedSpeed.Location = new System.Drawing.Point(135, 5);
-            this.chkFeedSpeed.Name = "chkFeedSpeed";
-            this.chkFeedSpeed.Size = new System.Drawing.Size(120, 28);
-            this.chkFeedSpeed.TabIndex = 16;
-            this.chkFeedSpeed.Text = "送丝速度";
-            // 
-            // chkLaserPower
-            // 
-            this.chkLaserPower.Checked = true;
-            this.chkLaserPower.CheckState = System.Windows.Forms.CheckState.Checked;
-            this.chkLaserPower.Cursor = System.Windows.Forms.Cursors.Hand;
-            this.chkLaserPower.Font = new System.Drawing.Font("宋体", 11F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
-            this.chkLaserPower.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(48)))), ((int)(((byte)(48)))), ((int)(((byte)(48)))));
-            this.chkLaserPower.Location = new System.Drawing.Point(9, 5);
-            this.chkLaserPower.Name = "chkLaserPower";
-            this.chkLaserPower.Size = new System.Drawing.Size(120, 28);
-            this.chkLaserPower.TabIndex = 17;
-            this.chkLaserPower.Text = "激光功率";
+            this.selSeriesGroup.DropDownArrow = true;
+            this.selSeriesGroup.Font = new System.Drawing.Font("Microsoft YaHei UI", 11F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.selSeriesGroup.Location = new System.Drawing.Point(9, 5);
+            this.selSeriesGroup.Name = "selSeriesGroup";
+            this.selSeriesGroup.Size = new System.Drawing.Size(161, 24);
+            this.selSeriesGroup.TabIndex = 21;
             // 
             // uiDataGridView1
             // 
-            this.uiDataGridView1.ContextMenuStrip = this.uiContextMenuStrip1;
-            this.uiDataGridView1.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.uiDataGridView1.Font = new System.Drawing.Font("宋体", 12F);
+            this.uiDataGridView1.Font = new System.Drawing.Font("Microsoft YaHei UI", 12F);
             this.uiDataGridView1.Gap = 12;
-            this.uiDataGridView1.Location = new System.Drawing.Point(9, 43);
+            this.uiDataGridView1.Location = new System.Drawing.Point(3, 103);
             this.uiDataGridView1.Name = "uiDataGridView1";
-            this.uiDataGridView1.Size = new System.Drawing.Size(226, 450);
+            this.uiDataGridView1.Size = new System.Drawing.Size(354, 678);
             this.uiDataGridView1.TabIndex = 9;
-            // 
-            // uiContextMenuStrip1
-            // 
-            this.uiContextMenuStrip1.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(243)))), ((int)(((byte)(249)))), ((int)(((byte)(255)))));
-            this.uiContextMenuStrip1.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
-            this.uiContextMenuStrip1.ImageScalingSize = new System.Drawing.Size(20, 20);
-            this.uiContextMenuStrip1.Items.AddRange(new System.Windows.Forms.ToolStripItem[] {
-            this.ShowData});
-            this.uiContextMenuStrip1.Name = "uiContextMenuStrip1";
-            this.uiContextMenuStrip1.Size = new System.Drawing.Size(159, 28);
-            // 
-            // ShowData
-            // 
-            this.ShowData.Name = "ShowData";
-            this.ShowData.Size = new System.Drawing.Size(158, 24);
-            this.ShowData.Text = "显示数据";
-            this.ShowData.Click += new System.EventHandler(this.ShowData_Click);
             // 
             // pagination1
             // 
-            this.pagination1.Dock = System.Windows.Forms.DockStyle.Bottom;
-            this.pagination1.Font = new System.Drawing.Font("宋体", 10F);
-            this.pagination1.Location = new System.Drawing.Point(9, 497);
+            this.pagination1.Font = new System.Drawing.Font("Microsoft YaHei UI", 10F);
+            this.pagination1.Location = new System.Drawing.Point(3, 799);
             this.pagination1.Name = "pagination1";
             this.pagination1.PageSize = 50;
             this.pagination1.RightToLeft = System.Windows.Forms.RightToLeft.Yes;
-            this.pagination1.Size = new System.Drawing.Size(226, 24);
+            this.pagination1.Size = new System.Drawing.Size(354, 44);
             this.pagination1.SizeChangerWidth = 80;
             this.pagination1.TabIndex = 5;
             // 
@@ -263,11 +160,7 @@ namespace AdaWeldSystem.UIDesign.ControlPage
             // 
             this.panelLeft.Back = System.Drawing.Color.White;
             this.panelLeft.BorderColor = System.Drawing.Color.FromArgb(((int)(((byte)(217)))), ((int)(((byte)(217)))), ((int)(((byte)(217)))));
-            this.panelLeft.Controls.Add(this.uiDataGridView1);
-            this.panelLeft.Controls.Add(this.divider2);
-            this.panelLeft.Controls.Add(this.pagination1);
-            this.panelLeft.Controls.Add(this.uiCalendar1);
-            this.panelLeft.Controls.Add(this.BtnRecordSetting);
+            this.panelLeft.Controls.Add(this.gridPanel1);
             this.panelLeft.Dock = System.Windows.Forms.DockStyle.Fill;
             this.panelLeft.Location = new System.Drawing.Point(3, 3);
             this.panelLeft.Name = "panelLeft";
@@ -275,44 +168,110 @@ namespace AdaWeldSystem.UIDesign.ControlPage
             this.panelLeft.Shadow = 5;
             this.panelLeft.ShadowColor = System.Drawing.Color.Black;
             this.panelLeft.ShadowOpacityAnimation = true;
-            this.panelLeft.Size = new System.Drawing.Size(244, 564);
+            this.panelLeft.Size = new System.Drawing.Size(378, 914);
             this.panelLeft.TabIndex = 2;
             this.panelLeft.Text = "panelLeft";
             // 
-            // divider2
+            // gridPanel1
             // 
-            this.divider2.ColorSplit = System.Drawing.Color.FromArgb(((int)(((byte)(3)))), ((int)(((byte)(172)))), ((int)(((byte)(248)))));
-            this.divider2.Dock = System.Windows.Forms.DockStyle.Bottom;
-            this.divider2.Location = new System.Drawing.Point(9, 493);
-            this.divider2.Name = "divider2";
-            this.divider2.OrientationMargin = 0F;
-            this.divider2.Size = new System.Drawing.Size(226, 4);
-            this.divider2.TabIndex = 4;
-            this.divider2.Text = "";
-            // 
-            // uiCalendar1
-            // 
-            this.uiCalendar1.Dock = System.Windows.Forms.DockStyle.Top;
-            this.uiCalendar1.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
-            this.uiCalendar1.Location = new System.Drawing.Point(9, 9);
-            this.uiCalendar1.Name = "uiCalendar1";
-            this.uiCalendar1.Size = new System.Drawing.Size(226, 34);
-            this.uiCalendar1.TabIndex = 1;
+            this.gridPanel1.Controls.Add(this.BtnRecordSetting);
+            this.gridPanel1.Controls.Add(this.pagination1);
+            this.gridPanel1.Controls.Add(this.divider2);
+            this.gridPanel1.Controls.Add(this.uiDataGridView1);
+            this.gridPanel1.Controls.Add(this.btnSelectInvert);
+            this.gridPanel1.Controls.Add(this.btnSelectNone);
+            this.gridPanel1.Controls.Add(this.btnSelectAll);
+            this.gridPanel1.Controls.Add(this.btnRefreshDate);
+            this.gridPanel1.Controls.Add(this.uiDateRange);
+            this.gridPanel1.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.gridPanel1.Location = new System.Drawing.Point(9, 9);
+            this.gridPanel1.Name = "gridPanel1";
+            this.gridPanel1.Size = new System.Drawing.Size(360, 896);
+            this.gridPanel1.Span = "40:100% 30;40:33% 33% 33%;100%:fill;10:fill;40:fill;40:fill";
+            this.gridPanel1.TabIndex = 18;
+            this.gridPanel1.Text = "gridPanel1";
             // 
             // BtnRecordSetting
             // 
             this.BtnRecordSetting.BackHover = System.Drawing.Color.FromArgb(((int)(((byte)(3)))), ((int)(((byte)(169)))), ((int)(((byte)(244)))));
-            this.BtnRecordSetting.Dock = System.Windows.Forms.DockStyle.Bottom;
-            this.BtnRecordSetting.Font = new System.Drawing.Font("微软雅黑", 10.8F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.BtnRecordSetting.Font = new System.Drawing.Font("Microsoft YaHei UI", 10.8F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.BtnRecordSetting.Ghost = true;
             this.BtnRecordSetting.IconRatio = 1F;
             this.BtnRecordSetting.IconSvg = "ProfileOutlined";
-            this.BtnRecordSetting.Location = new System.Drawing.Point(9, 521);
+            this.BtnRecordSetting.Location = new System.Drawing.Point(3, 849);
             this.BtnRecordSetting.Name = "BtnRecordSetting";
-            this.BtnRecordSetting.Size = new System.Drawing.Size(226, 34);
+            this.BtnRecordSetting.Size = new System.Drawing.Size(354, 44);
             this.BtnRecordSetting.TabIndex = 15;
             this.BtnRecordSetting.Text = "记录设置";
             this.BtnRecordSetting.Click += new System.EventHandler(this.BtnRecordSetting_Click);
+            // 
+            // divider2
+            // 
+            this.divider2.ColorSplit = System.Drawing.Color.FromArgb(((int)(((byte)(3)))), ((int)(((byte)(172)))), ((int)(((byte)(248)))));
+            this.divider2.Location = new System.Drawing.Point(3, 787);
+            this.divider2.Name = "divider2";
+            this.divider2.OrientationMargin = 0F;
+            this.divider2.Size = new System.Drawing.Size(354, 6);
+            this.divider2.TabIndex = 4;
+            this.divider2.Text = "";
+            // 
+            // btnSelectInvert
+            // 
+            this.btnSelectInvert.Font = new System.Drawing.Font("Microsoft YaHei UI", 9.75F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.btnSelectInvert.Location = new System.Drawing.Point(239, 50);
+            this.btnSelectInvert.Margin = new System.Windows.Forms.Padding(1, 0, 1, 0);
+            this.btnSelectInvert.Name = "btnSelectInvert";
+            this.btnSelectInvert.Size = new System.Drawing.Size(117, 50);
+            this.btnSelectInvert.TabIndex = 2;
+            this.btnSelectInvert.Text = "反选";
+            this.btnSelectInvert.Click += new System.EventHandler(this.btnSelectInvert_Click);
+            // 
+            // btnSelectNone
+            // 
+            this.btnSelectNone.Font = new System.Drawing.Font("Microsoft YaHei UI", 9.75F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.btnSelectNone.Location = new System.Drawing.Point(120, 50);
+            this.btnSelectNone.Margin = new System.Windows.Forms.Padding(1, 0, 1, 0);
+            this.btnSelectNone.Name = "btnSelectNone";
+            this.btnSelectNone.Size = new System.Drawing.Size(117, 50);
+            this.btnSelectNone.TabIndex = 1;
+            this.btnSelectNone.Text = "全取消";
+            this.btnSelectNone.Click += new System.EventHandler(this.btnSelectNone_Click);
+            // 
+            // btnSelectAll
+            // 
+            this.btnSelectAll.Font = new System.Drawing.Font("Microsoft YaHei UI", 9.75F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.btnSelectAll.Location = new System.Drawing.Point(1, 50);
+            this.btnSelectAll.Margin = new System.Windows.Forms.Padding(1, 0, 1, 0);
+            this.btnSelectAll.Name = "btnSelectAll";
+            this.btnSelectAll.Size = new System.Drawing.Size(117, 50);
+            this.btnSelectAll.TabIndex = 0;
+            this.btnSelectAll.Text = "全选";
+            this.btnSelectAll.Click += new System.EventHandler(this.btnSelectAll_Click);
+            // 
+            // btnRefreshDate
+            // 
+            this.btnRefreshDate.BackHover = System.Drawing.Color.FromArgb(((int)(((byte)(3)))), ((int)(((byte)(169)))), ((int)(((byte)(244)))));
+            this.btnRefreshDate.Font = new System.Drawing.Font("Microsoft YaHei UI", 10.8F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.btnRefreshDate.Ghost = true;
+            this.btnRefreshDate.IconRatio = 1F;
+            this.btnRefreshDate.IconSvg = "ReloadOutlined";
+            this.btnRefreshDate.Location = new System.Drawing.Point(325, 3);
+            this.btnRefreshDate.Name = "btnRefreshDate";
+            this.btnRefreshDate.Size = new System.Drawing.Size(32, 44);
+            this.btnRefreshDate.TabIndex = 17;
+            this.btnRefreshDate.Click += new System.EventHandler(this.btnRefreshDate_Click);
+            // 
+            // uiDateRange
+            // 
+            this.uiDateRange.Font = new System.Drawing.Font("Microsoft YaHei UI", 10F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.uiDateRange.InteractiveReset = false;
+            this.uiDateRange.Location = new System.Drawing.Point(3, 3);
+            this.uiDateRange.Name = "uiDateRange";
+            this.uiDateRange.PlaceholderEnd = "结束日期";
+            this.uiDateRange.PlaceholderStart = "开始日期";
+            this.uiDateRange.Size = new System.Drawing.Size(316, 44);
+            this.uiDateRange.TabIndex = 1;
+            this.uiDateRange.WaveSize = 0;
             // 
             // tableLayoutPanel2
             // 
@@ -326,7 +285,7 @@ namespace AdaWeldSystem.UIDesign.ControlPage
             this.tableLayoutPanel2.Name = "tableLayoutPanel2";
             this.tableLayoutPanel2.RowCount = 1;
             this.tableLayoutPanel2.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Percent, 100F));
-            this.tableLayoutPanel2.Size = new System.Drawing.Size(1252, 570);
+            this.tableLayoutPanel2.Size = new System.Drawing.Size(1920, 920);
             this.tableLayoutPanel2.TabIndex = 6;
             // 
             // DataReviewerPage
@@ -334,14 +293,12 @@ namespace AdaWeldSystem.UIDesign.ControlPage
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.None;
             this.Controls.Add(this.tableLayoutPanel2);
             this.Name = "DataReviewerPage";
-            this.Size = new System.Drawing.Size(1252, 570);
-            this.Load += new System.EventHandler(this.DataReview_Shown);
+            this.Size = new System.Drawing.Size(1920, 920);
             this.panelRight.ResumeLayout(false);
-            this.uiContextMenuStrip2.ResumeLayout(false);
             this.uiGridPanelRight.ResumeLayout(false);
-            this.uiFlowLayoutPanel1.ResumeLayout(false);
-            this.uiContextMenuStrip1.ResumeLayout(false);
+            this.SelectFlowPanel.ResumeLayout(false);
             this.panelLeft.ResumeLayout(false);
+            this.gridPanel1.ResumeLayout(false);
             this.tableLayoutPanel2.ResumeLayout(false);
             this.ResumeLayout(false);
 
@@ -350,25 +307,22 @@ namespace AdaWeldSystem.UIDesign.ControlPage
         #endregion
         private AntdUI.Panel panelRight;
         private AntdUI.GridPanel uiGridPanelRight;
-        private AntdUI.FlowPanel uiFlowLayoutPanel1;
-        private AntdUI.Checkbox chkSeamWidth;
-        private AntdUI.Checkbox chkRobotSpeed;
-        private AntdUI.Checkbox chkFeedSpeed;
-        private AntdUI.Checkbox chkLaserPower;
+        private AntdUI.FlowPanel SelectFlowPanel;
+        private AntdUI.Select selSeriesGroup;
         private AntdUI.Table uiDataGridView1;
         private AntdUI.Pagination pagination1;
-        private System.Windows.Forms.ContextMenuStrip uiContextMenuStrip1;
-        private System.Windows.Forms.ToolStripMenuItem ShowData;
-        private AntdUI.Slider uiTrackBar1;
-        private AntdUI.Label uiSymbolLabel1;
-        private System.Windows.Forms.ContextMenuStrip uiContextMenuStrip2;
-        private System.Windows.Forms.ToolStripMenuItem SetRange;
         private AntdUI.Panel panelLeft;
-        private AntdUI.DatePicker uiCalendar1;
+        private AntdUI.Button btnRefreshDate;
+        private AntdUI.DatePickerRange uiDateRange;
         private AntdUI.Button btnRenerView;
         private ScottPlot.FormsPlot formsPlotData;
         private AntdUI.Button BtnRecordSetting;
+        private AntdUI.Button btnSelectAll;
+        private AntdUI.Button btnSelectNone;
+        private AntdUI.Button btnSelectInvert;
         private AntdUI.Divider divider2;
         private System.Windows.Forms.TableLayoutPanel tableLayoutPanel2;
+        private AntdUI.Label uiSymbolLabel1;
+        private AntdUI.GridPanel gridPanel1;
     }
 }

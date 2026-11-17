@@ -5,12 +5,7 @@ using System.Windows.Forms;
 
 namespace AdaWeldSystem.UIDesign.ControlPage
 {
-    /// <summary>
-    /// 统一导航页面（替代 ImagePage / ParamPage）。
-    /// 通过 LoadTabs() 接受不同子页配置，实例化两次实现不同导航内容。
-    /// 左侧 Menu 导航 + 右侧 Tabs 内容区（TabMenuVisible=false, Vertical 模式, BackActive=White, BackHover=Gray, Round=false）。
-    /// 支持懒加载：LoadTabsLazy 接收工厂函数，Tab 首次选中时才实例化子页。
-    /// </summary>
+    /// <summary>统一导航页：左侧 Menu + 右侧 Tabs，支持懒加载。</summary>
     public partial class NavPage : UserControl
     {
         private List<UserControl> _childPages = new List<UserControl>();
@@ -64,16 +59,12 @@ namespace AdaWeldSystem.UIDesign.ControlPage
             };
         }
 
-        /// <summary>
-        /// 加载子页配置（必须在 InitializeComponent 之后调用）。
-        /// 子页立即实例化（旧版签名，保持兼容）。
-        /// </summary>
+        /// <summary>加载子页配置（必须在 InitializeComponent 之后调用），子页立即实例化。</summary>
         /// <param name="tabs">子页列表：(标签文本, UserControl 实例, string iconSvg)</param>
         public void LoadTabs(params (string text, UserControl control, string iconSvg)[] tabs)
         {
             for (int i = 0; i < tabs.Length; i++)
             {
-                // TabPage 包装子页
                 var tab = new AntdUI.TabPage { Text = tabs[i].text, Tag = i };
                 tabs[i].control.Dock = DockStyle.Fill;
                 tab.Controls.Add(tabs[i].control);
@@ -93,10 +84,7 @@ namespace AdaWeldSystem.UIDesign.ControlPage
             uiNavMenu1.SelectIndex(0,  true);
         }
 
-        /// <summary>
-        /// 兼容旧版签名（无图标），自动根据索引分配默认图标。
-        /// 子页立即实例化（旧版签名，保持兼容）。
-        /// </summary>
+        /// <summary>无图标重载：按索引分配默认图标。</summary>
         public void LoadTabs(params (string text, UserControl control)[] tabs)
         {
             string[] defaultIcons = {
@@ -112,10 +100,7 @@ namespace AdaWeldSystem.UIDesign.ControlPage
             uiNavMenu1.SelectIndex(0,  true);
         }
 
-        /// <summary>
-        /// 懒加载版本：接收工厂函数，Tab 首次选中时才实例化子页。
-        /// 有图标版本。
-        /// </summary>
+        /// <summary>懒加载子页（有图标）：Tab 首次选中时才实例化。</summary>
         /// <param name="tabs">子页列表：(标签文本, 工厂函数, 图标名)</param>
         public void LoadTabsLazy(params (string text, Func<UserControl> factory, string iconSvg)[] tabs)
         {
@@ -146,10 +131,7 @@ namespace AdaWeldSystem.UIDesign.ControlPage
             uiNavMenu1.SelectIndex(0, 0, true);
         }
 
-        /// <summary>
-        /// 懒加载版本：接收工厂函数，Tab 首次选中时才实例化子页。
-        /// 无图标版本，自动分配默认图标。
-        /// </summary>
+        /// <summary>懒加载子页（无图标）：自动分配默认图标。</summary>
         public void LoadTabsLazy(params (string text, Func<UserControl> factory)[] tabs)
         {
             string[] defaultIcons = {
@@ -165,10 +147,9 @@ namespace AdaWeldSystem.UIDesign.ControlPage
             LoadTabsLazy(withIcons);
         }
 
-        /// <summary>
-        /// 确保指定索引的 Tab 子页已加载（懒加载核心方法）。
-        /// 仅在首次选中时调用工厂函数创建实例。
-        /// </summary>
+        /// <summary>确保指定索引的子页已加载（仅首次选中时调用</summary>
+        /// <param name="index">索引。</param>
+        /// <remarks>工厂）。</remarks>
         private void EnsureTabLoaded(int index)
         {
             // 已在 _childPages 中说明已加载
@@ -176,10 +157,9 @@ namespace AdaWeldSystem.UIDesign.ControlPage
                 return;
 
             // 没有对应的工厂函数，跳过
-            if (!_lazyFactories.ContainsKey(index))
+            if (!_lazyFactories.TryGetValue(index, out Func<UserControl> factory))
                 return;
 
-            var factory = _lazyFactories[index];
             if (factory == null)
                 return;
 
@@ -224,10 +204,7 @@ namespace AdaWeldSystem.UIDesign.ControlPage
         {
             foreach (var page in _childPages)
             {
-                if (page != null)
-                {
-                    page.Dispose();
-                }
+                page?.Dispose();
             }
         }
     }

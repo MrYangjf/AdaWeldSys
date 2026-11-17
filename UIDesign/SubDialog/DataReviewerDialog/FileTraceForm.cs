@@ -7,18 +7,9 @@ using System.Windows.Forms;
 
 namespace AdaWeldSystem.UIDesign.SubDialog.DataReviewerDialog
 {
-    /// <summary>
-    /// 文件追溯对话框
-    /// 提供选择正常结束的文件和临时文件，并支持将临时文件解析为正常点云
-    /// </summary>
+    /// <summary>选择正常/临时文件，临时文件可解析为点云</summary>
     public partial class FileTraceForm : UserControl
     {
-        /// <summary>
-        /// 用户选择的文件路径
-        /// </summary>
-        public string SelectedFilePath { get; private set; }
-
-        // 复刻 AntdUI demo SystemSet 模式：注入父 Window，内部方法用 this.Window 作 owner
         private readonly Window Window;
 
         // 与两个 Table.Binding() 绑定的强类型列表
@@ -29,6 +20,10 @@ namespace AdaWeldSystem.UIDesign.SubDialog.DataReviewerDialog
         private FileTraceRow _selectedRecord;
         private FileTraceRow _selectedTemp;
 
+        /// <summary>用户选择的文件路径</summary>
+        public string SelectedFilePath { get; private set; }
+
+        // 注入父 Window，内部方法用 this.Window 作 owner
         public FileTraceForm() : this(null) { }
 
         public FileTraceForm(Window _window)
@@ -40,17 +35,13 @@ namespace AdaWeldSystem.UIDesign.SubDialog.DataReviewerDialog
             uiTableRecord.Binding(_recordRows);
             _tempRows = new AntdUI.AntList<FileTraceRow>();
             uiTableTemp.Binding(_tempRows);
-            // 事件订阅放代码后置（Designer.cs 手写订阅会被设计器重新序列化时丢失，参照 ConfigForm/DataReviewPage 惯例）
+            // 事件订阅放代码后置，避免设计器序列化丢失
             uiTableRecord.CellClick += uiTableRecord_CellClick;
             uiTableTemp.CellClick += uiTableTemp_CellClick;
             LoadFileList();
         }
 
-        /// <summary>
-        /// 初始化两个表格的列。参考 AntdUI 官方 TableDemo 范式：Columns 在代码后置设置，
-        /// 不可写入 Designer.cs（否则设计器无法序列化）。
-        /// 选取列用 ColumnCheck + SetAutoCheck(false)，配合 CellClick 实现单选互斥。
-        /// </summary>
+        /// <summary>初始化表格列：Columns 须代码后置；选取列用 ColumnCheck+SetAutoCheck(false) 单选互斥。</summary>
         private void InitTableColumns()
         {
             uiTableRecord.Columns = new AntdUI.ColumnCollection
@@ -70,9 +61,7 @@ namespace AdaWeldSystem.UIDesign.SubDialog.DataReviewerDialog
             uiTableTemp.AutoSizeColumnsMode = AntdUI.ColumnsMode.Fill;
         }
 
-        /// <summary>
-        /// 加载文件列表
-        /// </summary>
+        /// <summary>加载文件列表</summary>
         private void LoadFileList()
         {
             _recordRows.Clear();
@@ -118,13 +107,13 @@ namespace AdaWeldSystem.UIDesign.SubDialog.DataReviewerDialog
             uiLabelTempCount.Text = $"共 {_tempRows.Count} 个文件";
         }
 
-        /// <summary>
-        /// 正常记录表格：点击任意单元格选中该行（单选互斥）
-        /// </summary>
+        /// <summary>正常记录表格：点击任意单元格选中该行（单选互</summary>
+        /// <param name="sender">发送方。</param>
+        /// <param name="e">事件参数。</param>
+        /// <remarks>斥）</remarks>
         private void uiTableRecord_CellClick(object sender, AntdUI.TableClickEventArgs e)
         {
-            var row = e.Record as FileTraceRow;
-            if (row == null) return;
+            if (!(e.Record is FileTraceRow row)) return;
             _selectedRecord = row;
             foreach (var r in _recordRows)
             {
@@ -132,13 +121,13 @@ namespace AdaWeldSystem.UIDesign.SubDialog.DataReviewerDialog
             }
         }
 
-        /// <summary>
-        /// 临时文件表格：点击任意单元格选中该行（单选互斥）
-        /// </summary>
+        /// <summary>临时文件表格：点击任意单元格选中该行（单选互</summary>
+        /// <param name="sender">发送方。</param>
+        /// <param name="e">事件参数。</param>
+        /// <remarks>斥）</remarks>
         private void uiTableTemp_CellClick(object sender, AntdUI.TableClickEventArgs e)
         {
-            var row = e.Record as FileTraceRow;
-            if (row == null) return;
+            if (!(e.Record is FileTraceRow row)) return;
             _selectedTemp = row;
             foreach (var r in _tempRows)
             {
@@ -212,9 +201,7 @@ namespace AdaWeldSystem.UIDesign.SubDialog.DataReviewerDialog
             if (host != null) host.DialogResult = DialogResult.Cancel;
         }
 
-        /// <summary>
-        /// 表格行模型：No=序号，Selected=选取列（单选），FileName=文件名（含时间），FilePath=完整路径（隐藏）
-        /// </summary>
+        /// <summary>表格行模型：序号/选取/文件名/路径（隐藏）</summary>
         private class FileTraceRow : AntdUI.NotifyProperty
         {
             public int No { get; set; }

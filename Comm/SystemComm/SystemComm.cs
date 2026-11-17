@@ -3,15 +3,12 @@ using AdaWeldSystem.Comm.Communication;
 using System;
 using System.Drawing;
 using System.Threading;
-using Emgu.CV;
 using AdaWeldSystem.SQLiteDBControl;
 using AdaWeldSystem.SQLiteDBControl.Helpers;
 
 namespace AdaWeldSystem.Comm.SystemComm
 {
-    /// <summary>
-    /// 消息类型枚举
-    /// </summary>
+    /// <summary>消息类型枚举</summary>
     public enum MessageType
     {
         Summary,
@@ -20,162 +17,274 @@ namespace AdaWeldSystem.Comm.SystemComm
         Debug
     }
 
-    /// <summary>
-    /// 消息级别枚举
-    /// </summary>
+    /// <summary>消息级别枚举</summary>
+    /// <remarks>Debug 级写入同一日志，输出链路中间值。</remarks>
     public enum MessageLevel
     {
         Info,
         Warning,
-        Error
+        Error,
+        Debug
     }
 
-    /// <summary>
-    /// 操作权限等级枚举
-    /// </summary>
+    /// <summary>操作权限等级（数值越小权限越高）</summary>
     public enum OperateLevel
     {
-        Operator = 2,
+        /// <summary>管理员：全部页面与写权限，含用户管理。</summary>
+        Admin = 0,
+
+        /// <summary>工程师：除用户管理外的全部工程页面与写权限。</summary>
         Engineer = 1,
-        Admin = 0
+
+        /// <summary>操作员：仅基础页，关键参数不可见。</summary>
+        Operator = 2
     }
 
-    /// <summary>
-    /// 消息事件参数（用于日志/通讯信息显示）
-    /// </summary>
+    /// <summary>消息事件参数（日志/通讯信息显示）</summary>
     public class MessageArgs : EventArgs
     {
         public string strMessage = "";
         public Color MessageShowColor = Color.Black;
     }
 
-    /// <summary>
-    /// 全局通讯数据中心
-    /// 由原 GlobalCommData.cs 与 SystemStatus.cs 合并而成（SystemComm.cs）。
-    /// 职责（按优先级排序）：
-    /// 1. 全局事件触发（日志、通讯指令广播）
-    /// 2. 全局日志管理
-    /// 3. 全局通讯配置管理（由 CommunicationManager 实例化具体通讯结构，并持有通用 TCP 实例）
-    /// 自动调整参数管理由 <see cref="WeldParamManager"/> 统一管理
-    /// 遗留支持：权限/操作等级（计划逐步迁出）
-    /// </summary>
+    /// <summary>全局通讯数据中心</summary>
+    /// <remarks>职责：事件、日志、通讯配置管理；
+    /// 权限/操作等级为遗留支持。</remarks>
     static class GlobalCommData
     {
         #region 1. 全局事件触发
 
-        /// <summary>
-        /// 日志信息Handler
-        /// </summary>
+        /// <summary>日志信息 Handler</summary>
         public static event EventHandler<MessageArgs> EventInfoHandler;
 
-        /// <summary>
-        /// 通讯指令接收事件（Server/Client/S7/Robot 收到指令后广播）
-        /// Workflow 订阅此事件以触发工作流步骤
-        /// </summary>
+        /// <summary>通讯指令接收事件，Workflow 订阅以触发工作流步骤</summary>
         public static event EventHandler<string> CommunicationCommandReceived;
+
+        /// <summary>通讯日志查看事件，仅供通讯配置页订阅显示，不承载指令语义</summary>
+        /// <remarks>与 CommunicationCommandReceived 分离：后者有多个 Workflow 订阅会触发步骤，
+        /// 本事件只驱动界面日志框，避免重连过程日志被误当作通讯指令。</remarks>
+        public static event EventHandler<string> CommLogViewEvent;
 
         #endregion
 
         #region 2. 全局日志管理
 
-        /// <summary>
-        /// 系统日志操作
-        /// </summary>
+        private static string _logDedupKey = string.Empty;
+        private static DateTime _logDedupTime = DateTime.MinValue;
+        private static readonly object LogDedupLock = new object();
+
+        /// <summary>界面是否显示 Debug 级日志（默认关闭，文件仍全量）</summary>
+        private static volatile bool _showDebugToUi;
+
+        /// <summary>系统日志操作</summary>
         public static Log MachineLog;
 
-        /// <summary>
-        /// TCP通讯日志操作
-        /// </summary>
+        /// <summary>TCP 通讯日志操作</summary>
         public static Log TcpMessageLog;
 
-        /// <summary>
-        /// 显示日志
-        /// </summary>
+        /// <summary>界面调试日志开关</summary>
+        /// <remarks>仅控制界面显示；文件端四级全量写入，不受本开关影响。</remarks>
+        public static bool ShowDebugToUi
+        {
+            get { return _showDebugToUi; }
+            set { _showDebugToUi = value; }
+        }
+
+        /// <summary>同一秒内完全相同的 tag + 级别 + 文本只输出一次</summary>
+        /// <remarks>抑制重入回读刷屏；不同文本不合并</remarks>
+        /// <param name="tag">日志标签</param>
+        /// <param name="message">日志内容</param>
+        /// <param name="level">日志级别</param>
+        /// <returns>true = 本条属重复，应丢弃</returns>
+        private static bool IsDuplicateWithinSecond(string tag, string message, MessageLevel level)
+        {
+            string key = tag + "|" + (int)level + "|" + message;
+            lock (LogDedupLock)
+            {
+                DateTime now = DateTime.Now;
+                if (key == _logDedupKey && (now - _logDedupTime).TotalSeconds < 1)
+                {
+                    return true;
+                }
+                _logDedupKey = key;
+                _logDedupTime = now;
+                return false;
+            }
+        }
+
+        /// <summary>显示日志</summary>
+        /// <param name="TAG">标签（取类名）</param>
+        /// <param name="message">消息内容</param>
+        /// <param name="msgLevel">消息级别（决定界面颜色与文件级别）</param>
+        /// <param name="msgType">消息类型</param>
+        /// <remarks>⚠️ 本方法可能在 <see cref="GlobalCommData"/> 静态构造期间被重入调用。
+        /// 构造期可能重入，参数与日志须空保护。
+        /// 同一秒同 tag 同级别同文本只输出一次。
+        /// 不同文本不合并；全项目唯一日志入口。
+        /// 界面与文件用同一时间戳格式。</remarks>
         public static void ShowLog(string TAG, string message, MessageLevel msgLevel = MessageLevel.Info, MessageType msgType = MessageType.Debug)
         {
+            if (IsDuplicateWithinSecond(TAG, message, msgLevel)) return;
+
             EventHandler<MessageArgs> Handler = EventInfoHandler;
+            MessageArgs args = _logArgs;
             switch (msgLevel)
             {
                 case MessageLevel.Info:
-                    _logArgs.strMessage = message;
-                    _logArgs.MessageShowColor = Color.Black;
-                    Handler?.Invoke(null, _logArgs);
-                    MachineLog.Info(TAG, message);
+                    if (args != null)
+                    {
+                        args.strMessage = message;
+                        args.MessageShowColor = Color.Black;
+                        Handler?.Invoke(null, args);
+                    }
+                    MachineLog?.Info(TAG, message);
                     break;
 
                 case MessageLevel.Warning:
-                    _logArgs.strMessage = message;
-                    _logArgs.MessageShowColor = Color.Blue;
-                    Handler?.Invoke(null, _logArgs);
-                    MachineLog.Warn(TAG, message);
+                    if (args != null)
+                    {
+                        args.strMessage = message;
+                        args.MessageShowColor = Color.Blue;
+                        Handler?.Invoke(null, args);
+                    }
+                    MachineLog?.Warn(TAG, message);
                     break;
 
                 case MessageLevel.Error:
-                    _logArgs.strMessage = message;
-                    _logArgs.MessageShowColor = Color.Red;
-                    Handler?.Invoke(null, _logArgs);
-                    MachineLog.Error(TAG, message);
+                    if (args != null)
+                    {
+                        args.strMessage = message;
+                        args.MessageShowColor = Color.Red;
+                        Handler?.Invoke(null, args);
+                    }
+                    MachineLog?.Error(TAG, message);
+                    break;
+
+                case MessageLevel.Debug:
+                    // 界面默认不收 Debug；文件端仍全量，便于事后排障
+                    if (_showDebugToUi && args != null)
+                    {
+                        args.strMessage = message;
+                        args.MessageShowColor = Color.Gray;
+                        Handler?.Invoke(null, args);
+                    }
+                    MachineLog?.Debug(TAG, message);
                     break;
             }
         }
 
-        /// <summary>
-        /// 记录通讯日志到界面（受 CommunicationManager.ShowCommLog 开关控制）
-        /// 由 Workflow 在接收到通讯指令后调用，避免在通讯层直接打印
-        /// </summary>
+        /// <summary>记录通讯日志到界面（受 ShowCommLog 开关控制，由 Workflow 调用）</summary>
+        /// <param name="message">消息内容。</param>
         public static void ShowCommunicationLog(string source, string message)
         {
             if (mCommunicationManager != null && mCommunicationManager.ShowCommLog)
             {
-                _logArgs.strMessage = string.Format("[{0}] {1}", source, message);
-                _logArgs.MessageShowColor = Color.DarkGreen;
-                EventHandler<MessageArgs> handler = EventInfoHandler;
-                handler?.Invoke(null, _logArgs);
+                MessageArgs args = _logArgs;
+                if (args != null)
+                {
+                    args.strMessage = string.Format("[{0}] {1}", source, message);
+                    args.MessageShowColor = Color.DarkGreen;
+                    EventHandler<MessageArgs> handler = EventInfoHandler;
+                    handler?.Invoke(null, args);
+                }
             }
-            TcpMessageLog.Debug(source + Thread.GetDomainID(), message);
+            TcpMessageLog?.Debug(source + Thread.GetDomainID(), message);
+        }
+
+        /// <summary>通讯过程日志：写通讯日志文件并推送到通讯页查看，不进系统日志</summary>
+        /// <param name="source">日志来源标签</param>
+        /// <param name="message">日志内容</param>
+        /// <remarks>用于重连等通讯过程：文件端始终全量记录，界面端仅通讯配置页打开时显示。
+        /// 不写 MachineLog、不触发 EventInfoHandler，主系统日志只保留结果。</remarks>
+        public static void ShowCommLogForView(string source, string message)
+        {
+            TcpMessageLog?.Debug(source + Thread.GetDomainID(), message);
+            CommLogViewEvent?.Invoke(null, string.Format("[{0}] {1}", source, message));
         }
 
         #endregion
 
         #region 3. 全局通讯配置管理
 
-        /// <summary>
-        /// 通讯管理器（PLC、机器人、通用 TCP 持久化配置）
-        /// 内部实例化 Server/Client/Send/Receive XML 通讯结构，并持有通用 TCP 通讯实例 TcpIpComm
-        /// </summary>
+        /// <summary>通讯管理器（PLC、机器人、通用 TCP 持久化配置）</summary>
+        /// <remarks>内部实例化 Server/Client/Send/Receive XML 通讯结构，持有通用 TCP 实例 TcpIpComm。</remarks>
         public static CommunicationManager mCommunicationManager;
 
-        /// <summary>
-        /// 广播通讯指令到 Workflow 模块
-        /// 由各通讯实现（TCP/S7/Robot）在收到有效指令后调用
-        /// </summary>
+        /// <summary>界面是否已就绪（全部子页面实例化完成）。</summary>
+        private static volatile bool _isUiReady;
+
+        /// <summary>应用是否已进入正常运行态（首屏初始化结束）。</summary>
+        private static volatile bool _isAppRunning;
+
+        /// <summary>界面就绪标志，设备初始化须先满足</summary>
+        public static bool IsUiReady
+        {
+            get { return _isUiReady; }
+        }
+
+        /// <summary>正常运行态标志，false 时禁查历史数据</summary>
+        /// <remarks>由 FormMain 在设备初始化结束后显式置位。
+        /// ⛔ 不得用 Visible、Created、IsHandleCreated 替代。
+        /// AntdUI 非当前 TabPage 恒为 Visible=true。否则启动期会误查历史数据（实测）。</remarks>
+        public static bool IsAppRunning
+        {
+            get { return _isAppRunning; }
+        }
+
+        /// <summary>标记界面已就绪（由 FormMain 在子页面全部实例化后调用，</summary>
+        /// <remarks>仅一次）。</remarks>
+        public static void MarkUiReady()
+        {
+            _isUiReady = true;
+        }
+
+        /// <summary>标记进入正常运行态，</summary>
+        /// <remarks>仅一次）。</remarks>
+        public static void MarkAppRunning()
+        {
+            _isAppRunning = true;
+        }
+
+        /// <summary>广播通讯指令到 Workflow（各通讯实现收到有效指令后调</summary>
+        /// <param name="message">消息内容。</param>
+        /// <remarks>用）</remarks>
         public static void BroadcastCommunicationCommand(string message)
         {
-            EventHandler<string> handler = CommunicationCommandReceived;
-            if (handler != null)
-            {
-                handler(null, message);
-            }
+            CommunicationCommandReceived?.Invoke(null, message);
         }
 
         #endregion
 
         #region 4. 遗留支持（计划迁出）
 
-        /// <summary>
-        /// 权限管理文件
-        /// </summary>
-        /// <remarks>待迁出到独立的认证服务模块。</remarks>
+        /// <summary>权限管理文件</summary>
         public static AuthHelper mAuthHelper;
 
-        /// <summary>
-        /// 操作等级
-        /// </summary>
+        /// <summary>操作等级（禁直接赋值，须走 <see cref="SetOperateLevel"/> 广播变更）</summary>
         public static OperateLevel mOperateLevel;
+
+        /// <summary>权限变更事件，供各页刷新门控</summary>
+        public static event EventHandler<OperateLevel> OperateLevelChanged;
+
+        /// <summary>设置当前权限等级并广播变更事件</summary>
+        /// <param name="level">目标权限等级。</param>
+        public static void SetOperateLevel(OperateLevel level)
+        {
+            if (mOperateLevel == level) return;
+            mOperateLevel = level;
+            OperateLevelChanged?.Invoke(null, level);
+        }
 
         #endregion
 
-        #region 5. 事件参数复用（高频事件避免GC压力）
+        #region 5. Dash 运行时变量（单次软件开启，不落盘）
+
+        /// <summary>软件启动时刻（静态构造内赋值，软件关闭即丢失）。</summary>
+        public static DateTime SoftwareStartTime { get; private set; }
+
+        #endregion
+
+        #region 6. 事件参数复用（高频事件避免GC压力）
 
         private static readonly MessageArgs _logArgs;
 
@@ -185,38 +294,35 @@ namespace AdaWeldSystem.Comm.SystemComm
 
         static GlobalCommData()
         {
-            // 日志必须先初始化，后续管理器构造失败时会调用 ShowLog
+            // ⛔ 事件参数必须最先就绪：CommunicationManager 构造期间可能回写日志
+            // 静态构造未到赋值处会空引用崩溃。
+            _logArgs = new MessageArgs();
+
+            // 日志先初始化，构造失败时会写日志
             MachineLog = new Log("智能填丝焊接系统日志");
             TcpMessageLog = new Log("智能填丝焊接通讯日志");
 
-            // 自动调整参数管理由 WeldParamManager（WeldParamControl 模块）统一管理
-            // 由 WeldParamManager 单例在首次访问时完成初始化，包括：
-            // - CurrentAutoParamId 的 INI 持久化
-            // - Default 配置的初始构建与保护
+            // 自动调整参数由 WeldParamManager 单例在首次访问时统一初始化
 
             // CommunicationManager 内部负责实例化通用 TCP 通讯对象 TcpIpComm
             mCommunicationManager = new CommunicationManager();
 
             mAuthHelper = SQLiteDatabaseManager.Instance.AuthHelper;
-            mOperateLevel = OperateLevel.Operator;
+            mOperateLevel = OperateLevel.Admin;
 
-            _logArgs = new MessageArgs();
+            // Dash 运行时变量：软件启动时刻（单次，不落盘）
+            SoftwareStartTime = DateTime.Now;
         }
 
         #endregion
 
         #region 7. UI 配置（AntdUI.Config 一次性加载）
 
-        /// <summary>
-        /// UI 配置一次性加载标志（防止重复初始化 AntdUI 全局配置）
-        /// </summary>
+        /// <summary>UI 配置一次性加载标志</summary>
         private static bool _uiConfigLoaded;
 
-        /// <summary>
-        /// 一次性加载 AntdUI 全局 UI 配置（主题 + 文本渲染质量）。
-        /// 集中管理 AntdUI.Config 的所有设置，替代原先分散在 Program.cs / FormMain 构造函数中的配置。
-        /// 须在 UI 线程调用（FormMain 构造时）；内部以 _uiConfigLoaded 守卫保证只执行一次。
-        /// </summary>
+        /// <summary>一次性加载 AntdUI 全局 UI 配置（主题 + 文本渲染质量）</summary>
+        /// <remarks>须在 UI 线程（FormMain 构造时）调用；以 _uiConfigLoaded 守卫只执行一次。</remarks>
         public static void UIConfigSetting()
         {
             if (_uiConfigLoaded)
@@ -230,16 +336,16 @@ namespace AdaWeldSystem.Comm.SystemComm
                .Light("#f2f2f2", "#000000")
                .FormBorderColor();
 
-            // 全局主题：AntdUI 用 Config 替代 UIStyles（原 FormMain 构造函数）
+            // 全局主题
             AntdUI.Config.IsLight = true;
            
 
-            // 文本渲染质量（原 Program.Main）
+            // 文本渲染质量
             AntdUI.Config.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
             AntdUI.Config.TextRenderingHighQuality = true;
 
-            AntdUI.Config.Animation= true;
-            AntdUI.Config.ShadowEnabled = true;
+            AntdUI.Config.Animation= false;
+            AntdUI.Config.ShadowEnabled = false;
         }
 
         #endregion

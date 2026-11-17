@@ -1,4 +1,4 @@
-﻿using Emgu.CV;
+using Emgu.CV;
 using Emgu.CV.CvEnum;
 using Emgu.CV.Structure;
 using Emgu.CV.Util;
@@ -12,8 +12,8 @@ using AdaWeldSystem.EmguALG.RealtimeMonitor.WeldQuality;
 namespace AdaWeldSystem.EmguALG.Core
 {
     /// <summary>
-    /// 图像算法统一入口 - 所有图像算法必须在此文件中实现
-    /// 分类组织：1.预处理 3.边缘检测 4.形态学 5.特征提取 6.模板匹配 7.辅助工具
+    /// 图像算法统一入口，均须在此文件实现。
+    /// 分为预处理、边缘、形态学、特征、模板与辅助。
     /// </summary>
     public static class ImageAlgorithm
     {
@@ -171,80 +171,6 @@ namespace AdaWeldSystem.EmguALG.Core
         #region 5. 特征提取算法区
 
         /// <summary>
-        /// 焊接接头类型枚举
-        /// </summary>
-        public enum JointType
-        {
-            Unknown,
-            ButtJoint,      // 对接接头
-            CornerJoint,    // 角接接头
-            LapJoint,       // 搭接接头
-            TJoint          // T型接头
-        }
-
-        /// <summary>
-        /// 基于轮廓特征匹配焊接接头类型
-        /// </summary>
-        public static JointType MatchJointType(Mat contourImage)
-        {
-            if (contourImage == null || contourImage.IsEmpty)
-                return JointType.Unknown;
-
-            Mat binary = new Mat();
-            CvInvoke.Threshold(contourImage, binary, 127, 255, ThresholdType.Binary);
-
-            VectorOfVectorOfPoint contours = new VectorOfVectorOfPoint();
-            Mat hierarchy = new Mat();
-            CvInvoke.FindContours(binary, contours, hierarchy, RetrType.External, ChainApproxMethod.ChainApproxSimple);
-
-            if (contours.Size == 0)
-                return JointType.Unknown;
-
-            int maxIdx = 0;
-            double maxArea = 0;
-            for (int i = 0; i < contours.Size; i++)
-            {
-                double area = CvInvoke.ContourArea(contours[i]);
-                if (area > maxArea)
-                {
-                    maxArea = area;
-                    maxIdx = i;
-                }
-            }
-
-            VectorOfPoint largestContour = contours[maxIdx];
-            VectorOfPoint approxCurve = new VectorOfPoint();
-            double epsilon = 0.02 * CvInvoke.ArcLength(largestContour, true);
-            CvInvoke.ApproxPolyDP(largestContour, approxCurve, epsilon, true);
-
-            int vertexCount = approxCurve.Size;
-
-            if (vertexCount == 2 || vertexCount == 3)
-            {
-                double angle = CalculateLargestAngle(approxCurve);
-                if (angle > 60 && angle < 120)
-                    return JointType.CornerJoint;
-            }
-            else if (vertexCount >= 4 && vertexCount <= 6)
-            {
-                Rectangle boundingRect = CvInvoke.BoundingRectangle(largestContour);
-                double aspectRatio = (double)boundingRect.Width / boundingRect.Height;
-
-                if (aspectRatio > 1.5 || aspectRatio < 0.67)
-                    return JointType.LapJoint;
-
-                if (IsTJointShape(largestContour, approxCurve))
-                    return JointType.TJoint;
-            }
-            else if (vertexCount > 6)
-            {
-                return JointType.ButtJoint;
-            }
-
-            return JointType.Unknown;
-        }
-
-        /// <summary>
         /// 查找图像中的所有轮廓
         /// </summary>
         public static VectorOfVectorOfPoint FindContours(Mat image, double binaryThreshold = 127, 
@@ -319,6 +245,7 @@ namespace AdaWeldSystem.EmguALG.Core
         /// <summary>
         /// 计算焊缝宽度（轮廓水平方向最大跨度）
         /// </summary>
+        /// <returns>计算结果。</returns>
         public static double CalculateSeamWidth(VectorOfPoint contour)
         {
             if (contour == null || contour.Size == 0) return 0;
@@ -329,6 +256,7 @@ namespace AdaWeldSystem.EmguALG.Core
         /// <summary>
         /// 计算焊缝截面积
         /// </summary>
+        /// <returns>计算结果。</returns>
         public static double CalculateSeamArea(VectorOfPoint contour)
         {
             if (contour == null || contour.Size == 0) return 0;
@@ -354,9 +282,9 @@ namespace AdaWeldSystem.EmguALG.Core
             bool showResult, out string resultInfo)
         {
             resultInfo = "";
-            bool matchSuccess = false;
-            Point matchLoc = new Point(-1, -1);
-            double matchValue = 0.0;
+            bool matchSuccess;
+            Point matchLoc;
+            double matchValue;
 
             Mat output;
             if (image.NumberOfChannels == 1)
@@ -445,66 +373,7 @@ namespace AdaWeldSystem.EmguALG.Core
             return binary;
         }
 
-        /// <summary>返回面积最大的轮廓索引（空集合时返回 0）。</summary>
-        /// <param name="contours">待查找的轮廓集合</param>
-        private static int FindLargestContourIndex(VectorOfVectorOfPoint contours)
-        {
-            int idx = 0;
-            double maxA = 0;
-            for (int i = 0; i < contours.Size; i++)
-            {
-                double a = CvInvoke.ContourArea(contours[i]);
-                if (a > maxA) { maxA = a; idx = i; }
-            }
-            return idx;
-        }
-
-        private static double CalculateLargestAngle(VectorOfPoint polygon)
-        {
-            if (polygon.Size < 3) return 0;
-            double maxAngle = 0;
-            System.Drawing.Point[] pts = polygon.ToArray();
-            for (int i = 0; i < pts.Length; i++)
-            {
-                System.Drawing.Point prev = pts[(i - 1 + pts.Length) % pts.Length];
-                System.Drawing.Point curr = pts[i];
-                System.Drawing.Point next = pts[(i + 1) % pts.Length];
-                double angle = CalculateAngle(prev, curr, next);
-                if (angle > maxAngle) maxAngle = angle;
-            }
-            return maxAngle;
-        }
-
-        private static double CalculateAngle(System.Drawing.Point p1, System.Drawing.Point p2, System.Drawing.Point p3)
-        {
-            double dx1 = p1.X - p2.X;
-            double dy1 = p1.Y - p2.Y;
-            double dx2 = p3.X - p2.X;
-            double dy2 = p3.Y - p2.Y;
-            double dot = dx1 * dx2 + dy1 * dy2;
-            double mag1 = Math.Sqrt(dx1 * dx1 + dy1 * dy1);
-            double mag2 = Math.Sqrt(dx2 * dx2 + dy2 * dy2);
-            if (mag1 < 0.001 || mag2 < 0.001) return 0;
-            double cosAngle = dot / (mag1 * mag2);
-            cosAngle = Math.Max(-1, Math.Min(1, cosAngle));
-            return Math.Acos(cosAngle) * 180 / Math.PI;
-        }
-
-        private static bool IsTJointShape(VectorOfPoint contour, VectorOfPoint approxCurve)
-        {
-            if (approxCurve.Size < 4) return false;
-            Rectangle boundingRect = CvInvoke.BoundingRectangle(contour);
-            double contourArea = CvInvoke.ContourArea(contour);
-            double rectArea = boundingRect.Width * boundingRect.Height;
-            if (rectArea > 0)
-            {
-                double extent = contourArea / rectArea;
-                return extent > 0.5 && extent < 0.8;
-            }
-            return false;
-        }
-
-        private static void DrawTextOnImage(Mat image, string text, Point origin, MCvScalar color)
+         private static void DrawTextOnImage(Mat image, string text, Point origin, MCvScalar color)
         {
             FontFace font = FontFace.HersheySimplex;
             double fontScale = 0.5;
@@ -591,6 +460,19 @@ namespace AdaWeldSystem.EmguALG.Core
 
         #region 8. 监控相机算法区（焊前对中 / 焊中质量检测）
 
+        /// <summary>生成叠加绘制用的彩色 Mat（输入为灰度时转为 BGR，便于</summary>
+        /// <remarks>彩色标注）</remarks>
+        private static Mat PrepareOverlayMat(Mat image)
+        {
+            if (image.NumberOfChannels == 1)
+            {
+                Mat bgr = new Mat();
+                CvInvoke.CvtColor(image, bgr, ColorConversion.Gray2Bgr);
+                return bgr;
+            }
+            return image.Clone();
+        }
+
         public static WireFeedResult DetectPreWeldAlignment(Mat image, WireFeedConfig config)
         {
             var result = new WireFeedResult();
@@ -650,6 +532,9 @@ namespace AdaWeldSystem.EmguALG.Core
                 }
             }
 
+            // 毫米化偏差 + 三级判定 + 剪丝判据
+            result.WireMatched = !wireCenter.IsEmpty;
+            result.WireHeadAdhesion = laserCenter.IsEmpty;
             result.LaserCenter = laserCenter;
             result.WireCenter = wireCenter;
             result.AngleDeg = wireAngle;
@@ -657,6 +542,7 @@ namespace AdaWeldSystem.EmguALG.Core
             if (laserCenter.IsEmpty || wireCenter.IsEmpty)
             {
                 result.Aligned = false;
+                result.Grade = WireAlignGrade.Fail;
                 DrawTextOnImage(work, "检测失败 未找到激光光斑或焊丝", new Point(10, 30), new MCvScalar(0, 0, 255));
                 result.OverlayMat = work;
                 return result;
@@ -666,24 +552,36 @@ namespace AdaWeldSystem.EmguALG.Core
             double dy = laserCenter.Y - wireCenter.Y;
             result.OffsetX = dx;
             result.OffsetY = dy;
-            bool aligned = Math.Abs(dx) <= config.ToleranceX && Math.Abs(dy) <= config.ToleranceY;
+            result.DevXMm = dx * config.PixelMmScale;
+            result.DevYMm = dy * config.PixelMmScale;
+
+            // 轴向映射：送丝方向 ↔ 水平像素轴（可配换轴/换符号）；余下轴 = 横向只报警
+            double stickoutPx = config.StickoutAxisHorizontal ? dx : dy;
+            double lateralMm = (config.StickoutAxisHorizontal ? result.DevYMm : result.DevXMm);
+            result.WireStickoutDevMm = stickoutPx * config.PixelMmScale * config.StickoutSign;
+            result.LateralDevMm = lateralMm;
+
+            double lateralAbs = Math.Abs(lateralMm);
+            result.Grade = lateralAbs <= config.CenterWarnMm ? WireAlignGrade.Pass
+                         : lateralAbs <= config.CenterFailMm ? WireAlignGrade.Warn
+                         : WireAlignGrade.Fail;
+            bool aligned = result.Grade == WireAlignGrade.Pass;
             result.Aligned = aligned;
 
             CvInvoke.Circle(work, new Point((int)laserCenter.X, (int)laserCenter.Y), 6, new MCvScalar(0, 0, 255), -1);
             CvInvoke.Circle(work, new Point((int)wireCenter.X, (int)wireCenter.Y), 6, new MCvScalar(0, 255, 0), -1);
             CvInvoke.Line(work, new Point((int)wireCenter.X, (int)wireCenter.Y),
                 new Point((int)laserCenter.X, (int)laserCenter.Y), new MCvScalar(255, 255, 0), 2);
-            string info = string.Format("偏移X {0:F1} 偏移Y {1:F1} 角度 {2:F1} 对中 {3}",
-                dx, dy, wireAngle, aligned ? "OK" : "NG");
+            string info = string.Format("丝偏 {0:F2}mm 横偏 {1:F2}mm 角度 {2:F1} 判定 {3}",
+                result.WireStickoutDevMm, lateralMm, wireAngle, result.Grade);
             DrawTextOnImage(work, info, new Point(10, 30), aligned ? new MCvScalar(0, 255, 0) : new MCvScalar(0, 0, 255));
             result.OverlayMat = work;
             return result;
         }
 
-        /// <summary>
-        /// 焊中焊接质量检测
-        /// 输入 2D 图，识别焊道并检测缺陷（气孔/裂纹），输出缺陷数与质量分
-        /// </summary>
+        /// <summary>焊中焊接质量检测 输入 2D 图，识别焊道并检测缺陷（</summary>
+        /// <remarks>气孔/裂纹），输出缺陷数与质量分</remarks>
+        /// <param name="config">配置对象。</param>
         public static WeldQualityResult DetectWeldQuality(Mat image, WeldQualityConfig config)
         {
             var result = new WeldQualityResult();
@@ -742,8 +640,7 @@ namespace AdaWeldSystem.EmguALG.Core
             }
 
             result.DefectCount = result.Defects.Count;
-            double penalty = result.Defects.Count * 15;
-            double score = 100 - penalty;
+            double score = 100 - result.Defects.Count * 15;
             if (score < 0) score = 0;
             result.QualityScore = score;
             result.Pass = score >= config.PassScore;
@@ -752,20 +649,6 @@ namespace AdaWeldSystem.EmguALG.Core
             DrawTextOnImage(work, info, new Point(10, 30), result.Pass ? new MCvScalar(0, 255, 0) : new MCvScalar(0, 0, 255));
             result.OverlayMat = work;
             return result;
-        }
-
-        /// <summary>
-        /// 生成叠加绘制用的彩色 Mat（输入为灰度时转为 BGR，便于彩色标注）
-        /// </summary>
-        private static Mat PrepareOverlayMat(Mat image)
-        {
-            if (image.NumberOfChannels == 1)
-            {
-                Mat bgr = new Mat();
-                CvInvoke.CvtColor(image, bgr, ColorConversion.Gray2Bgr);
-                return bgr;
-            }
-            return image.Clone();
         }
 
         #endregion

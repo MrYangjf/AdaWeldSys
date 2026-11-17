@@ -1,8 +1,9 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using AdaWeldSystem.LineLaserCam.ILineLaser;
 using AdaWeldSystem.MotionControl.IMotion;
 using AdaWeldSystem.WeldParamControl;
+using AdaWeldSystem.WeldParamControl.Abstractions;
 using AdaWeldSystem.Comm.SystemComm;
 using AdaWeldSystem.FileOperate;
 
@@ -10,15 +11,18 @@ namespace AdaWeldSystem.WeldParamControl.Algorithms
 {
     /// <summary>线激光焊缝几何轨迹跟踪算法实现（非单例）。</summary>
     /// <remarks>
-    /// 把「线激光结果 + 机器人坐标 + 时间戳」搓合为 <see cref="SeamGuideSample"/>，经三级修正后
-    /// 换算为 Y 轴运动目标并输出为 <see cref="PVTPoint"/> 集合：
-    /// ① 无值容差——机器人行程内无有效结果时偏差记 0 继续移动，超出容差即报警；
-    /// ② 超限剔除——相邻偏差跳变超过阈值的点不归入轨迹计算，避免单帧噪点污染轨迹；
-    /// ③ 单调约束——机器人行程窗口内轨迹只朝一个方向移动，抑制线激光来回跳动的微小回调。
-    /// 转换模型：偏差 = (特征Y - 零点) × 轴/线激光比例 × 方向；运动目标 = 轴当前值 + 偏差。
-    /// 本算法只负责计算轨迹点，不直接写入控制器；点集由运控工作流批量下发。
+    /// 把线激光结果、坐标与时间戳搓合为 <see cref="SeamGuideSample"/>。
+    /// 换算为 Y 轴运动目标并输出为 <see cref="PVTPoint"/> 集合。
+    /// ① 无值容差：无有效结果时偏差记 0，超限报警。
+    /// ② 超限剔除：相邻跳变超阈值的点不入轨迹。
+    /// ③ 单调约束：窗口内轨迹只朝一个方向移动。
+    /// 抑制线激光来回跳动的微小回调。
+    /// 转换模型：偏差 = (特征Y − 示教中心Y) × 比例 × 方向。
+    /// 运动目标 = 轴当前值 + 偏差。
+    /// 本算法只负责计算轨迹点，不直接写入控制器。
+    /// 点集由运控工作流批量下发。
     /// </remarks>
-    public class SeamTrackingAlgorithm : Abstractions.WeldAlgorithmBase
+    public class SeamTrackingAlgorithm : WeldAlgorithmBase
     {
         #region 常量
 
@@ -144,15 +148,8 @@ namespace AdaWeldSystem.WeldParamControl.Algorithms
             _faultReason = "";
         }
 
-        /// <summary>把线激光坐标换算为带方向的偏差（毫米）。</summary>
-        /// <param name="sample">引导样本</param>
-        /// <returns>偏差值</returns>
-        private double ToDeviation(SeamGuideSample sample)
-        {
-            return (sample.FeatureY - _config.LaserZeroMm) * _config.AxisMmPerLaserMm * _config.GuideSign;
-        }
-
-        /// <summary>单调约束：窗口内只朝一个方向移动，抑制反向微小回调。</summary>
+        /// <summary>单调约束：窗口内只朝一个方向移动，抑制反向微</summary>
+        /// <remarks>小回调。</remarks>
         /// <param name="rawDev">原始偏差</param>
         /// <param name="robotX">机器人当前 X 坐标</param>
         /// <returns>约束后的偏差</returns>
@@ -205,7 +202,8 @@ namespace AdaWeldSystem.WeldParamControl.Algorithms
             _pending.Add(new PVTPoint(pos, time, vel));
         }
 
-        /// <summary>处理一帧引导样本：无值容差 → 超限剔除 → 单调约束 → 标定转换 → 攒批。</summary>
+        /// <summary>处理一帧引导样本：无值容差 → 超限剔除 → 单调约束 → </summary>
+        /// <remarks>标定转换 → 攒批。</remarks>
         /// <param name="sample">引导样本</param>
         private void ProcessSample(SeamGuideSample sample)
         {
@@ -232,11 +230,11 @@ namespace AdaWeldSystem.WeldParamControl.Algorithms
             }
             else
             {
-                double rawDev = ToDeviation(sample);
+                double rawDev = (sample.FeatureY - _config.CalibratedCenterY) * _config.AxisMmPerLaserMm * _config.GuideSign;
                 if (_hasLastAccepted && Math.Abs(rawDev - _lastAcceptedDeviation) > _config.OutlierLimitMm)
                 {
-                    // 超限点剔除，不归入轨迹计算，保持上一有效偏差维持轨迹连续
-                    dev = _hasLastAccepted ? _lastAcceptedDeviation : 0.0;
+                    // 超限点剔除，保持上一有效偏差以维持连续。
+                    dev = _lastAcceptedDeviation;
                 }
                 else
                 {
@@ -319,7 +317,7 @@ namespace AdaWeldSystem.WeldParamControl.Algorithms
         }
 
         /// <summary>按最长输出间隔强制输出一段轨迹。</summary>
-        /// <returns>超过间隔且存在待下发点时返回 PVT 点数组，否则返回空数组</returns>
+        /// <returns>超间隔且有下发点时返回点数组，否则空数组</returns>
         public PVTPoint[] Tick()
         {
             lock (_lock)

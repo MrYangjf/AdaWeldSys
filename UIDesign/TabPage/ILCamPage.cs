@@ -1,4 +1,4 @@
-﻿using AdaWeldSystem.MainDeviceControl.DeviceWorkflow;
+﻿﻿using AdaWeldSystem.MainDeviceControl.DeviceWorkflow;
 using AdaWeldSystem.LineLaserCam.IntelligentLaserCam;
 using AdaWeldSystem.LineLaserCam;
 using AdaWeldSystem.LineLaserCam.ILineLaser;
@@ -10,7 +10,9 @@ using System.Drawing;
 using System.Threading;
 using System.Windows.Forms;
 using AdaWeldSystem.Comm.SystemComm;
+using AdaWeldSystem.MainDeviceControl;
 using AdaWeldSystem.EmguALG.Core;
+using AdaWeldSystem.EmguALG.Manager;
 using AdaWeldSystem.MainDeviceControl.DeviceStateApiCore;
 using AdaWeldSystem.UIDesign.SubDialog.IntelligentLaserDialog;
 
@@ -28,7 +30,7 @@ namespace AdaWeldSystem.UIDesign.TabPage
             InitializeComponent();
             InitResultTable();
 
-            // 事件订阅放代码后置（Designer 手写事件订阅会被设计器重新序列化时丢失）
+            // 事件订阅放代码后置，避免设计器序列化丢失
             btnConnect.Click += btnConnect_Click;
             btnScan.Click += btnScan_Click;
             btnLaser.Click += btnLaser_Click;
@@ -41,26 +43,27 @@ namespace AdaWeldSystem.UIDesign.TabPage
             btnParamEdit.Click += btnParamEdit_Click;
             swDisplay.CheckedChanged += swDisplay_CheckedChanged;
 
-            // 订阅线激光工作流焊接过程态（WeldStatusChanged），用 WeldStatus 判断自动/空闲，不新增 bool
+            // 订阅焊接过程态，用 WeldStatus 判自动/空闲
             LineLaserWorkflow.Instance.WeldStatusChanged += OnWorkflowStateChanged;
 
-            // 切换到英莱相机并获取实例（不持久化，仅当前会话生效）
+            // 切到英莱相机：不持久化，仅本会话生效
             LineLaserManager.Instance.SelectIntelligentLaser();
             _ilCamera = LineLaserManager.Instance.IntelligentLaser;
 
-            // 初始化 IP 输入框：显示本地配置保存的 IP（需求：初始化使用保存路径上的 IP）
+            // 初始化 IP 输入框：显示本地配置保存的 IP
             txtIP.Text = LineLaserManager.Instance.Config.SensorIp;
 
-            // 统一刷新入口：连接态 + 模式（覆盖原 UpdateConnectionUi/UpdateModeUi 两处直调）
+            // 统一刷新入口：连接态 + 模式
             RefreshUi(RefreshUiScope.Connection | RefreshUiScope.Mode);
-            // 订阅线激光管理器的 Mat 更新事件（显示处理由管理器承担，ADR-035）
+            // 订阅 Mat 更新，显示由管理器处理
             LineLaserManager.Instance.MatUpdated += OnMatUpdated;
-            // 订阅 Job 参数变更（切 JOB/改参数，可能来自 ILAlgoPage 算法编辑页或工作流）→ 同步主 UI 下拉
+            // 订阅 Job 变更，同步主界面下拉
             if (_ilCamera != null) _ilCamera.JobParamsChanged += OnIlJobParamsChanged;
-            // ADR-019：订阅「线激光」设备态切换 StateSwitched（设备状态外发），统一驱动刷新状态标签
+            // 订阅「线激光」设备态切换 StateSwitched，统一驱动刷新状态标签
             LineLaserWorkflow.Instance.StateSwitched += OnIlStateChanged;
-            // 若相机已连接（如启动检测/子设备初始化已连接），直接同步一次硬件状态到 UI
-            // （"第一次正确"：连接后本地状态与硬件一致，之后按钮点击本地生效）
+            // 初始化结束刷新连接按钮
+            DeviceControlWork.Instance.InitializationCompleted += OnInitializationCompleted;
+            // 已连接则先同步一次硬件状态到界面
             if (_ilCamera != null && _ilCamera.IsConnected)
             {
                 RefreshUi(RefreshUiScope.Hardware);
@@ -120,10 +123,10 @@ namespace AdaWeldSystem.UIDesign.TabPage
             // 实测回调帧率（首帧已剔除，保留 1 位小数）
             lblMeasuredFps.Text = string.Format("回调帧率：{0:F1} Hz", _ilCamera.MeasuredFps);
 
-            // 自动运行期间不在本页绘制，轮廓与结果由管理器分发给主页面 ScottPlot
+            // 自动运行时不绘制，结果交主页面
             if (IsWorkflowRunning(LineLaserWorkflow.Instance.WeldStatus)) return;
 
-            // 手动模式下 swDisplay 控制是否绘制 Mat（允许只看结果表不看画面）
+            // 手动模式由 swDisplay 控制是否绘制
             if (swDisplay.Checked)
             {
                 ShowMat(_ilCamera.CurrentMat);
@@ -139,7 +142,7 @@ namespace AdaWeldSystem.UIDesign.TabPage
             var old = _displayedClone;
             _displayedClone = clone;
             imageBox.Image = clone;
-            if (old != null) old.Dispose();
+            old?.Dispose();
         }
 
         private void InitResultTable()
@@ -161,14 +164,13 @@ namespace AdaWeldSystem.UIDesign.TabPage
         {
             var rows = new List<InspectResultRow>();
             LineLaserSeamResult r = _ilCamera.LastInspectResult;
-            if (!r.Valid)
+            // 无结果也显示状态码，用于定位原因
+            rows.Add(new InspectResultRow { Field = "状态", Value = r.Valid ? "有识别结果" : "无识别结果", Unit = "-" });
+            rows.Add(new InspectResultRow { Field = "ParseRes", Value = r.ParseRes.ToString(), Unit = "-" });
+            rows.Add(new InspectResultRow { Field = "ErrorCode", Value = r.ErrorCode.ToString(), Unit = "-" });
+            // 几何与测量值仅在有结果时显示
+            if (r.Valid)
             {
-                rows.Add(new InspectResultRow { Field = "状态", Value = "-", Unit = "无识别结果" });
-            }
-            else
-            {
-                rows.Add(new InspectResultRow { Field = "ParseRes", Value = r.ParseRes.ToString(), Unit = "-" });
-                rows.Add(new InspectResultRow { Field = "ErrorCode", Value = r.ErrorCode.ToString(), Unit = "-" });
                 rows.Add(new InspectResultRow { Field = "FeatureY", Value = r.FeatureY.ToString("F3"), Unit = "mm" });
                 rows.Add(new InspectResultRow { Field = "FeatureZ", Value = r.FeatureZ.ToString("F3"), Unit = "mm" });
                 rows.Add(new InspectResultRow { Field = "Width0", Value = r.Width0.ToString("F3"), Unit = "mm" });
@@ -187,12 +189,14 @@ namespace AdaWeldSystem.UIDesign.TabPage
         private void btnConnect_Click(object sender, EventArgs e)
         {
             if (_ilCamera == null) return;
-            // ADR-019：手动连接/断开驱动「线激光」工作流（英莱是线激光的厂商实例），
-            // 不在此维护连接布尔；连接态由 LineLaserWorkflow 的 ConnectOn/ConnectOff 承载（内部自起后台线程，非阻塞）。
-            if (_ilCamera.IsConnected)
+            if (!TryPassPageAction("手动连接线激光")) return;
+            // 界面按钮属手动动作，显式置手动模式
+            LineLaserWorkflow.Instance.SetRunMode(WorkflowRunMode.Manual);
+            // 连接态以工作流为准
+            bool connected = LineLaserWorkflow.Instance.State == SubDeviceState.Connected;
+            if (connected)
             {
-                _ilCamera.DisconnectManual();
-                // 线激光设备态 → Disconnect（手动断开）
+                // 断开统一经工作流后台线程承载
                 LineLaserWorkflow.Instance.ConnectOff();
             }
             else
@@ -203,33 +207,60 @@ namespace AdaWeldSystem.UIDesign.TabPage
                     AntdUI.Message.warn(this.FindForm(), "请输入相机IP！");
                     return;
                 }
-                bool ok = _ilCamera.ConnectManual(ip);
-                // 连接结果 → Connect(连接就绪) / Disconnect(连接失败)
-                if (ok)
-                    LineLaserWorkflow.Instance.ConnectOn();
-                else
-                    LineLaserWorkflow.Instance.ConnectOff();
-
-                if (ok)
+                // 先落 IP 到配置，连接线程按配置地址执行
+                LineLaserManager.Instance.Config.SensorIp = ip;
+                LineLaserManager.Instance.SaveConfig();
+                if (!LineLaserWorkflow.Instance.ConnectOn())
                 {
-                    // 从相机端读取实际状态并刷新 UI（硬件状态检测 + Job + 帧率 + 传感器使能）
-                    RefreshUi(RefreshUiScope.Hardware);
+                    AntdUI.Message.info(this.FindForm(), "线激光连接正在进行中，请稍候...");
                 }
             }
-            // 统一刷新入口：连接态标签/按钮 + 模式可用性基于线激光状态机识别
+            // 刷新连接态与模式
             RefreshUi(RefreshUiScope.Connection | RefreshUiScope.Mode);
+        }
+
+        /// <summary>页面动作门控：三档拒绝。</summary>
+        /// <param name="action">动作描述，用于提示与日志。</param>
+        /// <returns>true 表示允许执行。</returns>
+        private bool TryPassPageAction(string action)
+        {
+            if (DeviceControlWork.Instance.IsShuttingDown)
+            {
+                AntdUI.Message.warn(this.FindForm(), "程序正在关闭，暂不支持" + action + "。");
+                LogPageWarning("页面动作被拒绝 " + action + " 原因 正在关闭");
+                return false;
+            }
+            if (DeviceControlWork.Instance.IsInitializing)
+            {
+                AntdUI.Message.warn(this.FindForm(), "设备初始化中仅可查询，" + action + " 已拒绝。");
+                LogPageWarning("页面动作被拒绝 " + action + " 原因 初始化中");
+                return false;
+            }
+            if (!PermissionLevel.IsEngineerOrAbove(GlobalCommData.mOperateLevel))
+            {
+                string msg = "当前权限为" + PermissionLevel.GetDisplayName(GlobalCommData.mOperateLevel)
+                           + "，无权" + action + "。该操作需工程师及以上权限。";
+                AntdUI.Message.warn(this.FindForm(), msg);
+                LogPageWarning("页面动作被拒绝 " + action + " 原因 权限不足 当前等级 " + GlobalCommData.mOperateLevel);
+                return false;
+            }
+            return true;
+        }
+
+        private static void LogPageWarning(string message)
+        {
+            GlobalCommData.ShowLog("ILCamPage", message, MessageLevel.Warning);
         }
 
         private void SyncFromHardwareCore()
         {
             if (_ilCamera == null) return;
 
-            // 1. 从硬件同步一次激光/相机开关状态到本地（"第一次正确"），统一刷新激光/传感器按钮 text
-            //    （之后 SetLaser/SetSensor 本地更新，UI 点击后立即生效，不再反复读硬件）
+            // 从硬件同步一次开关状态到本地
             _ilCamera.SyncHardwareStatus();
             UpdateLaserSensorUi();
 
-            // 2. 需求2：从相机端读取 Job 和帧率
+            // 2. 从相机端读取 Job 和帧率
             RefreshJobSelect();
             RefreshFpsSelect();
 
@@ -274,18 +305,17 @@ namespace AdaWeldSystem.UIDesign.TabPage
         private void btnCaptureCamera_Click(object sender, EventArgs e)
         {
             if (_ilCamera == null || !_ilCamera.IsConnected) return;
-            // 线激光工作方式：SetSensor 才是启停传感器（回调由此开始/停止）；
-            // SetCaptureCamera 仅上电采集相机、不启动传感器，非线激光工作方式，已舍弃。
+            // 启停传感器用 SetSensor，回调随之启停；SetCaptureCamera 不启动传感器，不用
             _ilCamera.SetSensor(!_ilCamera.IsCameraOn());
             UpdateLaserSensorUi();
-            // 需求2：传感器开启时禁用帧率切换，关闭时恢复
+            // 传感器开启时禁用帧率切换，关闭时恢复
             UpdateFpsDropdownState();
         }
 
         private void btnAlgoEdit_Click(object sender, EventArgs e)
         {
             // 英莱分支下 AlgorithmEditForm 会挂载 ILAlgoPage（JOB 参数编辑），PipelineConfig 仅作占位
-            using (ILAlgorithmEditForm dlg = new ILAlgorithmEditForm(this.FindForm() as AntdUI.Window, new PipelineConfig()))
+            using (ILAlgorithmEditForm dlg = new ILAlgorithmEditForm(this.FindForm() as AntdUI.Window, AlgorithmManager.Instance.CreateEmptyPipelineConfig()))
             {
                 AntdUI.Modal.open(new AntdUI.Modal.Config(this.FindForm(), "算法编辑", dlg, TType.Info)
                 {
@@ -298,7 +328,7 @@ namespace AdaWeldSystem.UIDesign.TabPage
         private void btnParamEdit_Click(object sender, EventArgs e)
         {
             if (_ilCamera == null) return;
-            // 打开独立「相机参数编辑」页（AntdUI.Table 展示 Job Parameter，支持读取/修改/保存）
+            // 打开相机参数编辑页（可读改存 Job 参数）
             using (var dlg = new ILParamForm(this.FindForm() as AntdUI.Window, _ilCamera))
             {
                 AntdUI.Modal.open(new AntdUI.Modal.Config(this.FindForm(), "相机参数编辑", dlg, TType.Info)
@@ -336,8 +366,7 @@ namespace AdaWeldSystem.UIDesign.TabPage
 
         private void cmbJob_SelectedIndexChanged(object sender, IntEventArgs e)
         {
-            // 需求2：下拉选择后不立即切换，点击"应用"按钮才确认切换
-            // 此处仅更新应用按钮的可用状态：选中项与当前一致则禁用，不一致则启用
+            // 下拉选择不立即切换，点「应用」才确认；此处仅按「与设备是否一致」更新按钮可用性
             UpdateApplyButtonsState();
         }
 
@@ -350,7 +379,7 @@ namespace AdaWeldSystem.UIDesign.TabPage
                 return;
             }
             if (_ilCamera == null || !_ilCamera.IsConnected) return;
-            // 切 JOB 后同步 cmbJob 下拉选中项 + 应用按钮态（"job 切换同步到主 UI"）
+            // 切 JOB 后同步下拉选中项与应用按钮态
             RefreshJobSelect();
             UpdateApplyButtonsState();
         }
@@ -360,8 +389,7 @@ namespace AdaWeldSystem.UIDesign.TabPage
             if (_ilCamera == null || !_ilCamera.IsConnected) return;
             int idx = cmbJob.SelectedIndex;
             if (idx < 0 || idx >= cmbJob.Items.Count) return;
-            var item = cmbJob.Items[idx] as CmbJobItem;
-            if (item == null) return;
+            if (!(cmbJob.Items[idx] is CmbJobItem item)) return;
             int currentId = _ilCamera.FetchCurrentJobId();
             if (currentId == item.JobId) return;
             int ret = _ilCamera.SwitchJob(item.JobId);
@@ -371,9 +399,10 @@ namespace AdaWeldSystem.UIDesign.TabPage
             }
             else
             {
-                AntdUI.Message.warn(this.FindForm(), string.Format("JOB {0} 切换失败, ret={1}", item.JobId, ret));
+                AntdUI.Message.warn(this.FindForm(), string.Format("JOB {0} 切换失败, {1}", item.JobId,
+                    LineLaserManager.Instance.DescribeLastError(LineLaserErrorContext.ReturnCode)));
             }
-            // 无论成功失败都刷新下拉 + 应用按钮态（失败时回滚显示）
+            // 成功失败都刷新下拉与应用按钮态
             RefreshJobSelect();
             UpdateApplyButtonsState();
         }
@@ -403,8 +432,7 @@ namespace AdaWeldSystem.UIDesign.TabPage
 
         private void cmbFps_SelectedIndexChanged(object sender, IntEventArgs e)
         {
-            // 需求2：下拉选择后不立即切换，点击"应用"按钮才确认切换
-            // 此处仅更新应用按钮的可用状态
+            // 下拉选择不立即切换，点「应用」才确认；此处仅更新应用按钮可用性
             UpdateApplyButtonsState();
         }
 
@@ -413,7 +441,7 @@ namespace AdaWeldSystem.UIDesign.TabPage
             if (_ilCamera == null || !_ilCamera.IsConnected) return;
             int idx = cmbFps.SelectedIndex;
             if (idx < 0 || idx >= 3) return;
-            // 相机开启时禁止切换帧率（SDK 报错），呼应 [[lessons/IntelligentLaser-Pitfalls]]
+            // 相机开启时禁止切换帧率（SDK 报错）
             if (_ilCamera.IsCameraOn())
             {
                 AntdUI.Message.warn(this.FindForm(), "传感器运行时无法切换帧率，请先关闭传感器！");
@@ -434,7 +462,7 @@ namespace AdaWeldSystem.UIDesign.TabPage
             {
                 AntdUI.Message.warn(this.FindForm(), "帧率模式切换失败！");
             }
-            // 无论成功失败都刷新 + 更新按钮状态（失败时回滚显示）
+            // 成功失败都刷新并更新按钮状态
             RefreshFpsSelect();
             UpdateApplyButtonsState();
         }
@@ -458,7 +486,7 @@ namespace AdaWeldSystem.UIDesign.TabPage
             }
             btnApplyJob.Enabled = jobChanged;
 
-            // 帧率应用按钮：当前选中的模式与设备实际模式不同时启用
+            // 帧率按钮：选中模式与设备实际不同则启用
             int fpsIdx = cmbFps.SelectedIndex;
             bool fpsChanged = false;
             if (fpsIdx >= 0 && fpsIdx < 3)
@@ -495,7 +523,7 @@ namespace AdaWeldSystem.UIDesign.TabPage
                 Invoke(new Action(() => OnWorkflowStateChanged(sender, e)));
                 return;
             }
-            // 工作流状态变更：模式可用性 + 连接态标签统一刷新
+            // 状态变更：刷新模式与连接态
             RefreshUi(RefreshUiScope.Mode | RefreshUiScope.Connection);
         }
 
@@ -504,15 +532,27 @@ namespace AdaWeldSystem.UIDesign.TabPage
             RefreshDisplay();
         }
 
+        /// <summary>初始化结束回调。</summary>
+        /// <param name="success">初始化是否成功。</param>
+        private void OnInitializationCompleted(bool success)
+        {
+            if (IsDisposed || Disposing) return;
+            if (InvokeRequired)
+            {
+                BeginInvoke(new Action(() => OnInitializationCompleted(success)));
+                return;
+            }
+            RefreshUi(RefreshUiScope.Connection | RefreshUiScope.Mode);
+        }
+
         private void UpdateModeUiCore()
         {
             bool running = IsWorkflowRunning(LineLaserWorkflow.Instance.WeldStatus);
 
-            // 设置显示处理：手动/空闲模式下按需开启轮廓 Mat 生成，自动运行时关闭以节省 CPU/GPU。
-            // 生成动作由 LineLaserManager 承担（ADR-035），本页只切换开关。
+            // 手动/空闲开 Mat 生成，自动运行时关闭；生成由管理器承担，本页只切开关
             LineLaserManager.Instance.SetDisplayOptions(!running, LineLaserManager.Instance.DisplayFps, true);
 
-            // ADR-019：状态标签统一由 Connection 分支刷新（基于状态机识别），本函数只管模式可用性。
+            // 标签由 Connection 分支刷新，本函数只管模式
             if (running)
             {
                 btnConnect.Enabled = false;
@@ -530,8 +570,9 @@ namespace AdaWeldSystem.UIDesign.TabPage
             }
             else
             {
-                // 空闲时恢复手动按钮（连接态相关按钮由 Connection 分支覆盖）
-                btnConnect.Enabled = true;
+                // 初始化/关闭中锁定连接
+                bool blocked = DeviceControlWork.Instance.IsInitializing || DeviceControlWork.Instance.IsShuttingDown;
+                btnConnect.Enabled = !blocked;
                 btnScan.Enabled = true;
                 cmbJob.Enabled = true;
                 // cmbFps 使能由 UpdateFpsDropdownState 管理（需考虑传感器是否运行）
@@ -546,17 +587,27 @@ namespace AdaWeldSystem.UIDesign.TabPage
         {
             // 设备真相源：相机实例是否已连接
             bool connected = _ilCamera != null && _ilCamera.IsConnected;
+            bool blocked = DeviceControlWork.Instance.IsInitializing || DeviceControlWork.Instance.IsShuttingDown;
 
-            alert_ConnStatus.Text = connected ? "已连接" : "未连接";
-            alert_ConnStatus.TextColor = connected ? Color.FromArgb(0, 128, 0) : Color.FromArgb(192, 0, 0);
+            if (!connected && blocked)
+            {
+                // 初始化期只查询
+                alert_ConnStatus.Text = "初始化中，连接已锁定";
+                alert_ConnStatus.TextColor = Color.FromArgb(200, 120, 0);
+            }
+            else
+            {
+                alert_ConnStatus.Text = connected ? "已连接" : "未连接";
+                alert_ConnStatus.TextColor = connected ? Color.FromArgb(0, 128, 0) : Color.FromArgb(192, 0, 0);
+            }
             btnConnect.Text = connected ? "断开" : "连接";
             btnConnect.IconSvg = connected ? "DisconnectOutlined" : "ApiOutlined";
             txtIP.Enabled = !connected;
             if (!connected)
             {
-                // 断开后统一刷新激光/传感器按钮 text（基于硬件真相源，此时均关闭）
+                // 断开后按硬件真相刷新激光/传感器按钮
                 UpdateLaserSensorUi();
-                // 需求2：断开连接时清除 Job 和帧率模式的选择
+                // 断开连接时清除 Job 和帧率模式的选择
                 cmbJob.Items.Clear();
                 cmbJob.SelectedIndex = -1;
                 cmbFps.SelectedIndex = -1;
@@ -590,8 +641,7 @@ namespace AdaWeldSystem.UIDesign.TabPage
             // 设备态变更：连接态标签/按钮统一刷新
             RefreshUi(RefreshUiScope.Connection);
 
-            // 初始化完成（从 Disconnect 进入 Connect）时，完整同步硬件状态到 UI
-            // （Job 列表、帧率选择、激光/相机开关状态等），解决「初始化完 UI 仍不同步」问题
+            // Disconnected→Connected 时完整同步一次硬件状态到 UI（Job 列表、帧率、开关状态）
             if (e.OldState == SubDeviceState.Disconnected
                 && e.NewState == SubDeviceState.Connected)
             {
@@ -606,7 +656,7 @@ namespace AdaWeldSystem.UIDesign.TabPage
                 cmbFps.Enabled = false;
                 return;
             }
-            // 传感器运行时禁止切换帧率（SDK 限制：采集运行时切帧率会报错）
+            // 传感器运行时禁止切帧率（SDK 会报错）
             cmbFps.Enabled = !_ilCamera.IsCameraOn();
         }
 
@@ -616,29 +666,17 @@ namespace AdaWeldSystem.UIDesign.TabPage
             swDisplay.CheckedChanged -= swDisplay_CheckedChanged;
             LineLaserWorkflow.Instance.WeldStatusChanged -= OnWorkflowStateChanged;
             LineLaserWorkflow.Instance.StateSwitched -= OnIlStateChanged;
+            DeviceControlWork.Instance.InitializationCompleted -= OnInitializationCompleted;
             LineLaserManager.Instance.MatUpdated -= OnMatUpdated;
             if (_ilCamera != null)
             {
                 _ilCamera.JobParamsChanged -= OnIlJobParamsChanged;
             }
 
-            if (_displayedClone != null)
-            {
-                _displayedClone.Dispose();
-                _displayedClone = null;
-            }
+            _displayedClone?.Dispose();
+            _displayedClone = null;
 
-            // 页面销毁时断开相机（ADR-001：资源释放走此回调，不重写 Dispose(bool)）；
-            // 同步线激光设备态 → Disconnect（仅当处于已连接/工作态，避免重复断开）
-            if (_ilCamera != null && _ilCamera.IsConnected)
-            {
-                _ilCamera.DisconnectManual();
-                SubDeviceState st = LineLaserWorkflow.Instance.State;
-                if (st == SubDeviceState.Connected)
-                {
-                    LineLaserWorkflow.Instance.ConnectOff();
-                }
-            }
+            // 页面释放不断设备
         }
 
         #endregion

@@ -6,10 +6,8 @@ using AdaWeldSystem.FileOperate;
 namespace AdaWeldSystem.MotionControl
 {
     /// <summary>IO 注册表</summary>
-    /// <remarks>
-    /// 统一管理业务层用到的全部数字输入与输出，按键名登记并保证它们都已注册进控制器。
-    /// 输入与输出分表存放，键名空间彼此独立，允许同名。
-    /// </remarks>
+    /// <remarks>按键名登记全部数字 IO 并保证注册进控制器；
+    /// 输入输出分表存放，键名空间独立，允许同名。</remarks>
     public class IORegistry
     {
         #region 私有变量
@@ -70,8 +68,7 @@ namespace AdaWeldSystem.MotionControl
         /// <returns>输入对象，未找到返回 null</returns>
         public InputIO GetInput(string name)
         {
-            InputIO io;
-            return _inputs.TryGetValue(name, out io) ? io : null;
+            return _inputs.TryGetValue(name, out InputIO io) ? io : null;
         }
 
         /// <summary>取全部输入</summary>
@@ -102,8 +99,7 @@ namespace AdaWeldSystem.MotionControl
         /// <returns>输出对象，未找到返回 null</returns>
         public OutputIO GetOutput(string name)
         {
-            OutputIO io;
-            return _outputs.TryGetValue(name, out io) ? io : null;
+            return _outputs.TryGetValue(name, out OutputIO io) ? io : null;
         }
 
         /// <summary>取全部输出</summary>
@@ -143,7 +139,8 @@ namespace AdaWeldSystem.MotionControl
                 control.AddIO(io);
             }
 
-            Log(string.Format("已向控制器注册输入 {0} 个 输出 {1} 个", _inputs.Count, _outputs.Count));
+            Log(string.Format("已向控制器注册输入 {0} 个 输出 {1} 个", _inputs.Count, _outputs.Count),
+                MessageLevel.Debug);
         }
 
         #endregion

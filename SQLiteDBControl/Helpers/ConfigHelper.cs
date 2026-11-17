@@ -1,5 +1,6 @@
-﻿using System;
+using System;
 using System.Data;
+using AdaWeldSystem.SQLiteDBControl.ISQLiteHelper;
 
 namespace AdaWeldSystem.SQLiteDBControl.Helpers
 {

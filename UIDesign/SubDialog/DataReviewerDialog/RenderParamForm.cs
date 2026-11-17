@@ -5,25 +5,18 @@ using System.Windows.Forms;
 
 namespace AdaWeldSystem.UIDesign.SubDialog.DataReviewerDialog
 {
-    /// <summary>
-    /// 渲染参数配置对话框
-    /// 用于配置表面重建算法的参数
-    /// </summary>
+    /// <summary>渲染参数：表面重建算法参数配置</summary>
     public partial class RenderParamForm : UserControl
     {
         #region 构造函数
 
-        // 复刻 AntdUI demo SystemSet 模式：注入父 Window，内部方法用 this.Window 作 owner
+        // 注入父 Window，内部方法用 this.Window 作 owner
         private readonly Window Window;
 
-        /// <summary>
-        /// 创建渲染参数配置对话框（设计时/无父窗口）
-        /// </summary>
+        /// <summary>创建渲染参数配置对话框（设计时/无父窗口）</summary>
         public RenderParamForm() : this(null) { }
 
-        /// <summary>
-        /// 创建渲染参数配置对话框（复刻 AntdUI demo SystemSet 模式：注入父 Window）
-        /// </summary>
+        /// <summary>创建渲染参数配置对话框（注入父 Window）。</summary>
         public RenderParamForm(Window _window)
         {
             Window = _window;
@@ -36,10 +29,7 @@ namespace AdaWeldSystem.UIDesign.SubDialog.DataReviewerDialog
 
         #region 控件初始化
 
-        /// <summary>
-        /// 初始化下拉框选项
-        /// 添加所有表面重建算法名称
-        /// </summary>
+        /// <summary>初始化下拉框选项 添加所有表面重建算法名称</summary>
         private void InitializeComboBoxItems()
         {
             uiComboBox1.Items.Clear();
@@ -55,9 +45,7 @@ namespace AdaWeldSystem.UIDesign.SubDialog.DataReviewerDialog
 
         #region 配置加载与保存
 
-        /// <summary>
-        /// 从RenderConfig加载当前配置值
-        /// </summary>
+        /// <summary>从RenderConfig加载当前配置值</summary>
         private void LoadConfigValues()
         {
             uiComboBox1.SelectedIndex = (int)RenderConfig.SelectedAlgorithm;
@@ -99,9 +87,7 @@ namespace AdaWeldSystem.UIDesign.SubDialog.DataReviewerDialog
             DisplayRatio.Value = (decimal)RenderConfig.DisplayRatio;
         }
 
-        /// <summary>
-        /// 保存配置到RenderConfig
-        /// </summary>
+        /// <summary>保存配置到RenderConfig</summary>
         private void SaveConfigValues()
         {
             RenderConfig.SelectedAlgorithm = (SurfaceRenderAlgorithm)uiComboBox1.SelectedIndex;
@@ -149,17 +135,15 @@ namespace AdaWeldSystem.UIDesign.SubDialog.DataReviewerDialog
 
         #region 事件处理
 
-        /// <summary>
-        /// 算法选择变更事件
-        /// </summary>
+        /// <summary>算法选择变更事件</summary>
+        /// <param name="sender">发送方。</param>
+        /// <param name="e">事件参数。</param>
         private void uiComboBox1_SelectedIndexChanged(object sender, IntEventArgs e)
         {
             UpdateParamVisibility();
         }
 
-        /// <summary>
-        /// 更新参数控件可见性
-        /// </summary>
+        /// <summary>更新参数控件可见性</summary>
         private void UpdateParamVisibility()
         {
             tableLayoutPanelParam.Controls.Clear();
@@ -200,9 +184,8 @@ namespace AdaWeldSystem.UIDesign.SubDialog.DataReviewerDialog
             }
         }
 
-        /// <summary>
-        /// 添加参数行到面板
-        /// </summary>
+        /// <summary>添加参数行到面板</summary>
+        /// <param name="row">行数据。</param>
         private void AddParamRow(int row, Control label1, Control control1, Control label2, Control control2)
         {
             if (label1 != null && control1 != null)
@@ -217,9 +200,9 @@ namespace AdaWeldSystem.UIDesign.SubDialog.DataReviewerDialog
             }
         }
 
-        /// <summary>
-        /// 保存按钮点击事件
-        /// </summary>
+        /// <summary>保存按钮点击事件</summary>
+        /// <param name="sender">发送方。</param>
+        /// <param name="e">事件参数。</param>
         private void btnSave_Click(object sender, EventArgs e)
         {
             SaveConfigValues();
@@ -227,9 +210,9 @@ namespace AdaWeldSystem.UIDesign.SubDialog.DataReviewerDialog
             if (host != null) host.DialogResult = DialogResult.OK;
         }
 
-        /// <summary>
-        /// 取消按钮点击事件
-        /// </summary>
+        /// <summary>取消按钮点击事件</summary>
+        /// <param name="sender">发送方。</param>
+        /// <param name="e">事件参数。</param>
         private void btnCancel_Click(object sender, EventArgs e)
         {
             var host = this.FindForm();

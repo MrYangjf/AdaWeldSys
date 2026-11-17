@@ -8,13 +8,8 @@ using AdaWeldSystem.FileOperate;
 namespace AdaWeldSystem.LineLaserCam.ILineLaser
 {
     /// <summary>线激光相机抽象基类</summary>
-    /// <remarks>
-    /// 线激光族的统一抽象（类比运控 [[modules/MotionControl]] 的 L2 `IMotion/`）：
-    /// 英莱真实相机与虚拟调试相机均可互换，工作流与界面只依赖本抽象。
-    /// 本层承载相机键名、连接态派生、两个回调事件（结果与轮廓）、统一日志出口；
-    /// 硬件相关实现全部下沉派生类，抽象层不得出现厂商 SDK 类型。
-    /// 派生类**只做回调触发**，业务处理（PVT 计算、显示生成）一律由业务层完成。
-    /// </remarks>
+    /// <remarks>真实相机与虚拟相机可互换，界面只依赖本抽象；
+    /// 派生类只触发回调，业务处理归业务层。</remarks>
     public abstract class LineLaserCameraBase : IDisposable
     {
         #region 私有变量
@@ -49,20 +44,20 @@ namespace AdaWeldSystem.LineLaserCam.ILineLaser
             {
                 lock (_matLock)
                 {
-                    return (_currentMat == null) ? null : _currentMat.Clone();
+                    return _currentMat?.Clone();
                 }
             }
         }
 
-        /// <summary>采集扫描率（Hz），业务层据此缩放等待超时与节流节拍</summary>
+        /// <summary>采集扫描率，业务层据此缩放超时</summary>
         public abstract double ScanRateHz { get; }
 
         /// <summary>采集完成信号（业务层等待此信号后读取结果）</summary>
         public abstract AutoResetEvent AcquisitionCompletedSignal { get; }
 
         /// <summary>
-        /// 校准数据快照，业务层生成轮廓 Mat 时据此绘制校准框与毫米刻度。
-        /// 厂商实现层在 SDK 回调中捕获并存储，未捕获到时返回空结构（HasData 为 false）。
+        /// 校准快照，业务层据此绘制校准框。
+        /// 回调捕获存储，未捕获返回空结构。
         /// </summary>
         public virtual LineLaserCalibration Calibration { get { return new LineLaserCalibration(); } }
 
@@ -72,13 +67,13 @@ namespace AdaWeldSystem.LineLaserCam.ILineLaser
             get { return IsConnected ? LineLaserConnectionState.Connected : LineLaserConnectionState.Disconnected; }
         }
 
-        /// <summary>识别结果就绪事件，由派生类在 SDK 回调末尾调用 RaiseResultReady 触发</summary>
+        /// <summary>结果就绪事件，派生类在回调末尾触发</summary>
         public event EventHandler<LineLaserResultEventArgs> ResultReady;
 
         /// <summary>轮廓就绪事件，由派生类在 SDK 回调末尾调用 RaiseProfileReady 触发</summary>
         public event EventHandler<LineLaserProfileEventArgs> ProfileReady;
 
-        /// <summary>状态变化事件，由派生类在连接与采集状态变化后调用 RaiseStateChanged 触发</summary>
+        /// <summary>状态变化事件，派生类在状态变化后触发</summary>
         public event EventHandler<LineLaserStateEventArgs> StateChanged;
 
         #endregion
@@ -101,11 +96,7 @@ namespace AdaWeldSystem.LineLaserCam.ILineLaser
         /// <param name="measuredFps">实测帧率，未统计传 0</param>
         protected void RaiseResultReady(LineLaserSeamResult result, double measuredFps)
         {
-            EventHandler<LineLaserResultEventArgs> handler = ResultReady;
-            if (handler != null)
-            {
-                handler(this, new LineLaserResultEventArgs(_cameraName, result, measuredFps));
-            }
+            ResultReady?.Invoke(this, new LineLaserResultEventArgs(_cameraName, result, measuredFps));
         }
 
         /// <summary>触发轮廓就绪事件</summary>
@@ -113,21 +104,13 @@ namespace AdaWeldSystem.LineLaserCam.ILineLaser
         /// <param name="measuredFps">实测帧率，未统计传 0</param>
         protected void RaiseProfileReady(PointCloudData cloud, double measuredFps)
         {
-            EventHandler<LineLaserProfileEventArgs> handler = ProfileReady;
-            if (handler != null)
-            {
-                handler(this, new LineLaserProfileEventArgs(_cameraName, cloud, measuredFps));
-            }
+            ProfileReady?.Invoke(this, new LineLaserProfileEventArgs(_cameraName, cloud, measuredFps));
         }
 
         /// <summary>触发状态变化事件</summary>
         protected void RaiseStateChanged()
         {
-            EventHandler<LineLaserStateEventArgs> handler = StateChanged;
-            if (handler != null)
-            {
-                handler(this, new LineLaserStateEventArgs(_cameraName, IsConnected, IsRunning, ConnectionState));
-            }
+            StateChanged?.Invoke(this, new LineLaserStateEventArgs(_cameraName, IsConnected, IsRunning, ConnectionState));
         }
 
         /// <summary>输出日志，标签取相机键名</summary>
@@ -142,8 +125,9 @@ namespace AdaWeldSystem.LineLaserCam.ILineLaser
 
         #region 公共函数
 
-        /// <summary>回写最新显示帧，由业务层生成 Mat 后调用，实现类自身不生成图像</summary>
-        /// <param name="mat">最新显示帧，传入的所有权归本对象，重复调用会释放上一帧</param>
+        /// <summary>回写最新显示帧，由业务层生成 Mat 后调用</summary>
+        /// <remarks>实现类自身不生成图像。</remarks>
+        /// <param name="mat">显示帧，所有权归本对象，重复调用释放旧帧</param>
         public void UpdateDisplayMat(Mat mat)
         {
             lock (_matLock)
@@ -169,11 +153,9 @@ namespace AdaWeldSystem.LineLaserCam.ILineLaser
 
         #region 外设虚契约
 
-        /// <summary>
-        /// 手动连接相机。
-        /// 默认实现返回 false（不支持），派生类按需重写；新增契约一律给默认实现，派生类可暂不实现。
-        /// </summary>
-        /// <param name="ip">相机 IP 地址，虚拟相机等无硬件语义的派生类可忽略</param>
+        /// <summary>手动连接相机。 默认实现返回 false（不支持），派生类按需</summary>
+        /// <remarks>新增契约给默认实现，派生类可暂不实现。</remarks>
+        /// <param name="ip">相机 IP，无硬件的派生类可忽略</param>
         /// <returns>连接成功返回 true</returns>
         public virtual bool ConnectManual(string ip)
         {
@@ -186,7 +168,8 @@ namespace AdaWeldSystem.LineLaserCam.ILineLaser
         {
         }
 
-        /// <summary>配置默认回调周期，默认实现视为无需配置并返回 true</summary>
+        /// <summary>配置默认回调周期，默认实现视为无需配置并返</summary>
+        /// <remarks>回 true</remarks>
         /// <returns>无需配置或配置成功返回 true</returns>
         public virtual bool ConfigureDefaultCommPeriod()
         {
@@ -217,6 +200,19 @@ namespace AdaWeldSystem.LineLaserCam.ILineLaser
         /// <param name="enable">true 为开启</param>
         public virtual void SetLaser(bool enable)
         {
+        }
+
+        #endregion
+
+        #region 诊断契约
+
+        /// <summary>失败原因成品文本，日志与界面只读</summary>
+        /// <remarks>默认实现表示本相机不上报厂商返回码；派生类按各自 SDK 的返回码口径覆写，不得返回空串。</remarks>
+        /// <param name="context">失败语境（连接 / 初始化 / 识别 / 指令返回码）</param>
+        /// <returns>非空的原因描述</returns>
+        public virtual string DescribeLastError(LineLaserErrorContext context)
+        {
+            return string.Format("未提供返回码（{0} 实现不上报厂商返回码）", Kind);
         }
 
         #endregion

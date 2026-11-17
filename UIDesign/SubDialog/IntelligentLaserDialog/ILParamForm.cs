@@ -1,3 +1,4 @@
+using AdaWeldSystem.LineLaserCam.ILineLaser;
 using AdaWeldSystem.LineLaserCam.IntelligentLaserCam;
 using AntdUI;
 using System;
@@ -12,7 +13,7 @@ namespace AdaWeldSystem.UIDesign.SubDialog.IntelligentLaserDialog
     public partial class ILParamForm : UserControl
     {
         #region 私有变量
-        // 复刻 AntdUI demo SystemSet 模式：注入父 Window，内部方法用 this.Window 作 owner
+        // 注入父 Window，内部方法用 this.Window 作 owner
         private readonly Window Window;
         private readonly IntelligentLaserCam _ilCamera;
         private AntdUI.AntList<CameraParamRow> _rows;
@@ -47,7 +48,7 @@ namespace AdaWeldSystem.UIDesign.SubDialog.IntelligentLaserDialog
             InitTableColumns();
             _rows = new AntdUI.AntList<CameraParamRow>();
             uiTableParam.Binding(_rows);
-            // 事件订阅放代码后置（Designer.cs 手写订阅会被设计器重新序列化时丢失）
+            // 事件订阅放代码后置，避免设计器序列化丢失
             uiTableParam.CellEndEdit += uiTableParam_CellEndEdit;
             btnFetch.Click += btnFetch_Click;
             btnSave.Click += btnSave_Click;
@@ -76,7 +77,7 @@ namespace AdaWeldSystem.UIDesign.SubDialog.IntelligentLaserDialog
 
         private void UpdateConnLabel()
         {
-            // 直接读硬件真相源，不缓存本地连接副本（避免与 IsConnected 脱节）
+            // 直读硬件真相源，不缓存连接副本
             bool connected = _ilCamera != null && _ilCamera.IsConnected;
             lblConn.Text = connected ? "英莱设备：已连接" : "英莱设备：未连接（只读）";
             lblConn.ForeColor = connected ? System.Drawing.Color.FromArgb(0, 128, 0) : System.Drawing.Color.FromArgb(192, 0, 0);
@@ -91,8 +92,8 @@ namespace AdaWeldSystem.UIDesign.SubDialog.IntelligentLaserDialog
             var p = _ilCamera.FetchCameraParams();
             if (p == null) return;
 
-            // 拉取 Job 参数（提取算法/边界 + 相机基础参数的范围来源）
-            List<IlJobParamInfo> jobParams = null;
+            // 拉取 Job 参数（算法/边界与相机参数范围来源）
+            List<IlJobParamInfo> jobParams;
             try { jobParams = _ilCamera.FetchAllJobParams(); }
             catch (Exception) { jobParams = null; }
 
@@ -193,8 +194,7 @@ namespace AdaWeldSystem.UIDesign.SubDialog.IntelligentLaserDialog
 
         private bool uiTableParam_CellEndEdit(object sender, AntdUI.TableEndEditEventArgs e)
         {
-            var row = e.Record as CameraParamRow;
-            if (row == null || e.Value == null) return true;
+            if (!(e.Record is CameraParamRow row) || e.Value == null) return true;
             if (e.Column.Key != "Value") return true;
 
             string raw = e.Value.ToString();
@@ -243,12 +243,16 @@ namespace AdaWeldSystem.UIDesign.SubDialog.IntelligentLaserDialog
                 else if (row.Kind == 3 && row.JobParam != null)
                 {
                     var jp = row.JobParam;
-                    var info = new IlJobParamInfo();
-                    info.Name = jp.Name;
-                    info.ValueType = jp.ValueType;
-                    info.HasRange = jp.HasRange;
-                    info.FloatMin = jp.FloatMin; info.FloatMax = jp.FloatMax;
-                    info.IntMin = jp.IntMin; info.IntMax = jp.IntMax;
+                    var info = new IlJobParamInfo
+                    {
+                        Name = jp.Name,
+                        ValueType = jp.ValueType,
+                        HasRange = jp.HasRange,
+                        FloatMin = jp.FloatMin,
+                        FloatMax = jp.FloatMax,
+                        IntMin = jp.IntMin,
+                        IntMax = jp.IntMax
+                    };
                     if (jp.ValueType == 1u)
                         info.StringValue = raw;
                     else if (jp.ValueType == 2u)
@@ -262,7 +266,8 @@ namespace AdaWeldSystem.UIDesign.SubDialog.IntelligentLaserDialog
             int ret = _ilCamera.ApplyCameraParams(param);
             if (ret != 0)
             {
-                AntdUI.Message.error(this.Window, string.Format("相机参数保存失败, ret={0}", ret));
+                AntdUI.Message.error(this.Window, string.Format("相机参数保存失败, {0}",
+                    _ilCamera.DescribeLastError(LineLaserErrorContext.ReturnCode)));
                 return;
             }
             if (jobEdits.Count > 0)
@@ -270,7 +275,8 @@ namespace AdaWeldSystem.UIDesign.SubDialog.IntelligentLaserDialog
                 int retJob = _ilCamera.ApplyJobParams(jobEdits);
                 if (retJob != 0)
                 {
-                    AntdUI.Message.error(this.Window, string.Format("提取算法/边界参数保存失败, ret={0}", retJob));
+                    AntdUI.Message.error(this.Window, string.Format("提取算法/边界参数保存失败, {0}",
+                        _ilCamera.DescribeLastError(LineLaserErrorContext.ReturnCode)));
                     return;
                 }
             }

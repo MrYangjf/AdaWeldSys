@@ -7,17 +7,14 @@ using AdaWeldSystem.SQLiteDBControl.Helpers;
 
 namespace AdaWeldSystem.UIDesign.SubDialog.UserManagerDialog
 {
-    /// <summary>
-    /// 用户管理界面 - 支持修改各级用户密码和用户等级
-    /// </summary>
+    /// <summary>用户管理：改各级用户密码与等级</summary>
     public partial class UserEditForm : UserControl
     {
         private readonly AuthHelper _authHelper;
-        // 与 uiDataGridView1.Binding() 绑定的强类型列表（替代原 DataTable + AutoGenerateColumns）
+        // 与 uiDataGridView1.Binding() 绑定的强类型列表
         private AntdUI.AntList<UserRow> _rows;
-        private UserRow _selectedUserRow;
 
-        // 复刻 AntdUI demo SystemSet 模式：注入父 Window，内部方法用 this.Window 作 owner
+        // 注入父 Window，内部方法用 this.Window 作 owner
         private readonly Window Window;
 
         public UserEditForm() : this(null) { }
@@ -33,10 +30,7 @@ namespace AdaWeldSystem.UIDesign.SubDialog.UserManagerDialog
             LoadUserList();
         }
 
-        /// <summary>
-        /// 初始化表格列。参考 AntdUI 官方 TableDemo 范式：在代码后置中设置 Columns，
-        /// 不可在 Designer.cs 的 InitializeComponent 内直接赋值 ColumnCollection。
-        /// </summary>
+        /// <summary>初始化表格列：Columns 须在代码后置设置，不可在 Designer 内赋值。</summary>
         private void InitTableColumns()
         {
             uiDataGridView1.Columns = new AntdUI.ColumnCollection
@@ -47,9 +41,7 @@ namespace AdaWeldSystem.UIDesign.SubDialog.UserManagerDialog
             };
         }
 
-        /// <summary>
-        /// 加载用户列表到 DataGridView
-        /// </summary>
+        /// <summary>加载用户列表到 DataGridView</summary>
         private void LoadUserList()
         {
             try
@@ -71,9 +63,9 @@ namespace AdaWeldSystem.UIDesign.SubDialog.UserManagerDialog
             }
         }
 
-        /// <summary>
-        /// 保存修改（密码和等级）
-        /// </summary>
+        /// <summary>保存修改（密码和等级）</summary>
+        /// <param name="sender">发送方。</param>
+        /// <param name="e">事件参数。</param>
         private void btnSave_Click(object sender, EventArgs e)
         {
             string userName = uiTextBoxUserName.Text.Trim();
@@ -109,8 +101,7 @@ namespace AdaWeldSystem.UIDesign.SubDialog.UserManagerDialog
             }
 
             // 修改用户等级
-            string newLevel = uiComboBoxLevel.SelectedIndex.ToString();
-            if (!_authHelper.UpdateUserLevel(userName, newLevel))
+            if (!_authHelper.UpdateUserLevel(userName, uiComboBoxLevel.SelectedIndex.ToString()))
             {
                 AntdUI.Message.error(this.Window, "用户等级修改失败");
                 return;
@@ -120,15 +111,15 @@ namespace AdaWeldSystem.UIDesign.SubDialog.UserManagerDialog
             LoadUserList();
         }
 
-        /// <summary>
-        /// 刷新用户列表
-        /// </summary>
+        /// <summary>刷新用户列表</summary>
+        /// <param name="sender">发送方。</param>
+        /// <param name="e">事件参数。</param>
         private void btnRefresh_Click(object sender, EventArgs e)
         {
             LoadUserList();
         }
 
-        // AntdUI.Table 数据行模型（替代原 DataGridView 列绑定）
+        // AntdUI.Table 数据行模型
         public class UserRow
         {
             public string UserName { get; set; }

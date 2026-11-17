@@ -6,20 +6,15 @@ using System.Windows.Forms;
 
 namespace AdaWeldSystem.UIDesign.SubDialog.IntelligentLaserDialog
 {
-    /// <summary>
-    /// 英莱相机扫描结果对话框：Table 展示网口扫描到的相机（IP/序列号/软件版本/传感器类型），
-    /// 单选互斥（ColumnCheck + SetAutoCheck(false) + CellClick 手动互斥），点「确定」回填选中 IP。
-    /// 参照 [[lessons/AntdUI-Table-ColumnCheck-SingleSelect]] 与 FileTraceForm 的 Table 单选范式。
-    /// </summary>
+    /// <summary>扫描结果对话框：单选相机，确定后回填 IP。</summary>
     public partial class ILScanForm : UserControl
     {
         #region 私有变量
-        // 复刻 AntdUI demo SystemSet 模式：注入父 Window，内部方法用 this.Window 作 owner
+        // 注入父 Window，内部方法用 this.Window 作 owner
         private readonly Window Window;
 
         // 与 uiTableSensor.Binding() 绑定的强类型列表（单选：一次仅一项 Selected=true）
         private AntdUI.AntList<SensorRow> _rows;
-        private SensorRow _selected;
         #endregion
 
         #region 公共变量
@@ -28,9 +23,7 @@ namespace AdaWeldSystem.UIDesign.SubDialog.IntelligentLaserDialog
         #endregion
 
         #region 嵌套类型
-        /// <summary>
-        /// 表格行模型：No=序号，Selected=选取列（单选），Ip/SerialNumber/SoftwareVersion/SensorType=相机信息。
-        /// </summary>
+        /// <summary>表格行模型：No=序号，Selected=选取列（单选），Ip/SerialNumber/SoftwareVersion/SensorType=相机信息。</summary>
         private class SensorRow : AntdUI.NotifyProperty
         {
             public int No { get; set; }
@@ -52,6 +45,7 @@ namespace AdaWeldSystem.UIDesign.SubDialog.IntelligentLaserDialog
             public string SoftwareVersion { get; set; }
             public string SensorType { get; set; }
         }
+        private SensorRow _selected;
         #endregion
 
         #region 构造函数
@@ -62,7 +56,7 @@ namespace AdaWeldSystem.UIDesign.SubDialog.IntelligentLaserDialog
             InitTableColumns();
             _rows = new AntdUI.AntList<SensorRow>();
             uiTableSensor.Binding(_rows);
-            // 事件订阅放代码后置（Designer.cs 手写订阅会被设计器重新序列化时丢失）
+            // 事件订阅放代码后置，避免设计器序列化丢失
             uiTableSensor.CellClick += uiTableSensor_CellClick;
             btnOK.Click += btnOK_Click;
             btnCancel.Click += btnCancel_Click;
@@ -72,10 +66,8 @@ namespace AdaWeldSystem.UIDesign.SubDialog.IntelligentLaserDialog
 
         #region 私有函数
 
-        /// <summary>
-        /// 初始化表格列。参考 AntdUI 官方 TableDemo 范式：Columns 在代码后置设置，不可写入 Designer.cs。
-        /// 选取列用 ColumnCheck（双参，表头无全选）+ SetAutoCheck(false)，配合 CellClick 实现单选互斥。
-        /// </summary>
+        /// <summary>初始化表格列。参考 AntdUI 官方 TableDemo 范式：Columns 在代码后置设置，不</summary>
+        /// <remarks>可写入 Designer.cs。 选取列用 ColumnCheck（双参，表头无全选）+ SetAutoCheck(false)，配合 CellClick 实现单选互斥。</remarks>
         private void InitTableColumns()
         {
             uiTableSensor.Columns = new AntdUI.ColumnCollection
@@ -90,9 +82,7 @@ namespace AdaWeldSystem.UIDesign.SubDialog.IntelligentLaserDialog
             uiTableSensor.AutoSizeColumnsMode = AntdUI.ColumnsMode.Fill;
         }
 
-        /// <summary>
-        /// 填充扫描结果列表，默认选中第一台相机。
-        /// </summary>
+        /// <summary>填充扫描结果列表，默认选中第一台相机。</summary>
         private void LoadSensors(List<IlSensorInfo> sensors)
         {
             _rows.Clear();
@@ -117,13 +107,12 @@ namespace AdaWeldSystem.UIDesign.SubDialog.IntelligentLaserDialog
             }
         }
 
-        /// <summary>
-        /// 点击任意单元格选中该行（单选互斥）。
-        /// </summary>
+        /// <summary>点击任意单元格选中该行（单选互斥）。</summary>
+        /// <param name="sender">发送方。</param>
+        /// <param name="e">事件参数。</param>
         private void uiTableSensor_CellClick(object sender, AntdUI.TableClickEventArgs e)
         {
-            var row = e.Record as SensorRow;
-            if (row == null) return;
+            if (!(e.Record is SensorRow row)) return;
             _selected = row;
             foreach (var r in _rows)
             {

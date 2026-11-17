@@ -3,7 +3,7 @@ using System;
 namespace AdaWeldSystem.MonitorCam.IMonitorCam
 {
     /// <summary>
-    /// 监控相机连接状态（相机自身状态，与设备流程态无关）
+    /// 监控相机连接状态，与设备流程态无关
     /// </summary>
     public enum MonitorCameraConnectionState
     {
@@ -33,6 +33,21 @@ namespace AdaWeldSystem.MonitorCam.IMonitorCam
 
         /// <summary>焊中质量检测</summary>
         WeldQuality
+    }
+
+    /// <summary>
+    /// 监控相机失败语境（决定 DescribeLastError 返回的描述种类）
+    /// </summary>
+    public enum MonitorCamErrorContext
+    {
+        /// <summary>连接失败（SDK 连接返回码 / 枚举 / 打开设备）</summary>
+        Connection,
+
+        /// <summary>采集失败（取流 / 软触发 / 取帧返回码）</summary>
+        Capture,
+
+        /// <summary>图像分析失败（算法链路，不产生厂商返回码）</summary>
+        Analyze
     }
 
     /// <summary>

@@ -74,7 +74,7 @@ namespace AdaWeldSystem.UIDesign.SubDialog.IntelligentLaserDialog
             // lblConn
             //             this.lblConn.AutoSizeMode = AntdUI.TAutoSize.Auto;
             this.lblConn.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.lblConn.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.lblConn.Font = new System.Drawing.Font("Microsoft YaHei UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.lblConn.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(192)))), ((int)(((byte)(0)))), ((int)(((byte)(0)))));
             this.lblConn.Location = new System.Drawing.Point(3, 3);
             this.lblConn.Name = "lblConn";
@@ -86,7 +86,7 @@ namespace AdaWeldSystem.UIDesign.SubDialog.IntelligentLaserDialog
             // 
             this.btnCreate.BackHover = System.Drawing.Color.FromArgb(((int)(((byte)(3)))), ((int)(((byte)(169)))), ((int)(((byte)(244)))));
             this.btnCreate.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.btnCreate.Font = new System.Drawing.Font("宋体", 11F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.btnCreate.Font = new System.Drawing.Font("Microsoft YaHei UI", 11F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.btnCreate.Location = new System.Drawing.Point(465, 261);
             this.btnCreate.Name = "btnCreate";
             this.btnCreate.Size = new System.Drawing.Size(174, 34);
@@ -96,7 +96,7 @@ namespace AdaWeldSystem.UIDesign.SubDialog.IntelligentLaserDialog
             // lblJointType
             // 
             this.lblJointType.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.lblJointType.Font = new System.Drawing.Font("宋体", 11F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.lblJointType.Font = new System.Drawing.Font("Microsoft YaHei UI", 11F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.lblJointType.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(48)))), ((int)(((byte)(48)))), ((int)(((byte)(48)))));
             this.lblJointType.Location = new System.Drawing.Point(3, 519);
             this.lblJointType.Name = "lblJointType";
@@ -172,7 +172,7 @@ namespace AdaWeldSystem.UIDesign.SubDialog.IntelligentLaserDialog
             // 
             this.btnDeleteJob.BackHover = System.Drawing.Color.FromArgb(((int)(((byte)(3)))), ((int)(((byte)(169)))), ((int)(((byte)(244)))));
             this.btnDeleteJob.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.btnDeleteJob.Font = new System.Drawing.Font("宋体", 11F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.btnDeleteJob.Font = new System.Drawing.Font("Microsoft YaHei UI", 11F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.btnDeleteJob.Location = new System.Drawing.Point(645, 261);
             this.btnDeleteJob.Name = "btnDeleteJob";
             this.btnDeleteJob.Size = new System.Drawing.Size(174, 34);
@@ -183,7 +183,7 @@ namespace AdaWeldSystem.UIDesign.SubDialog.IntelligentLaserDialog
             // 
             this.btnchangeJob.BackHover = System.Drawing.Color.FromArgb(((int)(((byte)(3)))), ((int)(((byte)(169)))), ((int)(((byte)(244)))));
             this.btnchangeJob.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.btnchangeJob.Font = new System.Drawing.Font("宋体", 11F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.btnchangeJob.Font = new System.Drawing.Font("Microsoft YaHei UI", 11F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.btnchangeJob.Location = new System.Drawing.Point(285, 261);
             this.btnchangeJob.Name = "btnchangeJob";
             this.btnchangeJob.Size = new System.Drawing.Size(174, 34);

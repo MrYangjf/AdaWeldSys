@@ -3,12 +3,8 @@ using System.Collections.Generic;
 namespace AdaWeldSystem.MotionControl.IMotion
 {
     /// <summary>PVT 多段插值能力</summary>
-    /// <remarks>
-    /// 面向连续跟随场景（焊缝跟踪）的流式接口：起始段下发后可不断追加点段，
-    /// 由调用方根据水位自行决定续喂节拍。本接口不感知控制器型号与脉冲换算。
-    /// 轴在调用前必须已切到 CSP 模式并伺服使能，接口不负责模式切换。
-    /// 配套数据结构 PVTPoint 与 PVTInformation 一并定义在本文件，避免能力契约碎片化。
-    /// </remarks>
+    /// <remarks>焊缝跟踪流式接口：起始段后按水位续喂。
+    /// 调用前须已切 CSP 并伺服使能，本接口不切模式。</remarks>
     public interface IPVTMotion
     {
         /// <summary>下发起始段并开始运动</summary>
@@ -38,10 +34,8 @@ namespace AdaWeldSystem.MotionControl.IMotion
     }
 
     /// <summary>PVT 轨迹点</summary>
-    /// <remarks>
-    /// 位置与速度一律工程单位（毫米、毫米每秒），时间为秒，与 MontionAxis 的单位语义一致。
-    /// 脉冲换算只在 L3 台达实现层完成，本结构不感知控制器型号。
-    /// </remarks>
+    /// <remarks>位置与速度为工程单位（毫米、毫米每秒），时间为秒；
+    /// 脉冲换算只在台达实现层完成，本结构不感知。</remarks>
     public struct PVTPoint
     {
         #region 公共变量
@@ -74,7 +68,7 @@ namespace AdaWeldSystem.MotionControl.IMotion
     }
 
     /// <summary>PVT 执行进度与缓冲区水位</summary>
-    /// <remarks>剩余缓冲区是流式续喂的节拍判据，水位低于阈值时应追加下一段。</remarks>
+    /// <remarks>剩余缓冲区是续喂节拍判据，低于阈值即追加。</remarks>
     public struct PVTInformation
     {
         #region 公共变量

@@ -26,7 +26,7 @@ namespace AdaWeldSystem.EmguALG.RealtimeMonitor.WeldQuality
         public Mat OverlayMat { get; set; }
 
         /// <summary>
-        /// 创建结果并初始化缺陷列表（ADR-002：构造函数内初始化）
+        /// 创建结果并初始化缺陷列表
         /// </summary>
         public WeldQualityResult()
         {

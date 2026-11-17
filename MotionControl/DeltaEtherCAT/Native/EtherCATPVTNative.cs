@@ -3,11 +3,8 @@ using System.Runtime.InteropServices;
 namespace AdaWeldSystem.MotionControl.DeltaEtherCAT.Native
 {
     /// <summary>台达 PVT 多段插值原生封装</summary>
-    /// <remarks>
-    /// 分 A/B 两套：A 套为 int 脉冲、一次性下发；B 套为 double 工程单位、支持流式续喂。
-    /// 焊缝跟踪等连续跟随场景用 B 套，靠 Get_Information 的剩余缓冲区实现水位闭环。
-    /// 全部 API 基于 CSP 模式，调用前轴必须已 Set_Move_Mode(8) 且伺服使能。
-    /// </remarks>
+    /// <remarks>A 套 int 脉冲整批下发。B 套 double 支持流式续喂，跟踪用 B。
+    /// 靠 Get_Information 剩余缓冲区做水位闭环。全部基于 CSP，调用前轴须已切模式且使能。</remarks>
     public static class EtherCATPVTNative
     {
 #if X86
@@ -19,10 +16,10 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT.Native
         /// <summary>A 套单批最大点数</summary>
         public const int MaxPointCount = 8000;
 
-        /// <summary>时间模式：相对时间，每一段的时间为相邻两点的间隔</summary>
+        /// <summary>时间模式 0：各段时间为相邻点间隔</summary>
         public const ushort TimeModeRelative = 0;
 
-        /// <summary>时间模式：绝对时间，每一段的时间为相对于起点的累计值</summary>
+        /// <summary>时间模式 1：各段时间为相对起点的累计值</summary>
         public const ushort TimeModeAbsolute = 1;
 
         #region A 套 int 脉冲
@@ -42,7 +39,7 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT.Native
         public static extern ushort CS_ECAT_Slave_CSP_Start_PVT_Config(ushort CardNo, ushort NodeID, ushort SlotID,
             int DataCnt, ref int TargetPos, ref int TargetTime, ref int TargetVel, ushort Abs);
 
-        /// <summary>只下载不启动 PVT 数据并约束起止速度，供多轴同动使用</summary>
+        /// <summary>只下载不启动并约束起止速度，供多轴同动</summary>
         [DllImport(DllPath, EntryPoint = "_ECAT_Slave_CSP_Start_PVTComplete_Config")]
         public static extern ushort CS_ECAT_Slave_CSP_Start_PVTComplete_Config(ushort CardNo, ushort NodeID,
             ushort SlotID, int DataCnt, ref int TargetPos, ref int TargetTime, int StrVel, int EndVel, ushort Abs);
@@ -69,10 +66,8 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT.Native
             ushort Retain, double SdStopTime);
 
         /// <summary>运动中追加 PVT 点段，保持轨迹不断流</summary>
-        /// <remarks>
-        /// EntryPoint 在 SDK 头文件中缺少下划线前缀，与同族其它函数不一致，疑为厂商笔误，此处照抄。
-        /// 运行时若抛 EntryPointNotFoundException，改为 _ECAT_Slave_CSP_Start_PVT_Continue_Move 再验。
-        /// </remarks>
+        /// <remarks>SDK 头文件此 EntryPoint 缺下划线前缀，照抄；若抛 EntryPointNotFoundException
+        /// 改用 <c>_ECAT_Slave_CSP_Start_PVT_Continue_Move</c> 再验。</remarks>
         [DllImport(DllPath, EntryPoint = "CS_ECAT_Slave_CSP_Start_PVT_Continue_Move")]
         public static extern ushort CS_ECAT_Slave_CSP_Start_PVT_Continue_Move(ushort CardNo, ushort NodeID,
             ushort SlotID, int DataCount, ref double Pos, ref double Time, ref double Vel, ushort Finial);

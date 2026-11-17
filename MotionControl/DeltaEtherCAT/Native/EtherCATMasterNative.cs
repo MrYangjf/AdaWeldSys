@@ -1,4 +1,4 @@
-using System.Runtime.InteropServices;
+﻿﻿using System.Runtime.InteropServices;
 using AdaWeldSystem.MotionControl.IMotion;
 
 namespace AdaWeldSystem.MotionControl.DeltaEtherCAT.Native
@@ -12,18 +12,6 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT.Native
 #else
         private const string DllPath = "EtherCAT_DLL_x64.dll";
 #endif
-
-        /// <summary>从站运行态：只有 OP 态可运动</summary>
-        public const ushort OpStateOperational = 3;
-
-        /// <summary>初始化完成</summary>
-        public const ushort InitDoneOk = 0;
-
-        /// <summary>初始化进行中</summary>
-        public const ushort InitDoneBusy = 1;
-
-        /// <summary>初始化失败</summary>
-        public const ushort InitDoneFail = 99;
 
         /// <summary>打开主站并检测板卡数量</summary>
         [DllImport(DllPath, EntryPoint = "_ECAT_Master_Open")]
@@ -101,6 +89,22 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT.Native
         public static extern ushort CS_ECAT_Slave_SDO_Check_Done(ushort CardNo, ushort NodeID,
             ushort SlotNo, ref ushort Done);
 
+        /// <summary>取上一次 SDO 的邮箱错误码（SDO Abort Code，如 0x06020000 对象不存在）</summary>
+        /// <remarks>区分「读到 0」与「读失败」，两者不能都回落成 0。</remarks>
+        [DllImport(DllPath, EntryPoint = "_ECAT_Slave_SDO_Get_ErrorCode")]
+        public static extern ushort CS_ECAT_Slave_SDO_Get_ErrorCode(ushort CardNo, ushort NodeID,
+            ushort SlotNo, ref uint ErrorCode);
+
+        /// <summary>写台达伺服参数（P 参数：Page=1 对应 P1）</summary>
+        [DllImport(DllPath, EntryPoint = "_ECAT_Slave_DeltaServo_Write_Parameter")]
+        public static extern ushort CS_ECAT_Slave_DeltaServo_Write_Parameter(ushort CardNo, ushort NodeID,
+            ushort SlotNo, ushort Page, ushort Index, int WriteData);
+
+        /// <summary>读台达伺服参数（P 参数：Page=1 对应 P1），用于写入后回读校验</summary>
+        [DllImport(DllPath, EntryPoint = "_ECAT_Slave_DeltaServo_Read_Parameter")]
+        public static extern ushort CS_ECAT_Slave_DeltaServo_Read_Parameter(ushort CardNo, ushort NodeID,
+            ushort SlotNo, ushort Page, ushort Index, ref int ReadData);
+
         /// <summary>读 PDO 对象字典数据，模拟量输入用</summary>
         [DllImport(DllPath, EntryPoint = "_ECAT_Slave_PDO_Get_OD_Data")]
         public static extern ushort CS_ECAT_Slave_PDO_Get_OD_Data(ushort CardNo, ushort NodeID, ushort SlotNo,
@@ -111,10 +115,24 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT.Native
         public static extern ushort CS_ECAT_Slave_PDO_Set_OD_Data(ushort CardNo, ushort NodeID, ushort SlotNo,
             ushort ODIndex, ushort ODSubIndex, ref byte Data);
 
+        /// <summary>从站运行态：只有 OP 态可运动。</summary>
+        /// <remarks>返回 ALState 位掩码（0x01 Init / 0x02 PreOP / 0x04 SafeOP / 0x08 OP），OP 必须为 8。
+        /// 取成 3 会被误判拦截，使能与运动指令都下不去。</remarks>
+        public const ushort OpStateOperational = 8;
+
+        /// <summary>初始化完成</summary>
+        public const ushort InitDoneOk = 0;
+
+        /// <summary>初始化进行中</summary>
+        public const ushort InitDoneBusy = 1;
+
+        /// <summary>初始化失败</summary>
+        public const ushort InitDoneFail = 99;
+
         #region 链路健康状态
 
         /// <summary>取主站链路连接状态</summary>
-        /// <remarks>台达无应用层心跳，链路健康只能靠本函数与工作计数器判定。</remarks>
+        /// <remarks>台达无心跳，链路健康靠本函数与工作计数器。</remarks>
         [DllImport(DllPath, EntryPoint = "_ECAT_Master_Get_Connect_Status")]
         public static extern ushort CS_ECAT_Master_Get_Connect_Status(ushort CardNo, ref ushort Status);
 
@@ -139,7 +157,7 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT.Native
             ref double Tx_MaxTime, ref double Rx_Time, ref double Rx_MaxTime);
 
         /// <summary>启用虚拟站点别名</summary>
-        /// <remarks>仅用于站点编号重映射，不是虚拟轴，不可作为凸轮主轴。</remarks>
+        /// <remarks>仅重映射站点号，不是虚拟轴，不可作凸轮主轴。</remarks>
         [DllImport(DllPath, EntryPoint = "_ECAT_Master_Virtual_NodeID_Alias_Enable")]
         public static extern ushort CS_ECAT_Master_Virtual_NodeID_Alias_Enable(ushort CardNo, ushort Enable);
 

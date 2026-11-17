@@ -5,11 +5,7 @@ using Emgu.CV;
 namespace AdaWeldSystem.LineLaserCam.ILineLaser
 {
     /// <summary>线激光焊缝识别结果快照（厂商无关的中性结构）</summary>
-    /// <remarks>
-    /// 由厂商实现层（英莱）在 SDK 回调中把自身算法结果映射为本结构后外传，
-    /// 业务层与工作流只认本结构，不感知厂商 SDK 类型（ADR-034 D1 铁律）。
-    /// 反例：此前业务层直接消费英莱 <c>IlInspectResult</c>，导致线激光业务被单一厂商绑死。
-    /// </remarks>
+    /// <remarks>厂商层在 SDK 回调中映射为本结构后外传；业务层只认本结构，不感知厂商 SDK 类型。</remarks>
     public struct LineLaserSeamResult
     {
         #region 公共变量
@@ -160,7 +156,7 @@ namespace AdaWeldSystem.LineLaserCam.ILineLaser
     }
 
     /// <summary>线激光轮廓 Mat 更新事件参数（显示链路）</summary>
-    /// <remarks>帧实例与相机 <c>CurrentMat</c> 共享同一对象，订阅方须自行 Clone 后再跨帧持有。</remarks>
+    /// <remarks>帧与相机 CurrentMat 共享，订阅方须 Clone。</remarks>
     public class LineLaserMatEventArgs : EventArgs
     {
         #region 公共变量

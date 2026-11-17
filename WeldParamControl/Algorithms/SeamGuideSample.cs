@@ -3,11 +3,14 @@ using AdaWeldSystem.LineLaserCam.ILineLaser;
 
 namespace AdaWeldSystem.WeldParamControl.Algorithms
 {
-    /// <summary>线激光引导样本：把线激光结果、机器人坐标与时间戳搓合在一起。</summary>
+    /// <summary>线激光引导样本：结果、坐标与时间戳整帧绑定。</summary>
     /// <remarks>
-    /// 线激光前置在焊枪前约 50mm，同帧产生的线激光结果与机器人坐标经本结构整帧绑定，
-    /// 由 <see cref="SeamTrackingAlgorithm"/> 按时间戳做轨迹计算与滞后对齐。
-    /// 轴当前位置只用于「偏差叠加」：运动目标 = 轴当前值 + 带方向偏差。
+    /// 线激光前置在焊枪前约 50mm。
+    /// 同帧结果与坐标经本结构绑定。
+    /// 由 <see cref="SeamTrackingAlgorithm"/> 按时间戳做轨迹计算。
+    /// 滞后对齐同样由该算法完成。
+    /// 轴当前位置只用于偏差叠加。
+    /// 运动目标 = 轴当前值 + 带方向偏差。
     /// </remarks>
     public struct SeamGuideSample
     {

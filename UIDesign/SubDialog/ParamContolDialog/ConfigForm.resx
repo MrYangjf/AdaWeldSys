@@ -117,34 +117,7 @@
   <resheader name="writer">
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
-  <metadata name="uiContextMenuStrip1.TrayLocation" type="System.Drawing.Point, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
-    <value>17, 17</value>
-  </metadata>
   <assembly alias="System.Drawing" name="System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a" />
-  <data name="uiContextMenuStrip1.Font" type="System.Drawing.Font, System.Drawing">
-    <value>宋体, 12pt</value>
-  </data>
-  <data name="SelectConfig.Size" type="System.Drawing.Size, System.Drawing">
-    <value>158, 24</value>
-  </data>
-  <data name="SelectConfig.Text" xml:space="preserve">
-    <value>切换配置</value>
-  </data>
-  <data name="DeleteConfig.Size" type="System.Drawing.Size, System.Drawing">
-    <value>158, 24</value>
-  </data>
-  <data name="DeleteConfig.Text" xml:space="preserve">
-    <value>删除配置</value>
-  </data>
-  <data name="uiContextMenuStrip1.Size" type="System.Drawing.Size, System.Drawing">
-    <value>159, 52</value>
-  </data>
-  <data name="&gt;&gt;uiContextMenuStrip1.Name" xml:space="preserve">
-    <value>uiContextMenuStrip1</value>
-  </data>
-  <data name="&gt;&gt;uiContextMenuStrip1.Type" xml:space="preserve">
-    <value>System.Windows.Forms.ContextMenuStrip, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
-  </data>
   <assembly alias="System.Windows.Forms" name="System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089" />
   <data name="uiDataGridView1.Dock" type="System.Windows.Forms.DockStyle, System.Windows.Forms">
     <value>Fill</value>
@@ -206,18 +179,6 @@
   </metadata>
   <data name="$this.Size" type="System.Drawing.Size, System.Drawing">
     <value>860, 561</value>
-  </data>
-  <data name="&gt;&gt;SelectConfig.Name" xml:space="preserve">
-    <value>SelectConfig</value>
-  </data>
-  <data name="&gt;&gt;SelectConfig.Type" xml:space="preserve">
-    <value>System.Windows.Forms.ToolStripMenuItem, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
-  </data>
-  <data name="&gt;&gt;DeleteConfig.Name" xml:space="preserve">
-    <value>DeleteConfig</value>
-  </data>
-  <data name="&gt;&gt;DeleteConfig.Type" xml:space="preserve">
-    <value>System.Windows.Forms.ToolStripMenuItem, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </data>
   <data name="&gt;&gt;$this.Name" xml:space="preserve">
     <value>ConfigForm</value>

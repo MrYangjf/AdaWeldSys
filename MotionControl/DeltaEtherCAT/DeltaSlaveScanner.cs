@@ -23,11 +23,13 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
         /// <summary>模拟量输出</summary>
         DA_Module,
         /// <summary>安川伺服</summary>
-        Yaskawa_Servo
+        Yaskawa_Servo,
+        /// <summary>万顺兴焊接头（ScanCut）</summary>
+        WeldHead_ScanCut
     }
 
     /// <summary>从站扫描器</summary>
-    /// <remarks>按厂商号与产品码识别设备类型，须在主站初始化完成后调用。</remarks>
+    /// <remarks>按厂商号与产品码识别，须主站初始化后调用。</remarks>
     public class DeltaSlaveScanner
     {
         #region 私有变量
@@ -35,6 +37,7 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
         private const uint VendorDelta = 0x01DD;
         private const uint VendorDeltaAlt = 0x01A05;
         private const uint VendorYaskawa = 0x00539;
+        private const uint VendorWsx = 0xE0000002;
 
         #endregion
 
@@ -61,6 +64,15 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
         /// <param name="info">待识别的从站</param>
         private static void IdentifyDevice(SlaveInfo info)
         {
+            // 焊接头非轴设备，不进 AxisRegistry，经从站通道访问
+            if (info.VendorId == VendorWsx && info.ProductCode == 0x26483052)
+            {
+                info.DeviceType = SlaveDeviceType.WeldHead_ScanCut;
+                info.DeviceName = "万顺兴焊接头";
+                info.AxisCount = 0;
+                return;
+            }
+
             if (info.VendorId == VendorYaskawa)
             {
                 if (info.ProductCode != 0x2200001) return;

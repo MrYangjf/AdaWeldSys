@@ -4,10 +4,8 @@ using AdaWeldSystem.Comm.SystemComm;
 namespace AdaWeldSystem.MotionControl.IMotion
 {
     /// <summary>气缸</summary>
-    /// <remarks>
-    /// 气缸是把若干输入（到位传感器）与若干输出（电磁阀）捆绑成一个动作的复合对象，
-    /// 依赖输入输出抽象，与厂商无关；传感器缺失时按到位处理。
-    /// </remarks>
+    /// <remarks>传感器与电磁阀复合为一个动作对象。与厂商无关。
+    /// 传感器缺失时按到位处理。</remarks>
     public class Cylinder
     {
         #region 私有变量
@@ -138,21 +136,21 @@ namespace AdaWeldSystem.MotionControl.IMotion
         /// <summary>执行伸出</summary>
         public void Stretch()
         {
-            if (OutCylinderRetract != null) OutCylinderRetract.SetOFF();
-            if (OutCylinderStretch != null) OutCylinderStretch.SetON();
+            OutCylinderRetract?.SetOFF();
+            OutCylinderStretch?.SetON();
             GlobalCommData.ShowLog(_name, StretchName + " 已输出", MessageLevel.Info);
         }
 
         /// <summary>执行缩回</summary>
         public void Retract()
         {
-            if (OutCylinderStretch != null) OutCylinderStretch.SetOFF();
-            if (OutCylinderRetract != null) OutCylinderRetract.SetON();
+            OutCylinderStretch?.SetOFF();
+            OutCylinderRetract?.SetON();
             GlobalCommData.ShowLog(_name, RetractName + " 已输出", MessageLevel.Info);
         }
 
         /// <summary>枚举本气缸占用的全部 IO</summary>
-        /// <returns>输入与输出混合序列，未配置的点位不出现在序列中</returns>
+        /// <returns>输入与输出混合序列，未配置点不出现</returns>
         public IEnumerable<MontionIO> GetAllIO()
         {
             if (InStretchSensor != null) yield return InStretchSensor;

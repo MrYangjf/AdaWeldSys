@@ -1,4 +1,5 @@
 ﻿using AdaWeldSystem.EmguALG.Abstractions;
+using AdaWeldSystem.EmguALG.Core;
 using Emgu.CV;
 using System;
 using System.Diagnostics;
@@ -6,8 +7,8 @@ using System.Diagnostics;
 namespace AdaWeldSystem.EmguALG.RealtimeMonitor.WireFeedDistance
 {
     /// <summary>
-    /// 送丝距离检测（焊前对中）：检测激光光斑与焊丝尖端，输出偏差与是否对中。
-    /// 纯算子实现仍在 ImageAlgorithm（ADR-038：算子库唯一文件），本类只做契约封装与计时。
+    /// 送丝距离检测（焊前对中）：光斑与焊丝尖端偏差。
+    /// 纯算子在 ImageAlgorithm，本类封装与计时。
     /// </summary>
     public sealed class WireFeedDistanceAlgorithm : IAlgorithm<WireFeedResult>, IConfigurableAlgorithm<WireFeedConfig>
     {
@@ -69,8 +70,10 @@ namespace AdaWeldSystem.EmguALG.RealtimeMonitor.WireFeedDistance
         {
             if (IsBusy)
             {
-                WireFeedResult busy = new WireFeedResult();
-                busy.ErrorMessage = "算法正在执行，已拒绝重入";
+                WireFeedResult busy = new WireFeedResult
+                {
+                    ErrorMessage = "算法正在执行，已拒绝重入"
+                };
                 return busy;
             }
 
@@ -81,8 +84,10 @@ namespace AdaWeldSystem.EmguALG.RealtimeMonitor.WireFeedDistance
                 WireFeedResult result = ImageAlgorithm.DetectPreWeldAlignment(input, _config);
                 if (result == null)
                 {
-                    result = new WireFeedResult();
-                    result.ErrorMessage = "送丝距离检测无结果";
+                    result = new WireFeedResult
+                    {
+                        ErrorMessage = "送丝距离检测无结果"
+                    };
                     return result;
                 }
                 result.Success = true;
@@ -92,10 +97,12 @@ namespace AdaWeldSystem.EmguALG.RealtimeMonitor.WireFeedDistance
             }
             catch (Exception ex)
             {
-                WireFeedResult failed = new WireFeedResult();
-                failed.ErrorMessage = ex.Message;
-                failed.Algorithm = _algorithmName;
-                failed.ElapsedMs = watch.Elapsed.TotalMilliseconds;
+                WireFeedResult failed = new WireFeedResult
+                {
+                    ErrorMessage = ex.Message,
+                    Algorithm = _algorithmName,
+                    ElapsedMs = watch.Elapsed.TotalMilliseconds
+                };
                 return failed;
             }
             finally

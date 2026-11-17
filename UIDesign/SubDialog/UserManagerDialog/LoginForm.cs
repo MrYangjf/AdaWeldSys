@@ -5,22 +5,14 @@ using AdaWeldSystem.Comm.SystemComm;
 
 namespace AdaWeldSystem.UIDesign.SubDialog.UserManagerDialog
 {
-    /// <summary>
-    /// 登录窗体（AntdUI 迁移版）。
-    /// ⚠ 与原任务简报不一致：原基类为 SunnyUI 的 UILoginForm 登录窗体基类（含内置用户名/密码框、
-    /// 登录/取消按钮及 ButtonLoginClick / ButtonCancelClick / UserName / Password /
-    /// IsLogin / ShowSuccessDialog / ShowAskDialog2 / SubText / Title 等专属成员），
-    /// 无干净 1:1 映射。故重建为 AntdUI 迁移版；2026-07-30 经 ADR-016 由 AntdUI.Window 改为
-    /// System.Windows.Forms.UserControl，以 AntdUI.Modal 承载（取消 PageHeader，标题由 Modal 提供），
-    /// 交互逻辑（校验、权限切换）保持不变。
-    /// </summary>
+    /// <summary>登录窗体：校验账号并切换权限等级，以 AntdUI.Modal 承载。</summary>
     public partial class LoginForm : System.Windows.Forms.UserControl
     {
-        public bool IsLogin { get; set; }
-
-        // 复刻 AntdUI demo SystemSet 模式：注入父 Window，内部方法用 this.Window 作 owner
         private readonly Window Window;
 
+        public bool IsLogin { get; set; }
+
+        // 注入父 Window，内部方法用 this.Window 作 owner
         public LoginForm() : this(null) { }
 
         public LoginForm(Window _window)
@@ -35,18 +27,19 @@ namespace AdaWeldSystem.UIDesign.SubDialog.UserManagerDialog
 
         private void BtnLogout_Click(object sender, EventArgs e)
         {
-            bool re = AntdUI.Modal.open(new Modal.Config(this.Window, "确认", "是否注销权限？", TType.Info)) == DialogResult.OK;
-            if (re) GlobalCommData.mOperateLevel = OperateLevel.Operator;
+            if (AntdUI.Modal.open(new Modal.Config(this.Window, "确认", "是否注销权限？注销后降为操作员，关键参数页将不可见。", TType.Info)) == DialogResult.OK)
+            {
+                GlobalCommData.SetOperateLevel(OperateLevel.Operator);
+                AntdUI.Message.success(this.Window, "已注销，当前权限：操作员");
+            }
             var host = this.FindForm();
             if (host != null) host.DialogResult = DialogResult.Cancel;
         }
 
         void ShowCorButton()
         {
-            if (GlobalCommData.mOperateLevel == OperateLevel.Admin)
-                btnUserManager.Visible = true;
-            else
-                btnUserManager.Visible = false;
+            // 用户管理入口仅管理员可见
+            btnUserManager.Visible = PermissionLevel.IsAdmin(GlobalCommData.mOperateLevel);
         }
 
         private void FormLogin_ButtonLoginClick(object sender, EventArgs e)
@@ -56,8 +49,8 @@ namespace AdaWeldSystem.UIDesign.SubDialog.UserManagerDialog
                 if (GlobalCommData.mAuthHelper.ValidateUser(txtUserName.Text, txtPassword.Text))
                 {
                     IsLogin = true;
-                    AntdUI.Message.success(this.Window, "登陆成功！");
-                    GlobalCommData.mOperateLevel = GlobalCommData.mAuthHelper.GetUserOperate(txtUserName.Text);
+                    GlobalCommData.SetOperateLevel(GlobalCommData.mAuthHelper.GetUserOperate(txtUserName.Text));
+                    AntdUI.Message.success(this.Window, "登陆成功！当前权限：" + PermissionLevel.GetDisplayName(GlobalCommData.mOperateLevel));
                     var host = this.FindForm();
                     if (host != null) host.DialogResult = DialogResult.OK;
                 }

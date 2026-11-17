@@ -16,12 +16,12 @@ namespace AdaWeldSystem.UIDesign.SubDialog.ParamContolDialog
         private const string ColId = "标识";
         private const int DefaultPageSize = 50;
 
-        // 与 uiDataGridView1.Binding() 绑定的强类型列表（替代原 DataTable + AutoGenerateColumns）
+        // 与 uiDataGridView1.Binding() 绑定的强类型列表
         private AntdUI.AntList<ConfigRow> _rows;
         private ConfigRow _selectedRow;
         private DataTable _allConfigs;
 
-        // 复刻 AntdUI demo SystemSet 模式：注入父 Window，内部方法用 this.Window 作 owner
+        // 注入父 Window，内部方法用 this.Window 作 owner
         private readonly Window Window;
 
         public ConfigForm() : this(null) { }
@@ -34,16 +34,12 @@ namespace AdaWeldSystem.UIDesign.SubDialog.ParamContolDialog
             _rows = new AntdUI.AntList<ConfigRow>();
             uiDataGridView1.Binding(_rows);
             uiDataGridView1.CellClick += uiDataGridView1_CellClick;
-            // AntdUI.Pagination 分页：ValueChanged(e.Current/e.PageSize) → 重新切片绑定
-            // 用 lambda 让编译器推断事件参数类型（范式见 02-Navigation.md Pagination 节）
+            // AntdUI.Pagination 分页：ValueChanged → 重新切片绑定（lambda 让编译器推断事件参数类型）
             uiPagination1.ValueChanged += (s, e) => BindPageData(e.Current, e.PageSize);
             LoadConfigData();
         }
 
-        /// <summary>
-        /// 初始化表格列。参考 AntdUI 官方 TableDemo 范式：在代码后置中设置 Columns，
-        /// 不可在 Designer.cs 的 InitializeComponent 内直接赋值 ColumnCollection。
-        /// </summary>
+        /// <summary>初始化表格列：Columns 须在代码后置设置，不可在 Designer 内赋值。</summary>
         private void InitTableColumns()
         {
             uiDataGridView1.Columns = new AntdUI.ColumnCollection
@@ -102,19 +98,36 @@ namespace AdaWeldSystem.UIDesign.SubDialog.ParamContolDialog
         }
 
 
-        // 通过 CellClick 捕获当前选中行（AntdUI.Table 无 SelectedItem；参见 demo TableDemo.cs 的 e.Record）
+        /// <summary>表格点击</summary>
+        /// <param name="sender">发送方。</param>
+        /// <param name="e">事件参数。</param>
+        /// <remarks>记录选中行；右键弹出「切换配置 / 删除配置」菜单</remarks>
         private void uiDataGridView1_CellClick(object sender, AntdUI.TableClickEventArgs e)
         {
             _selectedRow = e.Record as ConfigRow;
+            if (e.Button == MouseButtons.Right)
+            {
+                AntdUI.ContextMenuStrip.open(uiDataGridView1, OnConfigMenuClick, new AntdUI.IContextMenuStripItem[]
+                {
+                    new AntdUI.ContextMenuStripItem("切换配置").SetID("Select"),
+                    new AntdUI.ContextMenuStripItem("删除配置").SetID("Delete")
+                });
+            }
+        }
+
+        /// <summary>菜单项分派：按 ID 调用切换 / 删除配置</summary>
+        private void OnConfigMenuClick(AntdUI.IContextMenuStrip it)
+        {
+            if (it.ID == "Select") SelectConfig();
+            else if (it.ID == "Delete") DeleteConfig();
         }
 
         private string GetSelectedConfigId()
         {
-            var row = _selectedRow;
-            return row?.Id;
+            return _selectedRow?.Id;
         }
 
-        private void SelectConfig_Click(object sender, EventArgs e)
+        private void SelectConfig()
         {
             string configId = GetSelectedConfigId();
             if (string.IsNullOrWhiteSpace(configId))
@@ -131,7 +144,7 @@ namespace AdaWeldSystem.UIDesign.SubDialog.ParamContolDialog
             if (host != null) host.DialogResult = DialogResult.OK;
         }
 
-        private void DeleteConfig_Click(object sender, EventArgs e)
+        private void DeleteConfig()
         {
             string configId = GetSelectedConfigId();
             if (string.IsNullOrWhiteSpace(configId))
@@ -162,7 +175,7 @@ namespace AdaWeldSystem.UIDesign.SubDialog.ParamContolDialog
             var host = this.FindForm();
             if (host != null) host.DialogResult = DialogResult.OK;
         }
-        // AntdUI.Table 数据行模型（替代原 DataGridView 列绑定）
+        // AntdUI.Table 数据行模型
         public class ConfigRow
         {
             public int No { get; set; }

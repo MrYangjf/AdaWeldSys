@@ -6,9 +6,10 @@ namespace AdaWeldSystem.EmguALG.Core
 {
     /// <summary>
     /// 统一算法基类（算法架构设计 §4）。
-    /// 封装预处理编排与图形算子封装，提供 mm↔px 变换、ROI/计时/异常与 Execute 模板方法，
-    /// 以及 INI 契约（SaveToIni/LoadFromIni 由子类实现具体节）。
-    /// 不直接包含任何业务语义（焊缝/接头/对中）；业务规则由领域算法在 ExecuteCore 中实现。
+    /// 封装预处理编排、mm↔px 变换与 Execute 模板方法。
+    /// 以及 INI 契约，具体节由子类实现 SaveToIni 与 LoadFromIni。
+    /// 不直接包含任何业务语义（焊缝/接头/对中）。
+    /// 业务规则由领域算法在 ExecuteCore 中实现。
     /// </summary>
     public abstract class AlgorithmBase
     {
@@ -30,10 +31,9 @@ namespace AdaWeldSystem.EmguALG.Core
 
         #region 预处理算子（配置驱动，转调 ImageAlgorithm）
 
-        /// <summary>
-        /// 配置驱动的预处理编排：滤波 → 形态学 → 边缘。
-        /// 内部按 Operation 转调 ImageAlgorithm 的原子算子（不重复实现算子）。
-        /// </summary>
+        /// <summary>配置驱动的预处理编排：滤波 → 形态学 → 边缘。 内部按 Operation </summary>
+        /// <remarks>转调 ImageAlgorithm 的原子算子（不重复实现算子）。</remarks>
+        /// <param name="cfg">配置对象。</param>
         protected Mat Preprocess(Mat src, PreprocessConfig cfg)
         {
             Mat cur = src.Clone();
@@ -116,14 +116,15 @@ namespace AdaWeldSystem.EmguALG.Core
             AlgorithmResult result;
             try
             {
-                result = ExecuteCore(input);
-                if (result == null) result = new AlgorithmResult();
+                result = ExecuteCore(input) ?? new AlgorithmResult();
             }
             catch (System.Exception ex)
             {
-                result = new AlgorithmResult();
-                result.Success = false;
-                result.ErrorMessage = ex.Message;
+                result = new AlgorithmResult
+                {
+                    Success = false,
+                    ErrorMessage = ex.Message
+                };
             }
             finally
             {

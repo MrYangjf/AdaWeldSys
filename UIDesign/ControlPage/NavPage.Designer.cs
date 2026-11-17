@@ -28,7 +28,7 @@ namespace AdaWeldSystem.UIDesign.ControlPage
         /// </summary>
         private void InitializeComponent()
         {
-            AntdUI.Tabs.StyleLine styleLine2 = new AntdUI.Tabs.StyleLine();
+            AntdUI.Tabs.StyleLine styleLine1 = new AntdUI.Tabs.StyleLine();
             this.uiNavMenu1 = new AntdUI.Menu();
             this.uiTabControl1 = new AntdUI.Tabs();
             this.SuspendLayout();
@@ -43,7 +43,7 @@ namespace AdaWeldSystem.UIDesign.ControlPage
             this.uiNavMenu1.Location = new System.Drawing.Point(0, 0);
             this.uiNavMenu1.Mode = AntdUI.TMenuMode.Vertical;
             this.uiNavMenu1.Name = "uiNavMenu1";
-            this.uiNavMenu1.Size = new System.Drawing.Size(158, 586);
+            this.uiNavMenu1.Size = new System.Drawing.Size(158, 920);
             this.uiNavMenu1.TabIndex = 0;
             // 
             // uiTabControl1
@@ -51,12 +51,12 @@ namespace AdaWeldSystem.UIDesign.ControlPage
             this.uiTabControl1.BackColor = System.Drawing.Color.White;
             this.uiTabControl1.Cursor = System.Windows.Forms.Cursors.Hand;
             this.uiTabControl1.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.uiTabControl1.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.uiTabControl1.Font = new System.Drawing.Font("Microsoft YaHei UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.uiTabControl1.Gap = 16;
             this.uiTabControl1.Location = new System.Drawing.Point(158, 0);
             this.uiTabControl1.Name = "uiTabControl1";
-            this.uiTabControl1.Size = new System.Drawing.Size(834, 586);
-            this.uiTabControl1.Style = styleLine2;
+            this.uiTabControl1.Size = new System.Drawing.Size(1762, 920);
+            this.uiTabControl1.Style = styleLine1;
             this.uiTabControl1.TabIndex = 6;
             this.uiTabControl1.TabMenuVisible = false;
             // 
@@ -66,7 +66,7 @@ namespace AdaWeldSystem.UIDesign.ControlPage
             this.Controls.Add(this.uiTabControl1);
             this.Controls.Add(this.uiNavMenu1);
             this.Name = "NavPage";
-            this.Size = new System.Drawing.Size(992, 586);
+            this.Size = new System.Drawing.Size(1920, 920);
             this.ResumeLayout(false);
 
         }

@@ -5,14 +5,14 @@ namespace AdaWeldSystem.MonitorCam.IMonitorCam
 {
     /// <summary>
     /// 监控相机健康监督状态变更事件参数。
-    /// 只描述相机自身状态，不含任何流程态字段（流程态由工作流基类 StateChanged 承载）。
+    /// 只描述相机状态，流程态不在此。
     /// </summary>
     public class MonitorSupervisionStatusChangedEventArgs : EventArgs
     {
         /// <summary>健康监督状态</summary>
         public MonitorSupervisionState State { get; set; }
 
-        /// <summary>相机是否正在正常工作（已连接且近期有有效采集）</summary>
+        /// <summary>相机是否已连接且近期有有效采集</summary>
         public bool IsWorking { get; set; }
 
         /// <summary>当前检测阶段</summary>
@@ -32,8 +32,8 @@ namespace AdaWeldSystem.MonitorCam.IMonitorCam
     }
 
     /// <summary>
-    /// 监控相机帧采集完成事件参数（业务层 → 工作流/UI 订阅）。
-    /// 监控相机为 2D 面阵相机，无 LIVE/PIL 模式区分，所有帧均为单次触发产出（ADR-039）。
+    /// 帧采集完成事件参数，供工作流订阅。
+    /// 2D 面阵相机，无模式，帧均单次触发。
     /// </summary>
     public class MonitorCameraFrameCompletedEventArgs : EventArgs
     {

@@ -3,11 +3,8 @@ using System.Runtime.InteropServices;
 namespace AdaWeldSystem.MotionControl.DeltaEtherCAT.Native
 {
     /// <summary>台达 ECAM2 电子凸轮原生封装</summary>
-    /// <remarks>
-    /// 主轴来源 SourceType 只有 0（远端从站）与 1（轴卡脉冲输入口）两个合法值，不存在虚拟轴取值。
-    /// 无位置主轴时只能改用时间模式凸轮 Profile_CamIn_TimeMode，该模式从轴按时间推进，无法跟随外部位置。
-    /// 一代 ECAM 接口不再使用，新功能一律走 ECAM2。
-    /// </remarks>
+    /// <remarks>SourceType 仅 0（远端从站）、1（轴卡脉冲口），无虚拟轴；
+    /// 无位置主轴用时间模式凸轮，按时间推进。本封装为 ECAM2。</remarks>
     public static class EtherCATEcam2Native
     {
 #if X86

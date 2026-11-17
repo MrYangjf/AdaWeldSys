@@ -1,4 +1,4 @@
-﻿using System;
+﻿﻿using System;
 using System.Collections.Generic;
 using System.Threading;
 using AdaWeldSystem.Comm.Communication;
@@ -13,7 +13,7 @@ using AdaWeldSystem.MainDeviceControl.DeviceWorkflow;
 namespace AdaWeldSystem.MainDeviceControl
 {
     /// <summary>设备安全/IO/状态管控（单例，三常驻线程）。</summary>
-    /// <remarks>thIOWork 安全互锁与 IO 轮询、thEMGWork 急停处置、thLightStatusWork 三色灯反射；异常经 DeviceControlWork 单一控制源变更运行态（ADR-023）。</remarks>
+    /// <remarks>thIOWork 安全互锁与 IO 轮询、thEMGWork 急停处置、thLightStatusWork 三色灯反射；异常经 DeviceControlWork 变更运行态。</remarks>
     public class DeviceStatusWork
     {
         #region 常量
@@ -27,8 +27,14 @@ namespace AdaWeldSystem.MainDeviceControl
         /// <summary>状态反射轮询周期（毫秒，20Hz）</summary>
         private const int StatusPollIntervalMs = 50;
 
-        /// <summary>运控总线监督扫描节流拍数（50ms×4=200ms，总线检查为 µs~ms 级读共享内存，无需 20Hz 高频）</summary>
+        /// <summary>运控总线监督节流拍数（50ms×4=200ms）</summary>
         private const int MotionBusCheckBeats = 4;
+
+        /// <summary>监控线程退出等待上限。超时记警告并留句柄。</summary>
+        private const int MonitorThreadJoinTimeoutMs = 1000;
+
+        /// <summary>动作线程退出等待上限。超时记警告并留句柄。</summary>
+        private const int ActionThreadJoinTimeoutMs = 3000;
 
         #endregion
 
@@ -51,6 +57,7 @@ namespace AdaWeldSystem.MainDeviceControl
 
         /// <summary>运控总线监督节流拍计数器（IOWork 专享）</summary>
         private int _motionBusCheckBeat;
+
         private volatile bool _actionBusy;
         private Thread thAction;
 
@@ -86,7 +93,7 @@ namespace AdaWeldSystem.MainDeviceControl
         public SafetyFlow Config { get { return _checker.Thresholds; } }
 
         /// <summary>当前是否安全。监控未启动时不门控（返回 true），避免 PLC 未标定阻断整机；</summary>
-        /// <remarks>启动后以最近一次互锁检查结果为准，无结果视为不安全。</remarks>
+        /// <remarks>启动后以最近互锁结果为准，无结果视为不安全。</remarks>
         public bool IsSafe
         {
             get
@@ -126,25 +133,56 @@ namespace AdaWeldSystem.MainDeviceControl
             {
                 try
                 {
-                    ScanRunningIo();
-                    DeviceControlWork.Instance.CheckPreworkFailed();
-                    ScanMotionBusFault();
-
-                    var result = _checker.Check();
-                    LastResult = result;
-
-                    if (result.IsPassed)
+                    // 关闭中只保活，不再推进扫描/巡检/初始化
+                    if (DeviceControlWork.Instance.IsShuttingDown)
                     {
-                        if (_alarmActive)
-                        {
-                            _alarmActive = false;
-                            DeviceControlWork.Instance.ReportAlarmCleared();
-                        }
+                        Thread.Sleep(IoPollIntervalMs);
+                        continue;
                     }
-                    else if (!_alarmActive)
+
+                    // 取走并分派虚拟 IO 命令（初始化期仅 IoInit 有效，其余命令由运行态门控丢弃）
+                    ScanRunningIo();
+
+                    // 初始化期：本线程每拍只推进连接链，绝不执行任何会变更设备状态的巡检；
+                    // 否则设备尚未连通就被判互锁失败/一致性告警，出现 NoReset 转 Alarm 的时序混乱。
+                    if (DeviceControlWork.Instance.IsInitializing)
                     {
-                        _alarmActive = true;
-                        DeviceControlWork.Instance.ReportAlarm(result.Reason);
+                        DeviceControlWork.Instance.InitializeMachineTick();
+                    }
+                    else
+                    {
+                        // 初始化完成后的常驻巡检：状态一致性、运动总线故障、对齐、互锁判定
+                        DeviceControlWork.Instance.CheckPreworkFailed();
+                        // 状态一致性与子流程报警巡检，内部 1 s 节流
+                        DeviceControlWork.Instance.ConsistencyTick();
+                        ScanMotionBusFault();
+                        DeviceControlWork.Instance.MonitorAlignTick();
+
+                        if (DeviceControlWork.Instance.IsSimulationEnabled)
+                        {
+                            // 模拟态不判连接态，安全互锁整体旁路。
+                            // 否则无硬件时互锁不过，模拟启动即被打断。
+                            _alarmActive = false;
+                        }
+                        else
+                        {
+                            var result = _checker.Check();
+                            LastResult = result;
+
+                            if (result.IsPassed)
+                            {
+                                if (_alarmActive)
+                                {
+                                    _alarmActive = false;
+                                    DeviceControlWork.Instance.ReportAlarmCleared();
+                                }
+                            }
+                            else if (!_alarmActive)
+                            {
+                                _alarmActive = true;
+                                DeviceControlWork.Instance.ReportAlarm(result.Reason);
+                            }
+                        }
                     }
                 }
                 catch (Exception ex)
@@ -156,10 +194,9 @@ namespace AdaWeldSystem.MainDeviceControl
             IsIOWorking = false;
         }
 
-        /// <summary>读取物理急停位（反逻辑：安全型常闭回路，与普通 IO 相反）。</summary>
-        /// <remarks>用户 2026-09-08 裁定：EMGWork 只负责急停且只看物理 IO——
-        /// **没有电平信号 = 急停，有电平信号 = 不急停**（按钮按下或回路断线都表现为信号消失，故障安全）。
-        /// PLC 未连接时无法判定，返回 false 不主动触发急停（互锁检查器对 PLC 未连接恒判不通过兜底）。</remarks>
+        /// <summary>读取物理急停位（反逻辑：常闭回路）。</summary>
+        /// <remarks>无信号＝急停，有信号＝不急停。
+        /// PLC 未连接时返回 false，不主动触发急停。</remarks>
         /// <returns>信号消失（急停有效）返回 true</returns>
         private bool ReadPhysicalEmg()
         {
@@ -170,13 +207,10 @@ namespace AdaWeldSystem.MainDeviceControl
             return !plc.ReadBit(DataType.DataBlock, cfg.PlcDb, 0, cfg.EmergencyStopBit);
         }
 
-        /// <summary>扫描一条脉冲型虚拟 IO：命中即取走并异步分派（保证每条命令只执行一次）。</summary>
-        /// <remarks>
-        /// 取走（清位）与记日志都在动作执行前完成，IO 不因动作耗时而滞留；
-        /// 动作交由独立线程执行，IO 扫描线程立即返回，避免初始化链等长耗时动作独占扫描。
-        /// 运行中子流程类 IO（requireRunning）分派前问询运行态：整机已非 Running（停机/报警/急停）则丢弃，
-        /// 避免「排队中的工作指令在停机后被执行」。
-        /// </remarks>
+        /// <summary>扫描脉冲型虚拟 IO：命中即取走并异步分派。</summary>
+        /// <remarks>取走与记日志在动作前完成，IO 不滞留。
+        /// 动作交独立线程，扫描线程立即返回。
+        /// 非 Running 时丢弃，避免停机后执行排队指令。</remarks>
         /// <param name="ioName">虚拟 IO 常量</param>
         /// <param name="requireRunning">true 时要求当前运行态为 Running 才分派，否则丢弃</param>
         /// <returns>命中并已分派返回 true；未置位或因运行态变更被丢弃返回 false</returns>
@@ -187,18 +221,19 @@ namespace AdaWeldSystem.MainDeviceControl
 
             if (requireRunning && work.Status != MainDeviceStatus.Running)
             {
-                Log("Running IO 命中 " + ioName + " 但运行态已变更为 " + work.Status + " 已丢弃", MessageLevel.Warning);
+                Log("监控线程收到命令 " + ioName + "，但设备状态已变为 " + work.Status + "，该命令已丢弃", MessageLevel.Warning);
                 return false;
             }
 
-            Log("Running IO 命中 " + ioName, MessageLevel.Info);
+            Log("监控线程收到命令 " + ioName + "，开始执行", MessageLevel.Info);
             DispatchAction(ioName);
             return true;
         }
 
-        /// <summary>把命中 IO 对应的动作拉到独立线程执行（同一时刻只允许一个动作在跑）。</summary>
-        /// <remarks>与急停区分：急停必须同步立即生效，故仍由 EMGWork 直接执行，不走本通道。
-        /// 动作执行前后各问询一次运行态：执行期间被急停 / 报警抢占时记一次变更日志，供追溯动作是否被新状态打断。</remarks>
+        /// <summary>把命中 IO 的动作拉到独立线程执行。</summary>
+        /// <remarks>与急停区分：急停须同步生效，仍由 EMGWork 直执。
+        /// 同一时刻只允许一个动作。
+        /// 执行前后各查一次运行态，变更记日志。</remarks>
         /// <param name="ioName">已取走的虚拟 IO 常量</param>
         private void DispatchAction(string ioName)
         {
@@ -230,15 +265,19 @@ namespace AdaWeldSystem.MainDeviceControl
                         Log("动作 " + ioName + " 执行期间运行态变更为 " + after, MessageLevel.Warning);
                     lock (_actionLock) { _actionBusy = false; }
                 }
-            });
-            thAction.Name = "thAction_" + ioName;
-            thAction.IsBackground = true;
+            })
+            {
+                Name = "thAction_" + ioName,
+                IsBackground = true
+            };
+            // 动作线程纳入线程登记表。关闭时可查。
+            DeviceControlWork.Instance.RegisterWorkThread(thAction, ActionThreadJoinTimeoutMs);
             thAction.Start();
         }
 
         /// <summary>扫描全部 Running IO，命中后执行动作。</summary>
-        /// <remarks>只关心 IO 是否置位，不区分硬件、机器人或 UI 触发源；
-        /// 子流程类 IO（Sub*）要求运行态为 Running，整机被抢占后排队指令一律丢弃。</remarks>
+        /// <remarks>只关心 IO 是否置位，不区分触发源；
+        /// Sub* 类 IO 要求 Running，否则一律丢弃。</remarks>
         private void ScanRunningIo()
         {
             ScanPulseIo(DeviceControlWork.IoInit);
@@ -254,18 +293,16 @@ namespace AdaWeldSystem.MainDeviceControl
             ScanPulseIo(DeviceControlWork.IoSubAlarmStop, true);
         }
 
-        /// <summary>运控总线健康电平扫描：OK→NG 上升沿置虚拟 IO 并同步执行报警动作链。</summary>
-        /// <remarks>
-        /// 用户 2026-09-08 裁定：总线故障属普通 Alarm，检查放 IOWork（EMGWork 专责急停）；
-        /// 控制器状态变量注册成电平型虚拟 IO——持续 NG 期间 IoMotionBusFault 常置，天然闭锁不重复报（ADR-031 D1）；
-        /// NG→OK 不自动消警，归 ClearAlarm 链；消警（状态离开 Alarm）后闭锁自动解除，若仍 NG 在下一拍重新触发。
-        /// 未初始化（IsInitialized=false）不检测，避免启动阶段误报。
-        /// </remarks>
+        /// <summary>运控总线扫描：OK→NG 上升沿置虚拟 IO。</summary>
+        /// <remarks>总线故障属普通 Alarm，检查放 IOWork。
+        /// 电平型 IO 持续 NG 则常置并闭锁。
+        /// NG→OK 不消警，归 ClearAlarm 链。
+        /// 未初始化时不检测，避免启动误报。</remarks>
         private void ScanMotionBusFault()
         {
             var work = DeviceControlWork.Instance;
 
-            // 已触发：闭锁。整机已离开 Alarm（消警/急停解除回 NoReset）则解除闭锁，允许下次故障重新触发
+            // 已触发闭锁；离开 Alarm 后解除，允许再触发
             if (work.IsVirtualIoSet(DeviceControlWork.IoMotionBusFault))
             {
                 if (work.Status != MainDeviceStatus.Alarm) work.ClearVirtualIo(DeviceControlWork.IoMotionBusFault);
@@ -292,17 +329,16 @@ namespace AdaWeldSystem.MainDeviceControl
             }
             if (ok) return;
 
-            // OK→NG 上升沿：根因归口记一次 Error，置电平型虚拟 IO 并同步执行报警动作链（纯状态迁移 µs 级，与急停同属同步例外）
+            // OK→NG：记一次 Error，置电平 IO 并同步报警链
             Log("运控总线故障 " + desc, MessageLevel.Error);
             work.SetVirtualIo(DeviceControlWork.IoMotionBusFault);
             work.ExecuteIo(DeviceControlWork.IoMotionBusFault);
         }
 
-        /// <summary>急停轮询线程主体（原档 §2 EMG IO Work）。</summary>
-        /// <remarks>用户 2026-09-08 裁定：EMGWork 只负责急停且只看物理 IO（无虚拟 IO）——
-        /// 反逻辑：信号消失=急停有效（按下/断线均表现为信号消失，故障安全）；
-        /// 检测到 IO 上电（设备通知上位机安全）才允许取消急停，未检测到前 EStop 状态无法清除
-        /// （EstopCancel 仅在本线程信号恢复分支调用）。</remarks>
+
+        /// <summary>急停轮询线程主体。</summary>
+        /// <remarks>只管急停且只看物理 IO：信号消失＝急停有效。
+        /// IO 上电才允许取消急停，否则 EStop 无法清除。</remarks>
         private void EMGWork()
         {
             bool emgShown = false;
@@ -313,7 +349,7 @@ namespace AdaWeldSystem.MainDeviceControl
                 {
                     var work = DeviceControlWork.Instance;
 
-                    // 反逻辑物理急停：true=信号消失（急停有效），false=IO 上电（设备通知安全）
+                    // 反逻辑：true=信号消失（急停），false=IO 上电
                     bool estopActive = ReadPhysicalEmg();
                     var status = work.Status;
 
@@ -325,7 +361,7 @@ namespace AdaWeldSystem.MainDeviceControl
                     }
                     else if (!estopActive && emgShown)
                     {
-                        // 下降沿：IO 上电 = 设备通知上位机安全，才允许取消急停
+                        // 下降沿：IO 上电即设备安全，才允许取消急停
                         emgShown = false;
                         if (status == MainDeviceStatus.EStop)
                         {
@@ -358,7 +394,7 @@ namespace AdaWeldSystem.MainDeviceControl
                     {
                         last = status;
                         DriveTricolorLamp(status);
-                        // 状态切换不记日志（ADR-028 报错分层：三色灯动作本身即对外呈现）
+                        // 状态切换不记日志（三色灯动作本身即对外呈现）
                     }
                 }
                 catch (Exception ex)
@@ -412,11 +448,18 @@ namespace AdaWeldSystem.MainDeviceControl
             }
         }
 
-        /// <summary>等待线程退出（最多 1s）。</summary>
+        /// <summary>等待线程退出（监控线程最多 1s，动作线程最多 3s）。</summary>
+        /// <remarks>超时只记 Warning 并保留句柄，便于现场复查；不静默置 null。</remarks>
         /// <param name="thread">待汇合的线程</param>
-        private void JoinThread(Thread thread)
+        /// <param name="name">线程名（日志用）</param>
+        /// <param name="timeoutMs">等待上限（毫秒）</param>
+        /// <returns>已退出返回 true，超时返回 false</returns>
+        private bool JoinThread(Thread thread, string name, int timeoutMs)
         {
-            if (thread != null && thread.IsAlive) thread.Join(1000);
+            if (thread == null || !thread.IsAlive) return true;
+            if (thread.Join(timeoutMs)) return true;
+            Log(name + " 未在 " + timeoutMs + "ms 内退出，保留句柄待复查", MessageLevel.Warning);
+            return false;
         }
 
         #endregion
@@ -458,17 +501,23 @@ namespace AdaWeldSystem.MainDeviceControl
             Log("安全/IO/状态监控启动", MessageLevel.Info);
         }
 
-        /// <summary>停止三条监控线程（置标志位 + 有限等待，不 Abort）。</summary>
+        /// <summary>停止监控线程与动作线程。置标志位后有限等待。</summary>
+        /// <remarks>超时的线程记 Warning 并保留句柄，便于复查；仅已确认退出的才置空。</remarks>
         public void MachineIOWorkClose()
         {
             if (!_running) return;
             _running = false;
-            JoinThread(thIOWork);
-            JoinThread(thEMGWork);
-            JoinThread(thLightStatusWork);
-            thIOWork = null;
-            thEMGWork = null;
-            thLightStatusWork = null;
+
+            bool ioExited = JoinThread(thIOWork, "thIOWork", MonitorThreadJoinTimeoutMs);
+            bool emgExited = JoinThread(thEMGWork, "thEMGWork", MonitorThreadJoinTimeoutMs);
+            bool lightExited = JoinThread(thLightStatusWork, "thLightStatusWork", MonitorThreadJoinTimeoutMs);
+            bool actionExited = JoinThread(thAction, "thAction", ActionThreadJoinTimeoutMs);
+
+            if (ioExited) thIOWork = null;
+            if (emgExited) thEMGWork = null;
+            if (lightExited) thLightStatusWork = null;
+            if (actionExited) thAction = null;
+
             _alarmActive = false;
             Log("安全/IO/状态监控停止", MessageLevel.Info);
         }
@@ -498,8 +547,8 @@ namespace AdaWeldSystem.MainDeviceControl
     }
 
     /// <summary>安全互锁阈值与 PLC 地址映射。</summary>
-    /// <remarks>数值为 PLC 原始单位（WORD/REAL 经站点标定后填入），阈值比较使用原始单位；
-    /// StatusLamp* 为三色灯输出地址，StatusLampDb 置 0 表示未配置（不写）。</remarks>
+    /// <remarks>数值为 PLC 原始单位，阈值比较用原始单位；
+    /// StatusLamp* 为三色灯输出地址，StatusLampDb 为 0 表示未配置。</remarks>
     public class SafetyFlow
     {
         /// <summary>保护气压下限（PLC 原始单位）</summary>
@@ -726,8 +775,7 @@ namespace AdaWeldSystem.MainDeviceControl
             if (!GlobalCommData.mCommunicationManager.IsRobotEnabled) return;
 
             var commMgr = GlobalCommData.mCommunicationManager;
-            bool online = commMgr != null && commMgr.RobotConnected;
-            if (!online)
+            if (!commMgr.RobotConnected)
             {
                 result.FailedItems.Add("机器人未在线");
             }
@@ -739,11 +787,6 @@ namespace AdaWeldSystem.MainDeviceControl
         /// <param name="result">待写入的检查结果</param>
         private void CheckDevice(string name, DeviceStateBase device, SafetyInterlockResult result)
         {
-            if (device == null)
-            {
-                result.FailedItems.Add(name + " 状态缺失");
-                return;
-            }
             if (device.State != SubDeviceState.Connected)
             {
                 result.FailedItems.Add(name + " 未就绪 状态 " + device.State);
@@ -758,11 +801,13 @@ namespace AdaWeldSystem.MainDeviceControl
         /// <returns>互锁检查结果，含是否通过与未通过项</returns>
         public SafetyInterlockResult Check()
         {
-            var result = new SafetyInterlockResult();
-            result.CheckTime = DateTime.Now;
+            var result = new SafetyInterlockResult
+            {
+                CheckTime = DateTime.Now
+            };
 
             var comm = GlobalCommData.mCommunicationManager;
-            var plc = comm != null ? comm.S7Comm : null;
+            var plc = comm?.S7Comm;
             if (plc != null && comm.IsPlcEnabled)
             {
                 CheckPlc(plc, result);

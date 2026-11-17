@@ -6,10 +6,8 @@ using AdaWeldSystem.FileOperate;
 namespace AdaWeldSystem.MotionControl
 {
     /// <summary>气缸注册表</summary>
-    /// <remarks>
-    /// 统一管理业务层用到的全部气缸。气缸由若干到位传感器与电磁阀复合而成，
-    /// AttachAll 时会把每个气缸占用的全部 IO 逐个注册进控制器，避免逐个手工登记。
-    /// </remarks>
+    /// <remarks>按键名登记全部气缸。AttachAll 时把各气缸占用的 IO 逐个注册进控制器。
+    /// 免手工登记。</remarks>
     public class CylinderRegistry
     {
         #region 私有变量
@@ -65,8 +63,7 @@ namespace AdaWeldSystem.MotionControl
         /// <returns>气缸对象，未找到返回 null</returns>
         public Cylinder Get(string name)
         {
-            Cylinder cylinder;
-            return _items.TryGetValue(name, out cylinder) ? cylinder : null;
+            return _items.TryGetValue(name, out Cylinder cylinder) ? cylinder : null;
         }
 
         /// <summary>判断是否已登记</summary>
@@ -120,7 +117,8 @@ namespace AdaWeldSystem.MotionControl
                 }
             }
 
-            Log(string.Format("已向控制器注册气缸 {0} 个 占用 IO {1} 个", _items.Count, ioCount));
+            Log(string.Format("已向控制器注册气缸 {0} 个 占用 IO {1} 个", _items.Count, ioCount),
+                MessageLevel.Debug);
         }
 
         #endregion

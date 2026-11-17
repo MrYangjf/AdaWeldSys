@@ -83,7 +83,7 @@
             // uiTableRecord
             // 
             this.uiTableRecord.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.uiTableRecord.Font = new System.Drawing.Font("宋体", 12F);
+            this.uiTableRecord.Font = new System.Drawing.Font("Microsoft YaHei UI", 12F);
             this.uiTableRecord.Gap = 12;
             this.uiTableRecord.Location = new System.Drawing.Point(0, 32);
             this.uiTableRecord.Name = "uiTableRecord";
@@ -93,7 +93,7 @@
             // uiLabelRecordTitle
             // 
             this.uiLabelRecordTitle.Dock = System.Windows.Forms.DockStyle.Top;
-            this.uiLabelRecordTitle.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.uiLabelRecordTitle.Font = new System.Drawing.Font("Microsoft YaHei UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.uiLabelRecordTitle.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(48)))), ((int)(((byte)(48)))), ((int)(((byte)(48)))));
             this.uiLabelRecordTitle.Location = new System.Drawing.Point(0, 0);
             this.uiLabelRecordTitle.Name = "uiLabelRecordTitle";
@@ -116,7 +116,7 @@
             // uiTableTemp
             // 
             this.uiTableTemp.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.uiTableTemp.Font = new System.Drawing.Font("宋体", 12F);
+            this.uiTableTemp.Font = new System.Drawing.Font("Microsoft YaHei UI", 12F);
             this.uiTableTemp.Gap = 12;
             this.uiTableTemp.Location = new System.Drawing.Point(0, 32);
             this.uiTableTemp.Name = "uiTableTemp";
@@ -126,7 +126,7 @@
             // uiLabelTempTitle
             // 
             this.uiLabelTempTitle.Dock = System.Windows.Forms.DockStyle.Top;
-            this.uiLabelTempTitle.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.uiLabelTempTitle.Font = new System.Drawing.Font("Microsoft YaHei UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.uiLabelTempTitle.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(48)))), ((int)(((byte)(48)))), ((int)(((byte)(48)))));
             this.uiLabelTempTitle.Location = new System.Drawing.Point(0, 0);
             this.uiLabelTempTitle.Name = "uiLabelTempTitle";
@@ -140,7 +140,7 @@
             this.uiPanel1.Controls.Add(this.uiLabelRecordCount);
             this.uiPanel1.Controls.Add(this.btnRefresh);
             this.uiPanel1.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.uiPanel1.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.uiPanel1.Font = new System.Drawing.Font("Microsoft YaHei UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.uiPanel1.Location = new System.Drawing.Point(4, 365);
             this.uiPanel1.Margin = new System.Windows.Forms.Padding(4, 5, 4, 5);
             this.uiPanel1.MinimumSize = new System.Drawing.Size(1, 1);
@@ -150,7 +150,7 @@
             // 
             // uiLabelTempCount
             // 
-            this.uiLabelTempCount.Font = new System.Drawing.Font("宋体", 9F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.uiLabelTempCount.Font = new System.Drawing.Font("Microsoft YaHei UI", 9F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.uiLabelTempCount.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(48)))), ((int)(((byte)(48)))), ((int)(((byte)(48)))));
             this.uiLabelTempCount.Location = new System.Drawing.Point(180, 15);
             this.uiLabelTempCount.Name = "uiLabelTempCount";
@@ -160,7 +160,7 @@
             // 
             // uiLabelRecordCount
             // 
-            this.uiLabelRecordCount.Font = new System.Drawing.Font("宋体", 9F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.uiLabelRecordCount.Font = new System.Drawing.Font("Microsoft YaHei UI", 9F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.uiLabelRecordCount.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(48)))), ((int)(((byte)(48)))), ((int)(((byte)(48)))));
             this.uiLabelRecordCount.Location = new System.Drawing.Point(50, 15);
             this.uiLabelRecordCount.Name = "uiLabelRecordCount";
@@ -171,7 +171,7 @@
             // btnRefresh
             // 
             this.btnRefresh.Cursor = System.Windows.Forms.Cursors.Hand;
-            this.btnRefresh.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.btnRefresh.Font = new System.Drawing.Font("Microsoft YaHei UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.btnRefresh.Location = new System.Drawing.Point(280, 8);
             this.btnRefresh.MinimumSize = new System.Drawing.Size(1, 1);
             this.btnRefresh.Name = "btnRefresh";
@@ -186,7 +186,7 @@
             this.uiPanel2.Controls.Add(this.btnSelectTemp);
             this.uiPanel2.Controls.Add(this.btnSelectRecord);
             this.uiPanel2.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.uiPanel2.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.uiPanel2.Font = new System.Drawing.Font("Microsoft YaHei UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.uiPanel2.Location = new System.Drawing.Point(354, 365);
             this.uiPanel2.Margin = new System.Windows.Forms.Padding(4, 5, 4, 5);
             this.uiPanel2.MinimumSize = new System.Drawing.Size(1, 1);
@@ -197,7 +197,7 @@
             // btnCancel
             // 
             this.btnCancel.Cursor = System.Windows.Forms.Cursors.Hand;
-            this.btnCancel.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.btnCancel.Font = new System.Drawing.Font("Microsoft YaHei UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.btnCancel.Location = new System.Drawing.Point(260, 8);
             this.btnCancel.MinimumSize = new System.Drawing.Size(1, 1);
             this.btnCancel.Name = "btnCancel";
@@ -209,7 +209,7 @@
             // btnConvertTemp
             // 
             this.btnConvertTemp.Cursor = System.Windows.Forms.Cursors.Hand;
-            this.btnConvertTemp.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.btnConvertTemp.Font = new System.Drawing.Font("Microsoft YaHei UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.btnConvertTemp.Location = new System.Drawing.Point(175, 8);
             this.btnConvertTemp.MinimumSize = new System.Drawing.Size(1, 1);
             this.btnConvertTemp.Name = "btnConvertTemp";
@@ -221,7 +221,7 @@
             // btnSelectTemp
             // 
             this.btnSelectTemp.Cursor = System.Windows.Forms.Cursors.Hand;
-            this.btnSelectTemp.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.btnSelectTemp.Font = new System.Drawing.Font("Microsoft YaHei UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.btnSelectTemp.Location = new System.Drawing.Point(90, 8);
             this.btnSelectTemp.MinimumSize = new System.Drawing.Size(1, 1);
             this.btnSelectTemp.Name = "btnSelectTemp";
@@ -233,7 +233,7 @@
             // btnSelectRecord
             // 
             this.btnSelectRecord.Cursor = System.Windows.Forms.Cursors.Hand;
-            this.btnSelectRecord.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.btnSelectRecord.Font = new System.Drawing.Font("Microsoft YaHei UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.btnSelectRecord.Location = new System.Drawing.Point(5, 8);
             this.btnSelectRecord.MinimumSize = new System.Drawing.Size(1, 1);
             this.btnSelectRecord.Name = "btnSelectRecord";

@@ -3,7 +3,7 @@ using System.Runtime.InteropServices;
 namespace AdaWeldSystem.MotionControl.DeltaEtherCAT.Native
 {
     /// <summary>台达运动控制原生封装</summary>
-    /// <remarks>位置与速度参数均为脉冲单位，加减速时间为秒，S 曲线时间与回零加速度为毫秒。</remarks>
+    /// <remarks>位置与速度用脉冲。加减速时间用秒。S 曲线与回零加速度用毫秒。</remarks>
     public static class EtherCATMotionNative
     {
 #if X86
@@ -11,12 +11,6 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT.Native
 #else
         private const string DllPath = "EtherCAT_DLL_x64.dll";
 #endif
-
-        /// <summary>状态字使能位</summary>
-        public const ushort StatusWordOperationEnabled = 0x0004;
-
-        /// <summary>状态字报警位</summary>
-        public const ushort StatusWordFault = 0x0008;
 
         /// <summary>取当前运动模式</summary>
         [DllImport(DllPath, EntryPoint = "_ECAT_Slave_Motion_Get_MoveMode")]
@@ -96,11 +90,6 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT.Native
         public static extern ushort CS_ECAT_Slave_CSP_Start_V_Move(ushort CardNo, ushort NodeID, ushort SlotNo,
             ushort Dir, int StrVel, int ConstVel, double Tacc, ushort SCurve);
 
-        /// <summary>运动中变更目标位置</summary>
-        [DllImport(DllPath, EntryPoint = "_ECAT_Slave_CSP_TargetPos_Change")]
-        public static extern ushort CS_ECAT_Slave_CSP_TargetPos_Change(ushort CardNo, ushort NodeID,
-            ushort SlotNo, int NewPos);
-
         /// <summary>运动中变更速度</summary>
         [DllImport(DllPath, EntryPoint = "_ECAT_Slave_CSP_Velocity_Change")]
         public static extern ushort CS_ECAT_Slave_CSP_Velocity_Change(ushort CardNo, ushort NodeID,
@@ -116,6 +105,11 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT.Native
         public static extern ushort CS_ECAT_Slave_CST_Start_Move(ushort CardNo, ushort NodeID, ushort SlotNo,
             short Target_Torque, uint Slope, ushort Curve_Mode);
 
+        /// <summary>CST 扭矩模式输出使能（关闭即撤除力矩）</summary>
+        [DllImport(DllPath, EntryPoint = "_ECAT_Slave_CST_Output_Enable")]
+        public static extern ushort CS_ECAT_Slave_CST_Output_Enable(ushort CardNo, ushort NodeID, ushort SlotID,
+            ushort Enable);
+
         /// <summary>配置回零参数，速度为脉冲每秒，加速度为毫秒</summary>
         [DllImport(DllPath, EntryPoint = "_ECAT_Slave_Home_Config")]
         public static extern ushort CS_ECAT_Slave_Home_Config(ushort CardNo, ushort NodeID, ushort SlotNo,
@@ -130,14 +124,31 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT.Native
         public static extern ushort CS_ECAT_Slave_Home_Status(ushort CardNo, ushort NodeID,
             ushort SlotNo, ref ushort Status);
 
-        /// <summary>设置软限位</summary>
-        [DllImport(DllPath, EntryPoint = "_ECAT_Slave_CSP_Set_Softlimit")]
-        public static extern ushort CS_ECAT_Slave_CSP_Set_Softlimit(ushort CardNo, ushort NodeID, ushort SlotNo,
-            int PosiLimit, int NegaLimit, ushort Mode);
-
         /// <summary>设置电子齿轮比</summary>
         [DllImport(DllPath, EntryPoint = "_ECAT_Slave_CSP_Set_Gear")]
         public static extern ushort CS_ECAT_Slave_CSP_Set_Gear(ushort CardNo, ushort NodeID, ushort SlotNo,
             double Numerator, double Denominator, short Enable);
+
+        /// <summary>配置 CSP 软目标到达判定窗口（位置窗口 + 时间窗口）</summary>
+        /// <remarks>CSP 运动族专用到位判定。位置偏差进入 <c>Position_Window</c> 并持续 <c>Window_Time</c> 即判到达。
+        /// 与 <c>Motion_Get_Mdone</c>（只表示运动结束，不区分到位/被中断）互补。</remarks>
+        /// <param name="Window_Time">时间窗口</param>
+        /// <param name="Position_Window">位置窗口</param>
+        /// <param name="Enable">使能</param>
+        [DllImport(DllPath, EntryPoint = "_ECAT_Slave_CSP_Set_SoftTargetReach")]
+        public static extern ushort CS_ECAT_Slave_CSP_Set_SoftTargetReach(ushort CardNo, ushort NodeID,
+            ushort SlotID, ushort Window_Time, uint Position_Window, ushort Enable);
+
+        /// <summary>读取 CSP 软目标到达状态</summary>
+        /// <param name="Status">到达状态（语义待核实，暂不作判据）</param>
+        [DllImport(DllPath, EntryPoint = "_ECAT_Slave_CSP_Get_SoftTargetReach_Status")]
+        public static extern ushort CS_ECAT_Slave_CSP_Get_SoftTargetReach_Status(ushort CardNo, ushort NodeID,
+            ushort SlotID, ref ushort Status);
+
+        /// <summary>状态字使能位</summary>
+        public const ushort StatusWordOperationEnabled = 0x0004;
+
+        /// <summary>状态字报警位</summary>
+        public const ushort StatusWordFault = 0x0008;
     }
 }

@@ -8,45 +8,41 @@ using AdaWeldSystem.SQLiteDBControl.Helpers;
 namespace AdaWeldSystem.ProductFileControl
 {
     /// <summary>
-    /// 焊接结果记录类（实现层）
-    /// 记录内容 = 焊接异常 / 失败 / 成功 + 产品信息，连接数据库管理
-    /// （经 SQLiteDatabaseManager.ProductDatabaseHelper 按日期分表落库，写入契约 string[]，ADR-026 分层约束）。
+    /// 焊接结果记录类（实现层）。
+    /// 生产记录单位含产品码、时间、状态、结果与原因。
+    /// 按日期分表落库，写入契约为 string[]。
+    /// 焊毕一次写入，起焊信息由会话缓存。
+    /// 回溯走 <see cref="SelectResultTable"/>。
     /// </summary>
     public class WeldResultRecord : ProductRecordBase
     {
         private const string Tag = "WeldResultRecord";
+        public override string Name
+        {
+            get { return "WeldResultRecord"; }
+        }
 
         /// <summary>统一日志出口（固定使用本类标签）</summary>
+        /// <param name="message">消息内容。</param>
+        /// <param name="level">日志级别。</param>
         private void Log(string message, MessageLevel level = MessageLevel.Info)
         {
             GlobalCommData.ShowLog(Tag, message, level);
         }
 
-        /// <summary>
-        /// 记录名称
-        /// </summary>
-        public override string Name
-        {
-            get { return "WeldResultRecord"; }
-        }
-
-        /// <summary>
-        /// 记录一条焊接结果（异常/失败/成功 + 产品信息；入队即返回，后台落库）
-        /// </summary>
+        /// <summary>记录一条焊接结果（异常/失败/成功 + 产品信息；入队后即返回，后台落库）</summary>
         /// <param name="item">焊接结果条目</param>
         public void RecordResult(WeldResultItem item)
         {
             Enqueue(item);
         }
 
-        /// <summary>
-        /// 单条落盘（后台线程调用）：写入产品数据库当天分表
-        /// </summary>
+        /// <summary>单条落盘（后台线程调用）：写入产品数据库当天分</summary>
+        /// <remarks>表</remarks>
         /// <param name="item">记录条目</param>
         protected override void Persist(RecordItem item)
         {
-            var result = item as WeldResultItem;
-            if (result == null)
+            if (!(item is WeldResultItem result))
             {
                 return;
             }
@@ -58,8 +54,8 @@ namespace AdaWeldSystem.ProductFileControl
                     Log("ProductDatabaseHelper 未就绪 结果记录未落库", MessageLevel.Warning);
                     return;
                 }
-                helper.AddProductInfo(result.Sn, result.StartTime, result.InspectionType,
-                    result.Result, result.CheckInfo);
+                helper.AddProductInfo(result.Sn, result.StartTime, result.Status,
+                    result.Result, result.Info);
             }
             catch (Exception ex)
             {
@@ -71,16 +67,34 @@ namespace AdaWeldSystem.ProductFileControl
         /// 查询产品检测结果（DB 回溯入口；转发产品数据库 Helper）
         /// </summary>
         /// <param name="date">查询日期</param>
-        /// <returns>该日期数据表；无数据返回 null</returns>
+        /// <returns>该日期数据表；数据库不可用或无数据返回 null</returns>
+        /// <remarks>释放后返回 null 并记日志，不可抛到界面。</remarks>
         public System.Data.DataTable SelectResultTable(DateTime date)
         {
             var helper = SQLiteDatabaseManager.Instance.ProductDatabaseHelper;
-            if (helper == null)
+            if (helper == null || helper.IsDisposed)
             {
+                Log("产品数据库不可用 生产记录查询已跳过", MessageLevel.Warning);
                 return null;
             }
             helper.SelectTable(date);
             return helper.CurrentTable;
+        }
+
+        /// <summary>查询时间区间内的生产记录（数据追溯页区间筛</summary>
+        /// <remarks>选入口）。</remarks>
+        /// <param name="start">区间起始日（含）</param>
+        /// <param name="end">区间结束日（含）</param>
+        /// <returns>合并后的记录表；数据库不可用返回 null，区间内无记录返回零行的表</returns>
+        public System.Data.DataTable SelectResultTable(DateTime start, DateTime end)
+        {
+            var helper = SQLiteDatabaseManager.Instance.ProductDatabaseHelper;
+            if (helper == null || helper.IsDisposed)
+            {
+                Log("产品数据库不可用 生产记录区间查询已跳过", MessageLevel.Warning);
+                return null;
+            }
+            return helper.SelectTables(start, end);
         }
     }
 }

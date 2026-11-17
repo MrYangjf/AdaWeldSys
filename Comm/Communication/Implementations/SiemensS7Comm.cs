@@ -2,67 +2,49 @@ using S7.Net;
 using System;
 using AdaWeldSystem.Comm.SystemComm;
 using AdaWeldSystem.FileOperate;
+using AdaWeldSystem.Comm.Communication.Abstractions;
 
 namespace AdaWeldSystem.Comm.Communication.Implementations
 {
-    /// <summary>
-    /// 西门子 S7 PLC 通讯实现
-    /// 基于 S7NetPlus 库（需添加 S7.Net.dll 引用），继承 CommChannelBase 通讯抽象基类
-    /// </summary>
+    /// <summary>西门子 S7 PLC 通讯实现</summary>
+    /// <remarks>基于 S7NetPlus（S7.Net.dll），继承 CommChannelBase。</remarks>
     public class SiemensS7Comm : CommChannelBase
     {
-        private const string Tag = "SiemensS7Comm";
-
-        /// <summary>统一日志出口（固定使用本类标签）</summary>
-        private void Log(string message, MessageLevel level = MessageLevel.Info)
-        {
-            GlobalCommData.ShowLog(Tag, message, level);
-        }
-
         private Plc _plc;
         private readonly CpuType _cpuType;
         private readonly string _ipAddress;
         private readonly short _rack;
         private readonly short _slot;
 
-        /// <summary>
-        /// 通道名称
-        /// </summary>
+        private bool _isConnected;
+
+        /// <summary>通道名称</summary>
         public override string Name
         {
             get { return "SiemensS7"; }
         }
 
-        private bool _isConnected;
-
-        /// <summary>
-        /// 是否已连接
-        /// </summary>
+        /// <summary>是否已连接</summary>
         public override bool IsConnected
         {
             get { return _isConnected; }
         }
 
-        /// <summary>
-        /// PLC CPU 类型
-        /// </summary>
+        /// <summary>PLC CPU 类型</summary>
         public CpuType CpuType
         {
             get { return _cpuType; }
         }
 
-        /// <summary>
-        /// IP 地址
-        /// </summary>
+        /// <summary>IP 地址</summary>
         public string IpAddress
         {
             get { return _ipAddress; }
         }
 
-        /// <summary>
-        /// 构造函数
-        /// </summary>
+        /// <summary>构造函数</summary>
         public SiemensS7Comm(CpuType cpuType, string ipAddress, short rack, short slot)
+            : base("SiemensS7Comm")
         {
             _cpuType = cpuType;
             _ipAddress = ipAddress;
@@ -71,9 +53,15 @@ namespace AdaWeldSystem.Comm.Communication.Implementations
             _isConnected = false;
         }
 
-        /// <summary>
-        /// 连接到 S7 PLC
-        /// </summary>
+        private void EnsureConnected()
+        {
+            if (!IsConnected || _plc == null)
+            {
+                throw new InvalidOperationException("S7 PLC 未连接");
+            }
+        }
+
+        /// <summary>连接到 S7 PLC</summary>
         public override void Connect()
         {
             Disconnect();
@@ -92,9 +80,7 @@ namespace AdaWeldSystem.Comm.Communication.Implementations
             }
         }
 
-        /// <summary>
-        /// 断开 S7 PLC 连接
-        /// </summary>
+        /// <summary>断开 S7 PLC 连接</summary>
         public override void Disconnect()
         {
             if (_plc != null)
@@ -115,45 +101,49 @@ namespace AdaWeldSystem.Comm.Communication.Implementations
             }
         }
 
-        /// <summary>
-        /// 读取字节数组
-        /// </summary>
+        /// <summary>读取字节数组</summary>
+        /// <param name="dataType">PLC 存储区类型</param>
+        /// <param name="db">数据块号（非 DB 区传 0）</param>
+        /// <param name="startByteAdr">起始字节地址</param>
+        /// <param name="count">读取字节数</param>
+        /// <returns>读取到的字节数组</returns>
         public byte[] ReadBytes(DataType dataType, int db, int startByteAdr, int count)
         {
             EnsureConnected();
             return _plc.ReadBytes(dataType, db, startByteAdr, count);
         }
 
-        /// <summary>
-        /// 写入字节数组
-        /// </summary>
+        /// <summary>写入字节数组</summary>
+        /// <param name="dataType">PLC 存储区类型</param>
+        /// <param name="db">数据块号（非 DB 区传 0）</param>
+        /// <param name="startByteAdr">起始字节地址</param>
+        /// <param name="value">待写入字节</param>
         public void WriteBytes(DataType dataType, int db, int startByteAdr, byte[] value)
         {
             EnsureConnected();
             _plc.WriteBytes(dataType, db, startByteAdr, value);
         }
 
-        /// <summary>
-        /// 读取单个变量（使用 Read/Write 泛型方法）
-        /// </summary>
+        /// <summary>读取单个变量（使用 Read/Write 泛型方法）</summary>
         public T Read<T>(string variable)
         {
             EnsureConnected();
             return (T)_plc.Read(variable);
         }
 
-        /// <summary>
-        /// 写入单个变量
-        /// </summary>
+        /// <summary>写入单个变量</summary>
         public void Write<T>(string variable, T value)
         {
             EnsureConnected();
             _plc.Write(variable, value);
         }
 
-        /// <summary>
-        /// 读取 PLC 位（Bool）
-        /// </summary>
+        /// <summary>读取 PLC 位（Bool）</summary>
+        /// <param name="dataType">PLC 存储区类型</param>
+        /// <param name="db">数据块号（非 DB 区传 0）</param>
+        /// <param name="startByteAdr">起始字节地址</param>
+        /// <param name="bitIndex">位序号（0 起）</param>
+        /// <returns>该位为 true 时返回 true</returns>
         public bool ReadBit(DataType dataType, int db, int startByteAdr, int bitIndex)
         {
             EnsureConnected();
@@ -161,9 +151,12 @@ namespace AdaWeldSystem.Comm.Communication.Implementations
             return (buffer[0] & (1 << bitIndex)) != 0;
         }
 
-        /// <summary>
-        /// 写入 PLC 位（Bool）
-        /// </summary>
+        /// <summary>写入 PLC 位（Bool）</summary>
+        /// <param name="dataType">PLC 存储区类型</param>
+        /// <param name="db">数据块号（非 DB 区传 0）</param>
+        /// <param name="startByteAdr">起始字节地址</param>
+        /// <param name="bitIndex">位序号（0 起）</param>
+        /// <param name="value">待写入的位值</param>
         public void WriteBit(DataType dataType, int db, int startByteAdr, int bitIndex, bool value)
         {
             EnsureConnected();
@@ -175,9 +168,12 @@ namespace AdaWeldSystem.Comm.Communication.Implementations
             _plc.WriteBytes(dataType, db, startByteAdr, buffer);
         }
 
-        /// <summary>
-        /// 读取 PLC 字符串
-        /// </summary>
+        /// <summary>读取 PLC 字符串</summary>
+        /// <param name="dataType">PLC 存储区类型</param>
+        /// <param name="db">数据块号（非 DB 区传 0）</param>
+        /// <param name="startByteAdr">起始字节地址</param>
+        /// <param name="length">字符串最大长度</param>
+        /// <returns>读取到的字符串（按首个空字符截断）</returns>
         public string ReadString(DataType dataType, int db, int startByteAdr, int length)
         {
             EnsureConnected();
@@ -187,20 +183,10 @@ namespace AdaWeldSystem.Comm.Communication.Implementations
             return nullTerminator >= 0 ? result.Substring(0, nullTerminator) : result.TrimEnd();
         }
 
-        /// <summary>
-        /// 释放资源
-        /// </summary>
+        /// <summary>释放资源</summary>
         public override void Dispose()
         {
             Disconnect();
-        }
-
-        private void EnsureConnected()
-        {
-            if (!IsConnected || _plc == null)
-            {
-                throw new InvalidOperationException("S7 PLC 未连接");
-            }
         }
     }
 }

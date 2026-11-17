@@ -55,7 +55,7 @@
             // uiTableSensor
             // 
             this.uiTableSensor.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.uiTableSensor.Font = new System.Drawing.Font("宋体", 12F);
+            this.uiTableSensor.Font = new System.Drawing.Font("Microsoft YaHei UI", 12F);
             this.uiTableSensor.Gap = 12;
             this.uiTableSensor.Location = new System.Drawing.Point(4, 5);
             this.uiTableSensor.Margin = new System.Windows.Forms.Padding(4, 5, 4, 5);
@@ -77,7 +77,7 @@
             // btnCancel
             // 
             this.btnCancel.Cursor = System.Windows.Forms.Cursors.Hand;
-            this.btnCancel.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.btnCancel.Font = new System.Drawing.Font("Microsoft YaHei UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.btnCancel.Location = new System.Drawing.Point(628, 8);
             this.btnCancel.MinimumSize = new System.Drawing.Size(1, 1);
             this.btnCancel.Name = "btnCancel";
@@ -88,7 +88,7 @@
             // btnOK
             // 
             this.btnOK.Cursor = System.Windows.Forms.Cursors.Hand;
-            this.btnOK.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.btnOK.Font = new System.Drawing.Font("Microsoft YaHei UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.btnOK.Location = new System.Drawing.Point(540, 8);
             this.btnOK.MinimumSize = new System.Drawing.Size(1, 1);
             this.btnOK.Name = "btnOK";

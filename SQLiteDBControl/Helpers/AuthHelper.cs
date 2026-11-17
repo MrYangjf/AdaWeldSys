@@ -1,8 +1,9 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Data.SQLite;
 using AdaWeldSystem.Comm.SystemComm;
+using AdaWeldSystem.SQLiteDBControl.ISQLiteHelper;
 
 namespace AdaWeldSystem.SQLiteDBControl.Helpers
 {

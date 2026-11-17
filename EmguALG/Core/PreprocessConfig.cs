@@ -5,7 +5,7 @@ using AdaWeldSystem.FileOperate;
 namespace AdaWeldSystem.EmguALG.Core
 {
     /// <summary>滤波阶段配置（强类型，供 AlgorithmBase.Preprocess 直接使用）。
-    /// 算子枚举统一引用 AdaWeldSystem.EmguALG 命名空间下的定义（ADR-017）。</summary>
+    /// 算子枚举统一引用 EmguALG 命名空间下的定义。</summary>
     public class FilterConfig
     {
         public bool Enabled;
@@ -34,14 +34,13 @@ namespace AdaWeldSystem.EmguALG.Core
         public void SetParameters(Dictionary<string, string> p)
         {
             if (p == null) return;
-            string v;
-            if (p.TryGetValue("ksize", out v))
+            if (p.TryGetValue("ksize", out string v))
             {
-                int k; if (int.TryParse(v, out k)) Ksize = k;
+                if (int.TryParse(v, out int k)) Ksize = k;
             }
             if (p.TryGetValue("sigmaX", out v))
             {
-                double s; if (double.TryParse(v, NumberStyles.Float, CultureInfo.InvariantCulture, out s)) SigmaX = s;
+                if (double.TryParse(v, NumberStyles.Float, CultureInfo.InvariantCulture, out double s)) SigmaX = s;
             }
         }
 
@@ -75,10 +74,9 @@ namespace AdaWeldSystem.EmguALG.Core
         public void SetParameters(Dictionary<string, string> p)
         {
             if (p == null) return;
-            string v;
-            if (p.TryGetValue("ksize", out v))
+            if (p.TryGetValue("ksize", out string v))
             {
-                int k; if (int.TryParse(v, out k)) Ksize = k;
+                if (int.TryParse(v, out int k)) Ksize = k;
             }
         }
 
@@ -115,14 +113,13 @@ namespace AdaWeldSystem.EmguALG.Core
         public void SetParameters(Dictionary<string, string> p)
         {
             if (p == null) return;
-            string v;
-            if (p.TryGetValue("threshold1", out v))
+            if (p.TryGetValue("threshold1", out string v))
             {
-                double t; if (double.TryParse(v, NumberStyles.Float, CultureInfo.InvariantCulture, out t)) Threshold1 = t;
+                if (double.TryParse(v, NumberStyles.Float, CultureInfo.InvariantCulture, out double t)) Threshold1 = t;
             }
             if (p.TryGetValue("threshold2", out v))
             {
-                double t; if (double.TryParse(v, NumberStyles.Float, CultureInfo.InvariantCulture, out t)) Threshold2 = t;
+                if (double.TryParse(v, NumberStyles.Float, CultureInfo.InvariantCulture, out double t)) Threshold2 = t;
             }
         }
 
@@ -132,7 +129,7 @@ namespace AdaWeldSystem.EmguALG.Core
         }
     }
 
-    /// <summary>线激光专用预处理（离群点剔除 / Z 向抖动平滑 / 断线桥接）。</summary>
+    /// <summary>线激光预处理（去离群、抖动平滑、断线桥接）。</summary>
     public class LineLaserConfig
     {
         public bool OutlierRemoval;
@@ -159,7 +156,7 @@ namespace AdaWeldSystem.EmguALG.Core
 
     /// <summary>
     /// 预处理配置（算法架构设计 §4.2 / §6.3）。
-    /// 在旧 PipelineConfig 基础上增加线激光专用预处理（离群点剔除、Z 向抖动平滑、断线桥接），仍复用 ImageAlgorithm。
+    /// 在旧 PipelineConfig 上扩展线激光预处理。仍复用 ImageAlgorithm。
     /// </summary>
     [System.ComponentModel.TypeConverter(typeof(System.ComponentModel.ExpandableObjectConverter))]
     public class PreprocessConfig
@@ -212,14 +209,14 @@ namespace AdaWeldSystem.EmguALG.Core
             Filter.Enabled = ini.ReadBool(Section, "Filter_Enabled", Filter.Enabled);
             Filter.Ksize = ini.ReadInt(Section, "Filter_Ksize", Filter.Ksize);
             string sx = ini.ReadString(Section, "Filter_SigmaX", null);
-            if (!string.IsNullOrEmpty(sx)) { double v; if (double.TryParse(sx, NumberStyles.Float, CultureInfo.InvariantCulture, out v)) Filter.SigmaX = v; }
+            if (!string.IsNullOrEmpty(sx)) { if (double.TryParse(sx, NumberStyles.Float, CultureInfo.InvariantCulture, out double v)) Filter.SigmaX = v; }
             Morphology.Enabled = ini.ReadBool(Section, "Morph_Enabled", Morphology.Enabled);
             Morphology.Ksize = ini.ReadInt(Section, "Morph_Ksize", Morphology.Ksize);
             Edge.Enabled = ini.ReadBool(Section, "Edge_Enabled", Edge.Enabled);
             string t1 = ini.ReadString(Section, "Edge_Threshold1", null);
-            if (!string.IsNullOrEmpty(t1)) { double v; if (double.TryParse(t1, NumberStyles.Float, CultureInfo.InvariantCulture, out v)) Edge.Threshold1 = v; }
+            if (!string.IsNullOrEmpty(t1)) { if (double.TryParse(t1, NumberStyles.Float, CultureInfo.InvariantCulture, out double v)) Edge.Threshold1 = v; }
             string t2 = ini.ReadString(Section, "Edge_Threshold2", null);
-            if (!string.IsNullOrEmpty(t2)) { double v; if (double.TryParse(t2, NumberStyles.Float, CultureInfo.InvariantCulture, out v)) Edge.Threshold2 = v; }
+            if (!string.IsNullOrEmpty(t2)) { if (double.TryParse(t2, NumberStyles.Float, CultureInfo.InvariantCulture, out double v)) Edge.Threshold2 = v; }
             LineLaser.OutlierRemoval = ini.ReadBool(Section, "LineLaser_Outlier", LineLaser.OutlierRemoval);
             LineLaser.ZJitterSmooth = ini.ReadBool(Section, "LineLaser_ZJitter", LineLaser.ZJitterSmooth);
             LineLaser.GapBridge = ini.ReadBool(Section, "LineLaser_GapBridge", LineLaser.GapBridge);

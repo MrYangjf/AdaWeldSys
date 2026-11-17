@@ -15,6 +15,8 @@ namespace AdaWeldSystem.PCLOperate.DataIO
         /// <summary>
         /// 根据文件扩展名自动选择保存方法
         /// </summary>
+        /// <param name="data">数据。</param>
+        /// <param name="filePath">文件路径。</param>
         public static void SaveToFile(PointCloudData data, string filePath)
         {
             var extension = Path.GetExtension(filePath).ToLowerInvariant();
@@ -39,6 +41,8 @@ namespace AdaWeldSystem.PCLOperate.DataIO
         /// <summary>
         /// 保存为TXT/XYZ格式
         /// </summary>
+        /// <param name="data">数据。</param>
+        /// <param name="filePath">文件路径。</param>
         public static void SaveToTxt(PointCloudData data, string filePath, bool includeColor = true)
         {
             var sb = new StringBuilder();
@@ -71,6 +75,8 @@ namespace AdaWeldSystem.PCLOperate.DataIO
         /// <summary>
         /// 保存为PLY格式
         /// </summary>
+        /// <param name="data">数据。</param>
+        /// <param name="filePath">文件路径。</param>
         public static void SaveToPly(PointCloudData data, string filePath)
         {
             var sb = new StringBuilder();
@@ -119,6 +125,8 @@ namespace AdaWeldSystem.PCLOperate.DataIO
         /// <summary>
         /// 保存为OBJ格式
         /// </summary>
+        /// <param name="data">数据。</param>
+        /// <param name="filePath">文件路径。</param>
         public static void SaveToObj(PointCloudData data, string filePath)
         {
             var sb = new StringBuilder();

@@ -69,7 +69,7 @@ namespace AdaWeldSystem.UIDesign.SubDialog.DataReviewerDialog
             // btnAssimpImport
             // 
             this.btnAssimpImport.Cursor = System.Windows.Forms.Cursors.Hand;
-            this.btnAssimpImport.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.btnAssimpImport.Font = new System.Drawing.Font("Microsoft YaHei UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.btnAssimpImport.Ghost = true;
             this.btnAssimpImport.Location = new System.Drawing.Point(363, 3);
             this.btnAssimpImport.MinimumSize = new System.Drawing.Size(1, 1);
@@ -83,7 +83,7 @@ namespace AdaWeldSystem.UIDesign.SubDialog.DataReviewerDialog
             // 
             this.btnRenderParam.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
             this.btnRenderParam.Cursor = System.Windows.Forms.Cursors.Hand;
-            this.btnRenderParam.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.btnRenderParam.Font = new System.Drawing.Font("Microsoft YaHei UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.btnRenderParam.Ghost = true;
             this.btnRenderParam.Location = new System.Drawing.Point(603, 3);
             this.btnRenderParam.MinimumSize = new System.Drawing.Size(1, 1);
@@ -96,7 +96,7 @@ namespace AdaWeldSystem.UIDesign.SubDialog.DataReviewerDialog
             // btnClearData
             // 
             this.btnClearData.Cursor = System.Windows.Forms.Cursors.Hand;
-            this.btnClearData.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.btnClearData.Font = new System.Drawing.Font("Microsoft YaHei UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.btnClearData.Ghost = true;
             this.btnClearData.Location = new System.Drawing.Point(243, 3);
             this.btnClearData.MinimumSize = new System.Drawing.Size(1, 1);
@@ -109,7 +109,7 @@ namespace AdaWeldSystem.UIDesign.SubDialog.DataReviewerDialog
             // btnSurface
             // 
             this.btnSurface.Cursor = System.Windows.Forms.Cursors.Hand;
-            this.btnSurface.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.btnSurface.Font = new System.Drawing.Font("Microsoft YaHei UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.btnSurface.Ghost = true;
             this.btnSurface.Location = new System.Drawing.Point(483, 3);
             this.btnSurface.MinimumSize = new System.Drawing.Size(1, 1);
@@ -122,7 +122,7 @@ namespace AdaWeldSystem.UIDesign.SubDialog.DataReviewerDialog
             // btnZColor
             // 
             this.btnZColor.Cursor = System.Windows.Forms.Cursors.Hand;
-            this.btnZColor.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.btnZColor.Font = new System.Drawing.Font("Microsoft YaHei UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.btnZColor.Ghost = true;
             this.btnZColor.Location = new System.Drawing.Point(123, 3);
             this.btnZColor.MinimumSize = new System.Drawing.Size(1, 1);
@@ -135,7 +135,7 @@ namespace AdaWeldSystem.UIDesign.SubDialog.DataReviewerDialog
             // btnTraceFile
             // 
             this.btnTraceFile.Cursor = System.Windows.Forms.Cursors.Hand;
-            this.btnTraceFile.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.btnTraceFile.Font = new System.Drawing.Font("Microsoft YaHei UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.btnTraceFile.Ghost = true;
             this.btnTraceFile.Location = new System.Drawing.Point(3, 3);
             this.btnTraceFile.MinimumSize = new System.Drawing.Size(1, 1);
@@ -149,7 +149,7 @@ namespace AdaWeldSystem.UIDesign.SubDialog.DataReviewerDialog
             // 
             this.uiPanel2.Controls.Add(this.tableLayoutPanel2);
             this.uiPanel2.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.uiPanel2.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.uiPanel2.Font = new System.Drawing.Font("Microsoft YaHei UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.uiPanel2.Location = new System.Drawing.Point(933, 5);
             this.uiPanel2.Margin = new System.Windows.Forms.Padding(4, 5, 4, 5);
             this.uiPanel2.MinimumSize = new System.Drawing.Size(1, 1);
@@ -160,7 +160,7 @@ namespace AdaWeldSystem.UIDesign.SubDialog.DataReviewerDialog
             // btnRound
             // 
             this.btnRound.Cursor = System.Windows.Forms.Cursors.Hand;
-            this.btnRound.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.btnRound.Font = new System.Drawing.Font("Microsoft YaHei UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.btnRound.Location = new System.Drawing.Point(3, 83);
             this.btnRound.MinimumSize = new System.Drawing.Size(1, 1);
             this.btnRound.Name = "btnRound";
@@ -172,7 +172,7 @@ namespace AdaWeldSystem.UIDesign.SubDialog.DataReviewerDialog
             // btnMove
             // 
             this.btnMove.Cursor = System.Windows.Forms.Cursors.Hand;
-            this.btnMove.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.btnMove.Font = new System.Drawing.Font("Microsoft YaHei UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.btnMove.Location = new System.Drawing.Point(3, 43);
             this.btnMove.MinimumSize = new System.Drawing.Size(1, 1);
             this.btnMove.Name = "btnMove";
@@ -184,7 +184,7 @@ namespace AdaWeldSystem.UIDesign.SubDialog.DataReviewerDialog
             // btnRotate
             // 
             this.btnRotate.Cursor = System.Windows.Forms.Cursors.Hand;
-            this.btnRotate.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.btnRotate.Font = new System.Drawing.Font("Microsoft YaHei UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.btnRotate.Location = new System.Drawing.Point(3, 3);
             this.btnRotate.MinimumSize = new System.Drawing.Size(1, 1);
             this.btnRotate.Name = "btnRotate";

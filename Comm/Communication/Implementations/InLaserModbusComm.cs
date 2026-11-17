@@ -4,53 +4,24 @@ using System.Net.Sockets;
 using System.Threading;
 using AdaWeldSystem.Comm.SystemComm;
 using AdaWeldSystem.FileOperate;
+using AdaWeldSystem.Comm.Communication.Abstractions;
 
 namespace AdaWeldSystem.Comm.Communication.Implementations
 {
-    /// <summary>
-    /// Modbus TCP 主站通讯类
-    /// 自实现 Modbus TCP 协议（MBAP + PDU），无需第三方库。
-    /// 支持：FC03 读保持寄存器、FC06 写单个寄存器、FC16 写多个寄存器。
-    /// 与 SiemensS7Comm 类似，独立实现，不依赖 NetworkPortBase。
-    /// </summary>
+    /// <summary>Modbus TCP 主站通讯类</summary>
+    /// <remarks>自实现协议（MBAP + PDU），无需第三方库；支持 FC03 读、FC06 写单个、FC16 写多个寄存器；独立实现不依赖 NetworkPortBase。</remarks>
     public class InLaserModbusComm : CommChannelBase
     {
-        private const string Tag = "InLaserModbusComm";
-
-        /// <summary>统一日志出口（固定使用本类标签）</summary>
-        private void Log(string message, MessageLevel level = MessageLevel.Info)
-        {
-            GlobalCommData.ShowLog(Tag, message, level);
-        }
-
-        /// <summary>
-        /// 通道名称
-        /// </summary>
-        public override string Name
-        {
-            get { return "InLaser_Modbus"; }
-        }
-
-        /// <summary>
-        /// 建立连接（打开 Modbus TCP 连接）
-        /// </summary>
-        public override void Connect()
-        {
-            Open();
-        }
-
-        /// <summary>
-        /// 断开连接（关闭 Modbus TCP 连接）
-        /// </summary>
-        public override void Disconnect()
-        {
-            Close();
-        }
-
         private TcpClient _tcpClient;
         private NetworkStream _stream;
         private readonly object _lock = new object();
         private ushort _transactionId = 0;
+
+        /// <summary>通道名称</summary>
+        public override string Name
+        {
+            get { return "InLaser_Modbus"; }
+        }
 
         /// <summary>远程 IP 地址</summary>
         public string RemoteIP { get; set; }
@@ -92,10 +63,9 @@ namespace AdaWeldSystem.Comm.Communication.Implementations
         /// <summary>错误事件</summary>
         public event EventHandler<ModbusErrorEventArgs> ErrorOccurred;
 
-        /// <summary>
-        /// 构造函数
-        /// </summary>
+        /// <summary>构造函数</summary>
         public InLaserModbusComm()
+            : base("InLaserModbusComm")
         {
             RemoteIP = "192.168.1.100";
             RemotePort = 502;
@@ -104,21 +74,36 @@ namespace AdaWeldSystem.Comm.Communication.Implementations
             ReadWriteTimeoutMs = 5000;
         }
 
-        /// <summary>
-        /// 打开连接
-        /// </summary>
+        /// <summary>建立连接（打开 Modbus TCP 连接）</summary>
+        public override void Connect()
+        {
+            Open();
+        }
+
+        /// <summary>断开连接（关闭 Modbus TCP 连接）</summary>
+        public override void Disconnect()
+        {
+            Close();
+        }
+
+        /// <summary>打开连接</summary>
+        /// <returns>是否成功。</returns>
         public bool Open()
         {
             try
             {
                 Close();
 
+                // 等待值运行期取，下次连接即生效
+                ConnectTimeoutMs = DeviceWaitSettings.ModbusConnectMs;
+                ReadWriteTimeoutMs = DeviceWaitSettings.ModbusReadWriteMs;
+
                 _tcpClient = new TcpClient();
                 IAsyncResult ar = _tcpClient.BeginConnect(RemoteIP, RemotePort, null, null);
                 if (!ar.AsyncWaitHandle.WaitOne(ConnectTimeoutMs, false))
                 {
                     _tcpClient.Close();
-                    Log(string.Format("连接超时 目标地址 {0} 端口 {1}", RemoteIP, RemotePort), MessageLevel.Error);
+                    Log(string.Format("连接超时(上限 {0}ms) 目标地址 {1} 端口 {2}", ConnectTimeoutMs, RemoteIP, RemotePort), MessageLevel.Error);
                     return false;
                 }
                 _tcpClient.EndConnect(ar);
@@ -127,7 +112,8 @@ namespace AdaWeldSystem.Comm.Communication.Implementations
                 _tcpClient.SendTimeout = ReadWriteTimeoutMs;
                 _stream = _tcpClient.GetStream();
 
-                Log(string.Format("连接成功 目标地址 {0} 端口 {1} 从站 {2}", RemoteIP, RemotePort, SlaveId));
+                Log(string.Format("连接成功 目标地址 {0} 端口 {1} 从站 {2} 连接超时 {3}ms 读写超时 {4}ms",
+                    RemoteIP, RemotePort, SlaveId, ConnectTimeoutMs, ReadWriteTimeoutMs));
                 OnConnected();
                 return true;
             }
@@ -139,23 +125,15 @@ namespace AdaWeldSystem.Comm.Communication.Implementations
             }
         }
 
-        /// <summary>
-        /// 关闭连接
-        /// </summary>
+        /// <summary>关闭连接</summary>
         public void Close()
         {
             try
             {
-                if (_stream != null)
-                {
-                    _stream.Close();
-                    _stream = null;
-                }
-                if (_tcpClient != null)
-                {
-                    _tcpClient.Close();
-                    _tcpClient = null;
-                }
+                _stream?.Close();
+                _stream = null;
+                _tcpClient?.Close();
+                _tcpClient = null;
                 OnDisconnected();
             }
             catch (Exception ex)
@@ -164,9 +142,7 @@ namespace AdaWeldSystem.Comm.Communication.Implementations
             }
         }
 
-        /// <summary>
-        /// 释放资源
-        /// </summary>
+        /// <summary>释放资源</summary>
         public override void Dispose()
         {
             Close();
@@ -174,9 +150,7 @@ namespace AdaWeldSystem.Comm.Communication.Implementations
 
         #region Modbus 功能码
 
-        /// <summary>
-        /// 读保持寄存器（FC03）
-        /// </summary>
+        /// <summary>读保持寄存器（FC03）</summary>
         /// <param name="startAddress">起始地址（0-based）</param>
         /// <param name="count">寄存器数量</param>
         /// <returns>读取到的寄存器值数组，失败返回 null</returns>
@@ -217,9 +191,7 @@ namespace AdaWeldSystem.Comm.Communication.Implementations
             return result;
         }
 
-        /// <summary>
-        /// 写单个寄存器（FC06）
-        /// </summary>
+        /// <summary>写单个寄存器（FC06）</summary>
         /// <param name="address">寄存器地址</param>
         /// <param name="value">值</param>
         /// <returns>成功返回 true</returns>
@@ -247,9 +219,7 @@ namespace AdaWeldSystem.Comm.Communication.Implementations
             return true;
         }
 
-        /// <summary>
-        /// 写多个寄存器（FC16）
-        /// </summary>
+        /// <summary>写多个寄存器（FC16）</summary>
         /// <param name="startAddress">起始地址</param>
         /// <param name="values">值数组</param>
         /// <returns>成功返回 true</returns>
@@ -295,10 +265,7 @@ namespace AdaWeldSystem.Comm.Communication.Implementations
 
         #region 私有方法
 
-        /// <summary>
-        /// 执行 Modbus 请求（发送 PDU + 接收响应）
-        /// 线程安全：同一时间只允许一个请求
-        /// </summary>
+        /// <summary>执行 Modbus 请求（发送 PDU + 接收响应，线程安全）</summary>
         private byte[] Execute(byte[] pdu)
         {
             lock (_lock)
@@ -322,7 +289,6 @@ namespace AdaWeldSystem.Comm.Communication.Implementations
                     mbap[5] = (byte)((pdu.Length + 1) & 0xFF);
                     mbap[6] = SlaveId;  // Unit ID
 
-                    // 发送
                     byte[] request = new byte[mbap.Length + pdu.Length];
                     Buffer.BlockCopy(mbap, 0, request, 0, mbap.Length);
                     Buffer.BlockCopy(pdu, 0, request, mbap.Length, pdu.Length);
@@ -367,9 +333,10 @@ namespace AdaWeldSystem.Comm.Communication.Implementations
             }
         }
 
-        /// <summary>
-        /// 从流中精确读取指定字节数
-        /// </summary>
+        /// <summary>从流中精确读取指定字节数</summary>
+        /// <param name="offset">偏移量。</param>
+        /// <param name="count">数量。</param>
+        /// <returns>结果码。</returns>
         private static int ReadExact(NetworkStream stream, byte[] buffer, int offset, int count)
         {
             int totalRead = 0;
@@ -385,9 +352,7 @@ namespace AdaWeldSystem.Comm.Communication.Implementations
             return totalRead;
         }
 
-        /// <summary>
-        /// 处理异常响应
-        /// </summary>
+        /// <summary>处理异常响应</summary>
         private void HandleErrorResponse(byte[] response)
         {
             if (response == null || response.Length < 2)
@@ -405,37 +370,23 @@ namespace AdaWeldSystem.Comm.Communication.Implementations
 
         private void OnConnected()
         {
-            EventHandler handler = Connected;
-            if (handler != null)
-            {
-                handler(this, EventArgs.Empty);
-            }
+            Connected?.Invoke(this, EventArgs.Empty);
         }
 
         private void OnDisconnected()
         {
-            EventHandler handler = Disconnected;
-            if (handler != null)
-            {
-                handler(this, EventArgs.Empty);
-            }
+            Disconnected?.Invoke(this, EventArgs.Empty);
         }
 
         private void OnErrorOccurred(string message, Exception ex)
         {
-            EventHandler<ModbusErrorEventArgs> handler = ErrorOccurred;
-            if (handler != null)
-            {
-                handler(this, new ModbusErrorEventArgs(message, ex));
-            }
+            ErrorOccurred?.Invoke(this, new ModbusErrorEventArgs(message, ex));
         }
 
         #endregion
     }
 
-    /// <summary>
-    /// Modbus 错误事件参数
-    /// </summary>
+    /// <summary>Modbus 错误事件参数</summary>
     public class ModbusErrorEventArgs : EventArgs
     {
         public string Message { get; private set; }
@@ -448,21 +399,15 @@ namespace AdaWeldSystem.Comm.Communication.Implementations
         }
     }
 
-    /// <summary>
-    /// 英莱(IntelligentLaser) 相机 Modbus 寄存器映射与数据转换
-    /// 基于英莱 Modbus TCP 通讯协议文档（2026-04-09）
-    /// 寄存器地址范围：0x00 ~ 0x28
-    /// 单位：0.01mm（部分寄存器）
-    /// </summary>
+    /// <summary>英莱相机 Modbus 寄存器映射与数据转换</summary>
+    /// <remarks>基于英莱 Modbus TCP 通讯协议文档；寄存器地址 0x00~0x28，单位 0.01mm（部分寄存器）。</remarks>
     public static class ILModbusData
     {
         private const string Tag = "ILModbusData";
 
         #region 寄存器地址定义
 
-        /// <summary>
-        /// 控制寄存器地址
-        /// </summary>
+        /// <summary>控制寄存器地址</summary>
         public static class ControlRegisters
         {
             /// <summary>控制字（0x00）：1=激光开，2=激光关，3=启动检测，4=停止检测</summary>
@@ -478,9 +423,7 @@ namespace AdaWeldSystem.Comm.Communication.Implementations
             public const ushort TriggerSource = 0x03;
         }
 
-        /// <summary>
-        /// 检测结果寄存器地址
-        /// </summary>
+        /// <summary>检测结果寄存器地址</summary>
         public static class ResultRegisters
         {
             /// <summary>检测结果（0x08）：0=未检测，1=OK，2=NG</summary>
@@ -543,57 +486,50 @@ namespace AdaWeldSystem.Comm.Communication.Implementations
 
         #region 数据转换
 
-        /// <summary>
-        /// 将寄存器值转换为毫米（0.01mm → mm）
-        /// </summary>
+        /// <summary>将寄存器值转换为毫米（0.01mm → mm）</summary>
+        /// <returns>计算结果。</returns>
         public static float ToMillimeter(ushort registerValue)
         {
             return registerValue * 0.01f;
         }
 
-        /// <summary>
-        /// 将毫米值转换为寄存器值（mm → 0.01mm）
-        /// </summary>
+        /// <summary>将毫米值转换为寄存器值（mm → 0.01mm）</summary>
+        /// <returns>结果码。</returns>
         public static ushort FromMillimeter(float mmValue)
         {
             return (ushort)Math.Round(mmValue * 100.0f);
         }
 
-        /// <summary>
-        /// 将寄存器值转换为角度（0.01° → °）
-        /// </summary>
+        /// <summary>将寄存器值转换为角度（0.01° → °）</summary>
+        /// <returns>计算结果。</returns>
         public static float ToDegree(ushort registerValue)
         {
             return registerValue * 0.01f;
         }
 
-        /// <summary>
-        /// 将角度值转换为寄存器值（° → 0.01°）
-        /// </summary>
+        /// <summary>将角度值转换为寄存器值（° → 0.01°）</summary>
+        /// <returns>结果码。</returns>
         public static ushort FromDegree(float degreeValue)
         {
             return (ushort)Math.Round(degreeValue * 100.0f);
         }
 
-        /// <summary>
-        /// 将寄存器值转换为百分比（0.1% → %）
-        /// </summary>
+        /// <summary>将寄存器值转换为百分比（0.1% → %）</summary>
+        /// <returns>计算结果。</returns>
         public static float ToPercent(ushort registerValue)
         {
             return registerValue * 0.1f;
         }
 
-        /// <summary>
-        /// 将寄存器值转换为温度（0.1°C → °C）
-        /// </summary>
+        /// <summary>将寄存器值转换为温度（0.1°C → °C）</summary>
+        /// <returns>计算结果。</returns>
         public static float ToTemperature(ushort registerValue)
         {
             return registerValue * 0.1f;
         }
 
-        /// <summary>
-        /// 将两个寄存器值解析为固件版本字符串
-        /// </summary>
+        /// <summary>将两个寄存器值解析为固件版本字符串</summary>
+        /// <returns>结果文本。</returns>
         public static string ToFirmwareVersion(ushort regValue)
         {
             byte major = (byte)(regValue >> 8);
@@ -605,9 +541,7 @@ namespace AdaWeldSystem.Comm.Communication.Implementations
 
         #region 控制命令
 
-        /// <summary>
-        /// 控制字命令值
-        /// </summary>
+        /// <summary>控制字命令值</summary>
         public static class ControlCommands
         {
             /// <summary>激光开启</summary>
@@ -623,9 +557,7 @@ namespace AdaWeldSystem.Comm.Communication.Implementations
             public const ushort StopInspect = 4;
         }
 
-        /// <summary>
-        /// 状态字值
-        /// </summary>
+        /// <summary>状态字值</summary>
         public static class StatusValues
         {
             /// <summary>就绪</summary>
@@ -638,9 +570,7 @@ namespace AdaWeldSystem.Comm.Communication.Implementations
             public const ushort Error = 3;
         }
 
-        /// <summary>
-        /// 检测结果值
-        /// </summary>
+        /// <summary>检测结果值</summary>
         public static class InspectResultValues
         {
             /// <summary>未检测</summary>
@@ -657,9 +587,13 @@ namespace AdaWeldSystem.Comm.Communication.Implementations
 
         #region 批量读取方法
 
-        /// <summary>
-        /// 获取所有需要读取的状态寄存器地址列表
-        /// </summary>
+        /// <summary>批量读取状态时的起始地址（0x08）</summary>
+        public const ushort StatusBatchStartAddress = 0x08;
+
+        /// <summary>批量读取状态时的寄存器数量（0x08~0x17 共 16 个 + 0x28 单独读取）</summary>
+        public const ushort StatusBatchCount = 16;
+
+        /// <summary>获取所有需要读取的状态寄存器地址列表</summary>
         public static ushort[] GetStatusRegisterAddresses()
         {
             return new ushort[]
@@ -684,23 +618,11 @@ namespace AdaWeldSystem.Comm.Communication.Implementations
             };
         }
 
-        /// <summary>
-        /// 批量读取状态时的起始地址（0x08）
-        /// </summary>
-        public const ushort StatusBatchStartAddress = 0x08;
-
-        /// <summary>
-        /// 批量读取状态时的寄存器数量（0x08~0x17 共 16 个 + 0x28 单独读取）
-        /// </summary>
-        public const ushort StatusBatchCount = 16;
-
         #endregion
 
         #region 检测结果模型
 
-        /// <summary>
-        /// 英莱 Modbus 检测结果快照
-        /// </summary>
+        /// <summary>英莱 Modbus 检测结果快照</summary>
         public class ILModbusInspectResult
         {
             /// <summary>检测结果（0=None, 1=OK, 2=NG）</summary>
@@ -754,9 +676,7 @@ namespace AdaWeldSystem.Comm.Communication.Implementations
             /// <summary>固件版本字符串</summary>
             public string FirmwareVersion { get; set; }
 
-            /// <summary>
-            /// 从 Modbus 寄存器数组解析检测结果
-            /// </summary>
+            /// <summary>从 Modbus 寄存器数组解析检测结果</summary>
             /// <param name="registers">从 0x08 开始的连续寄存器值数组</param>
             /// <param name="firmwareReg">0x28 固件版本寄存器值</param>
             /// <returns>解析后的检测结果</returns>
@@ -767,42 +687,43 @@ namespace AdaWeldSystem.Comm.Communication.Implementations
                     return null;
                 }
 
-                ILModbusInspectResult result = new ILModbusInspectResult();
-
-                // 0x08: 检测结果
-                result.InspectResult = registers[0];
-                // 0x09: 焊缝宽度
-                result.SeamWidthMm = ToMillimeter(registers[1]);
-                // 0x0A: 焊缝高度
-                result.SeamHeightMm = ToMillimeter(registers[2]);
-                // 0x0B: 焊缝偏移X
-                result.SeamOffsetXmm = ToMillimeter(registers[3]);
-                // 0x0C: 焊缝偏移Y
-                result.SeamOffsetYmm = ToMillimeter(registers[4]);
-                // 0x0D: 焊缝面积
-                result.SeamAreaMm2 = ToMillimeter(registers[5]);
-                // 0x0E: 焊缝角度
-                result.SeamAngleDeg = ToDegree(registers[6]);
-                // 0x0F: 轮廓点数
-                result.ContourPointCount = registers[7];
-                // 0x10: 帧率
-                result.FrameRate = registers[8];
-                // 0x11: 激光功率
-                result.LaserPowerPercent = ToPercent(registers[9]);
-                // 0x12: 曝光时间
-                result.ExposureTime = registers[10];
-                // 0x13: 设备温度
-                result.DeviceTempC = ToTemperature(registers[11]);
-                // 0x14: 运行时长
-                result.RunTimeSeconds = registers[12];
-                // 0x15: 总检测数
-                result.TotalCount = registers[13];
-                // 0x16: OK 数
-                result.OkCount = registers[14];
-                // 0x17: NG 数
-                result.NgCount = registers[15];
-                // 0x28: 固件版本
-                result.FirmwareVersion = ToFirmwareVersion(firmwareReg);
+                ILModbusInspectResult result = new ILModbusInspectResult
+                {
+                    // 0x08: 检测结果
+                    InspectResult = registers[0],
+                    // 0x09: 焊缝宽度
+                    SeamWidthMm = ToMillimeter(registers[1]),
+                    // 0x0A: 焊缝高度
+                    SeamHeightMm = ToMillimeter(registers[2]),
+                    // 0x0B: 焊缝偏移X
+                    SeamOffsetXmm = ToMillimeter(registers[3]),
+                    // 0x0C: 焊缝偏移Y
+                    SeamOffsetYmm = ToMillimeter(registers[4]),
+                    // 0x0D: 焊缝面积
+                    SeamAreaMm2 = ToMillimeter(registers[5]),
+                    // 0x0E: 焊缝角度
+                    SeamAngleDeg = ToDegree(registers[6]),
+                    // 0x0F: 轮廓点数
+                    ContourPointCount = registers[7],
+                    // 0x10: 帧率
+                    FrameRate = registers[8],
+                    // 0x11: 激光功率
+                    LaserPowerPercent = ToPercent(registers[9]),
+                    // 0x12: 曝光时间
+                    ExposureTime = registers[10],
+                    // 0x13: 设备温度
+                    DeviceTempC = ToTemperature(registers[11]),
+                    // 0x14: 运行时长
+                    RunTimeSeconds = registers[12],
+                    // 0x15: 总检测数
+                    TotalCount = registers[13],
+                    // 0x16: OK 数
+                    OkCount = registers[14],
+                    // 0x17: NG 数
+                    NgCount = registers[15],
+                    // 0x28: 固件版本
+                    FirmwareVersion = ToFirmwareVersion(firmwareReg)
+                };
 
                 return result;
             }

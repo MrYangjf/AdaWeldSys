@@ -12,12 +12,11 @@ using WpfSize = System.Windows.Size;
 namespace AdaWeldSystem.PCLOperate.Render
 {
     /// <summary>
-    /// 3D点云查看器 - 基于HelixToolkit.Wpf.SharpDX
-    /// 显示逻辑：
-    /// 1. 导入文件后加载原始点云显示
-    /// 2. 减点显示：清除原有点云，显示减点后的点云
-    /// 3. 表面渲染：按最新点云生成表面，清除点云，显示表面
-    /// 4. 清除显示：清理所有点云和模型
+    /// 3D 点云查看器，基于 HelixToolkit.Wpf.SharpDX。
+    /// 显示逻辑：导入文件后加载原始点云。
+    /// 减点显示：清除原有点云，显示减点后点云。
+    /// 表面渲染：由点云生成并显示表面。
+    /// 清除显示：清理所有点云和模型。
     /// </summary>
     public class PointCloudViewer : IDisposable
     {
@@ -34,8 +33,7 @@ namespace AdaWeldSystem.PCLOperate.Render
         // Assimp Scene 直接显示包装器
         private SceneNodeGroupModel3D _sceneModel;
 
-        // 显示控制
-        private float _displayRatio = 1.0f;  // 1.0=显示全部, 0.5=显示一半, 0.1=显示10%
+        private float _displayRatio = 1.0f;  // 显示比例：1.0 全部，0.5 一半，0.1 一成
         private bool _showByZColor = false; // 是否按Z轴着色
         private float _currentPointSize = 2f; // 保存当前点大小用于恢复
 
@@ -121,30 +119,6 @@ namespace AdaWeldSystem.PCLOperate.Render
         }
 
         /// <summary>
-        /// 1. 加载点云数据（显示原始全部点）
-        /// 导入文件后调用，清除之前所有内容，显示原始点云，并自适应调整视角
-        /// </summary>
-        public void LoadPointCloud(PointCloudData data, float pointSize = 2f)
-        {
-            // 先清除所有内容
-            ClearAll();
-
-            _currentData = data ?? throw new ArgumentNullException(nameof(data));
-            _displayRatio = 1.0f;
-            _showByZColor = false;
-            _currentPointSize = pointSize;
-
-            // 构建并显示原始点云
-            BuildAndShowPointCloud(pointSize);
-
-            // 自适应调整视角，完整显示整个点云
-            FitViewToPointCloud();
-
-            // 重置相机到模型中心
-            ResetCameraToCenter();
-        }
-
-        /// <summary>
         /// 自适应调整视角，使点云完整显示在视口中
         /// </summary>
         private void FitViewToPointCloud()
@@ -220,202 +194,6 @@ namespace AdaWeldSystem.PCLOperate.Render
                     -radius * 2, radius * 2, -radius);
                 orthoCamera.UpDirection = new System.Windows.Media.Media3D.Vector3D(0, 0, 1);
                 orthoCamera.Width = radius * 3;
-            }
-        }
-
-        /// <summary>
-        /// 2. 减点显示：清除界面上原始点的显示后显示减点后的点云
-        /// </summary>
-        /// <param name="ratio">显示比例（0.01-1.0），如0.5表示显示一半点数</param>
-        public void ReducePointCloud(float ratio, float pointSize = 2f)
-        {
-            if (_currentData == null) return;
-
-            // 清除表面模型（如果存在）
-            ClearSurface();
-
-            // 更新显示比例
-            _displayRatio = Math.Max(0.01f, Math.Min(1.0f, ratio));
-            _currentPointSize = pointSize;
-
-            // 重新构建并显示减点后的点云
-            BuildAndShowPointCloud(pointSize);
-        }
-
-        /// <summary>
-        /// 3. 表面渲染：按照最新的点云生成表面渲染对象，窗口清除点云，显示表面渲染
-        /// </summary>
-        /// <param name="searchRadius">搜索半径</param>
-        /// <param name="maxNeighbors">最大邻居数量</param>
-        /// <param name="sampleStep">采样步长（1=全部点）</param>
-        public void GenerateSurface(float searchRadius = 0.5f, int maxNeighbors = 30, int sampleStep = 1)
-        {
-            if (_currentData == null || _currentData.PointCount == 0) return;
-
-            // 先清除点云显示
-            ClearPointCloud();
-
-            // 生成表面
-            var mesh = SurfaceTriangulator.GenerateSurface(_currentData, searchRadius, maxNeighbors, sampleStep);
-            if (mesh != null)
-            {
-                ShowSurfaceMesh(mesh, MediaColor.FromRgb(180, 200, 255));
-            }
-        }
-
-        /// <summary>
-        /// 3. 使用Ball Pivoting算法生成表面
-        /// </summary>
-        /// <param name="ballRadius">球半径</param>
-        /// <param name="sampleStep">采样步长（1=全部点）</param>
-        /// <param name="maxNeighbors">最大邻居数量</param>
-        public void GenerateSurfaceBallPivoting(float ballRadius = 0.5f, int sampleStep = 1, int maxNeighbors = 20)
-        {
-            if (_currentData == null || _currentData.PointCount == 0) return;
-
-            // 先清除点云显示
-            ClearPointCloud();
-
-            // 生成表面
-            var mesh = SurfaceTriangulator.GenerateSurfaceBallPivoting(_currentData, ballRadius, sampleStep, maxNeighbors);
-            if (mesh != null)
-            {
-                ShowSurfaceMesh(mesh, MediaColor.FromRgb(180, 200, 255));
-            }
-        }
-
-        /// <summary>
-        /// 3. 使用Alpha Shape算法生成表面
-        /// 适合需要保留空洞的场景，如建筑模型、医学图像
-        /// </summary>
-        /// <param name="alpha">Alpha值</param>
-        /// <param name="sampleStep">采样步长（1=全部点）</param>
-        /// <param name="maxNeighbors">最大邻居数量</param>
-        public void GenerateAlphaShape(float alpha = 1.0f, int sampleStep = 1, int maxNeighbors = 15)
-        {
-            if (_currentData == null || _currentData.PointCount == 0) return;
-
-            // 先清除点云显示
-            ClearPointCloud();
-
-            // 生成表面
-            var mesh = SurfaceTriangulator.GenerateAlphaShape(_currentData, alpha, sampleStep, maxNeighbors);
-            if (mesh != null)
-            {
-                ShowSurfaceMesh(mesh, MediaColor.FromRgb(200, 180, 255));
-            }
-        }
-
-        /// <summary>
-        /// 3. 使用Delaunay三角剖分生成表面
-        /// 适合需要高质量网格的场景，如有限元分析
-        /// </summary>
-        /// <param name="qualityThreshold">质量阈值</param>
-        /// <param name="searchRadiusMultiplier">搜索半径倍数</param>
-        /// <param name="sampleStep">采样步长（1=全部点）</param>
-        /// <param name="maxNeighbors">最大邻居数量</param>
-        public void GenerateDelaunay(float qualityThreshold = 0.3f, float searchRadiusMultiplier = 5f, int sampleStep = 1, int maxNeighbors = 15)
-        {
-            if (_currentData == null || _currentData.PointCount == 0) return;
-
-            // 先清除点云显示
-            ClearPointCloud();
-
-            // 生成表面
-            var mesh = SurfaceTriangulator.GenerateDelaunay3D(_currentData, qualityThreshold, searchRadiusMultiplier, sampleStep, maxNeighbors);
-            if (mesh != null)
-            {
-                ShowSurfaceMesh(mesh, MediaColor.FromRgb(255, 200, 180));
-            }
-        }
-
-        /// <summary>
-        /// 3. 使用Poisson泊松重建生成表面
-        /// 适合需要水密表面和抗噪的场景，如扫描数据重建
-        /// </summary>
-        /// <param name="depth">八叉树深度</param>
-        /// <param name="samplesPerNode">每节点最小采样数</param>
-        /// <param name="maxCells">最大处理单元数（0=无限制）</param>
-        public void GeneratePoisson(int depth = 8, float samplesPerNode = 1.0f, int maxCells = 0)
-        {
-            if (_currentData == null || _currentData.PointCount == 0) return;
-
-            // 先清除点云显示
-            ClearPointCloud();
-
-            // 生成表面
-            var mesh = SurfaceTriangulator.GeneratePoissonSurface(_currentData, depth, samplesPerNode, maxCells);
-            if (mesh != null)
-            {
-                ShowSurfaceMesh(mesh, MediaColor.FromRgb(180, 255, 200));
-            }
-        }
-
-        /// <summary>
-        /// 3. 使用MLS移动最小二乘生成表面
-        /// 适合需要平滑表面和去噪的场景，如地形建模
-        /// </summary>
-        /// <param name="searchRadius">搜索半径</param>
-        /// <param name="sampleStep">采样步长（1=全部点）</param>
-        /// <param name="maxNeighbors">最大邻居数量</param>
-        public void GenerateMLS(float searchRadius = 0.5f, int sampleStep = 1, int maxNeighbors = 12)
-        {
-            if (_currentData == null || _currentData.PointCount == 0) return;
-
-            // 先清除点云显示
-            ClearPointCloud();
-
-            // 生成表面
-            var mesh = SurfaceTriangulator.GenerateMLSSurface(_currentData, searchRadius, sampleStep, maxNeighbors);
-            if (mesh != null)
-            {
-                ShowSurfaceMesh(mesh, MediaColor.FromRgb(255, 220, 180));
-            }
-        }
-
-        /// <summary>
-        /// 4. 清除显示：所有点云和模型数据都清理掉
-        /// </summary>
-        public void ClearAll()
-        {
-            // 清除点云
-            ClearPointCloud();
-
-            // 清除表面
-            ClearSurface();
-
-            // 清除 Assimp Scene
-            ClearScene();
-
-            // 清除数据引用
-            _currentData = null;
-            _currentGeometry = null;
-            _displayRatio = 1.0f;
-            _showByZColor = false;
-        }
-
-        /// <summary>
-        /// 设置点大小
-        /// </summary>
-        public void SetPointSize(float pointSize)
-        {
-            _currentPointSize = pointSize;
-            if (_pointModel != null)
-            {
-                _pointModel.Size = new WpfSize(pointSize, pointSize);
-            }
-        }
-
-        /// <summary>
-        /// 设置是否按Z轴着色
-        /// </summary>
-        public void SetZColorEnabled(bool enabled, float pointSize = 2f)
-        {
-            _showByZColor = enabled;
-            if (_currentData != null && _pointModel != null)
-            {
-                // 重新构建点云以应用颜色
-                BuildAndShowPointCloud(pointSize);
             }
         }
 
@@ -588,39 +366,8 @@ namespace AdaWeldSystem.PCLOperate.Render
             }
         }
 
-        /// <summary>
-        /// 直接加载 HelixToolkitScene 到视口（通过 SceneNodeGroupModel3D 桥接）
-        /// 保留原始网格拓扑、材质和层次结构，不经过 PointCloudData 转换
-        /// </summary>
-        /// <param name="scene">Assimp 导入返回的 HelixToolkitScene（调用方负责生命周期管理）</param>
-        public void LoadScene(HelixToolkitScene scene)
-        {
-            if (scene == null || scene.Root == null)
-                throw new ArgumentNullException("scene", "Scene 或 Scene.Root 不能为 null");
-
-            // 清除现有内容
-            ClearAll();
-
-            // 创建 SceneNodeGroupModel3D 作为 SceneNode → Element3D 的桥梁
-            _sceneModel = new SceneNodeGroupModel3D();
-
-            // 将 Scene 的根节点整体添加到 SceneNodeGroupModel3D 的 GroupNode 中
-            // 注意：不能遍历 scene.Root.Items 将子节点逐个添加，
-            // 因为 Importer.Load() 返回的 Scene 中子节点已附加到 scene.Root 上，
-            // 再次 AddChildNode 会触发 "SceneNode already attach to a different node" 异常
-            _sceneModel.GroupNode.AddChildNode(scene.Root);
-
-            // 添加到视口
-            _viewport.Items.Add(_sceneModel);
-
-            // 自适应调整相机视角
-            FitViewToScene(scene.Root);
-        }
-
-        /// <summary>
-        /// 根据 SceneNode 的边界框调整相机位置
-        /// 递归累加所有子节点的 Bounds，避免依赖可能未计算的 rootNode.Bounds
-        /// </summary>
+        /// <summary>根据 SceneNode 的边界框调整相机位置 递归累加所有子节</summary>
+        /// <remarks>点的 Bounds，避免依赖可能未计算的 rootNode.Bounds</remarks>
         private void FitViewToScene(SceneNode rootNode)
         {
             if (rootNode == null) return;
@@ -635,7 +382,7 @@ namespace AdaWeldSystem.PCLOperate.Render
             {
                 var b = node.Bounds;
 
-                // 检查是否为无效/空边界框：Minimum >= Maximum 是空边界框的典型特征
+                // Minimum >= Maximum 即为空边界框
                 bool isEmpty = b.Minimum.X >= b.Maximum.X
                             && b.Minimum.Y >= b.Maximum.Y
                             && b.Minimum.Z >= b.Maximum.Z;
@@ -765,6 +512,267 @@ namespace AdaWeldSystem.PCLOperate.Render
         }
 
         /// <summary>
+        /// 初始化相机和视口配置（无参构造时调用）
+        /// </summary>
+        private void InitializeCamera()
+        {
+            _viewport.EffectsManager = new DefaultEffectsManager();
+            _viewport.BackgroundColor = MediaColor.FromRgb(20, 20, 30);
+            _viewport.ShowCoordinateSystem = true;
+            _viewport.ShowViewCube = true;
+            _viewport.ShowCameraTarget = true;
+            _viewport.RotateAroundMouseDownPoint = false;
+            _viewport.IsRotationEnabled = false;
+            _viewport.IsZoomEnabled = false;
+            _viewport.IsPanEnabled = false;
+
+            _viewport.Camera = new PerspectiveCamera
+            {
+                Position = new System.Windows.Media.Media3D.Point3D(5, 5, 10),
+                LookDirection = new System.Windows.Media.Media3D.Vector3D(-5, -5, -10),
+                UpDirection = new System.Windows.Media.Media3D.Vector3D(0, 1, 0),
+                FieldOfView = 45,
+                NearPlaneDistance = 0.001,
+                FarPlaneDistance = 100000
+            };
+        }
+
+        /// <summary>1. 加载点云数据（显示原始全部点） 导入文件后调用，</summary>
+        /// <remarks>清空后显示原始点云并自适应视角</remarks>
+        /// <param name="data">数据。</param>
+        public void LoadPointCloud(PointCloudData data, float pointSize = 2f)
+        {
+            // 先清除所有内容
+            ClearAll();
+
+            _currentData = data ?? throw new ArgumentNullException(nameof(data));
+            _displayRatio = 1.0f;
+            _showByZColor = false;
+            _currentPointSize = pointSize;
+
+            // 构建并显示原始点云
+            BuildAndShowPointCloud(pointSize);
+
+            // 自适应调整视角，完整显示整个点云
+            FitViewToPointCloud();
+
+            // 重置相机到模型中心
+            ResetCameraToCenter();
+        }
+
+        /// <summary>2. 减点显示：清除界面上原始点的显示后显示减点</summary>
+        /// <remarks>后的点云</remarks>
+        /// <param name="ratio">显示比例（0.01-1.0），如0.5表示显示一半点数</param>
+        public void ReducePointCloud(float ratio, float pointSize = 2f)
+        {
+            if (_currentData == null) return;
+
+            // 清除表面模型（如果存在）
+            ClearSurface();
+
+            // 更新显示比例
+            _displayRatio = Math.Max(0.01f, Math.Min(1.0f, ratio));
+            _currentPointSize = pointSize;
+
+            // 重新构建并显示减点后的点云
+            BuildAndShowPointCloud(pointSize);
+        }
+
+        /// <summary>3. 表面渲染：按照最新的点云生成表面渲染对象，窗</summary>
+        /// <remarks>口清除点云，显示表面渲染</remarks>
+        /// <param name="searchRadius">搜索半径</param>
+        /// <param name="maxNeighbors">最大邻居数量</param>
+        /// <param name="sampleStep">采样步长（1=全部点）</param>
+        public void GenerateSurface(float searchRadius = 0.5f, int maxNeighbors = 30, int sampleStep = 1)
+        {
+            if (_currentData == null || _currentData.PointCount == 0) return;
+
+            // 先清除点云显示
+            ClearPointCloud();
+
+            // 生成表面
+            var mesh = SurfaceTriangulator.GenerateSurface(_currentData, searchRadius, maxNeighbors, sampleStep);
+            if (mesh != null)
+            {
+                ShowSurfaceMesh(mesh, MediaColor.FromRgb(180, 200, 255));
+            }
+        }
+
+        /// <summary>
+        /// 3. 使用Ball Pivoting算法生成表面
+        /// </summary>
+        /// <param name="ballRadius">球半径</param>
+        /// <param name="sampleStep">采样步长（1=全部点）</param>
+        /// <param name="maxNeighbors">最大邻居数量</param>
+        public void GenerateSurfaceBallPivoting(float ballRadius = 0.5f, int sampleStep = 1, int maxNeighbors = 20)
+        {
+            if (_currentData == null || _currentData.PointCount == 0) return;
+
+            // 先清除点云显示
+            ClearPointCloud();
+
+            // 生成表面
+            var mesh = SurfaceTriangulator.GenerateSurfaceBallPivoting(_currentData, ballRadius, sampleStep, maxNeighbors);
+            if (mesh != null)
+            {
+                ShowSurfaceMesh(mesh, MediaColor.FromRgb(180, 200, 255));
+            }
+        }
+
+        /// <summary>3. 使用Alpha Shape算法生成表面 适合需要保留空洞的场景，如</summary>
+        /// <remarks>建筑模型、医学图像</remarks>
+        /// <param name="alpha">Alpha值</param>
+        /// <param name="sampleStep">采样步长（1=全部点）</param>
+        /// <param name="maxNeighbors">最大邻居数量</param>
+        public void GenerateAlphaShape(float alpha = 1.0f, int sampleStep = 1, int maxNeighbors = 15)
+        {
+            if (_currentData == null || _currentData.PointCount == 0) return;
+
+            // 先清除点云显示
+            ClearPointCloud();
+
+            // 生成表面
+            var mesh = SurfaceTriangulator.GenerateAlphaShape(_currentData, alpha, sampleStep, maxNeighbors);
+            if (mesh != null)
+            {
+                ShowSurfaceMesh(mesh, MediaColor.FromRgb(200, 180, 255));
+            }
+        }
+
+        /// <summary>3. 使用Delaunay三角剖分生成表面 适合需要高质量网格的</summary>
+        /// <remarks>场景，如有限元分析</remarks>
+        /// <param name="qualityThreshold">质量阈值</param>
+        /// <param name="searchRadiusMultiplier">搜索半径倍数</param>
+        /// <param name="sampleStep">采样步长（1=全部点）</param>
+        /// <param name="maxNeighbors">最大邻居数量</param>
+        public void GenerateDelaunay(float qualityThreshold = 0.3f, float searchRadiusMultiplier = 5f, int sampleStep = 1, int maxNeighbors = 15)
+        {
+            if (_currentData == null || _currentData.PointCount == 0) return;
+
+            // 先清除点云显示
+            ClearPointCloud();
+
+            // 生成表面
+            var mesh = SurfaceTriangulator.GenerateDelaunay3D(_currentData, qualityThreshold, searchRadiusMultiplier, sampleStep, maxNeighbors);
+            if (mesh != null)
+            {
+                ShowSurfaceMesh(mesh, MediaColor.FromRgb(255, 200, 180));
+            }
+        }
+
+        /// <summary>3. 使用Poisson泊松重建生成表面 适合需要水密表面和抗</summary>
+        /// <remarks>噪的场景，如扫描数据重建</remarks>
+        /// <param name="depth">八叉树深度</param>
+        /// <param name="samplesPerNode">每节点最小采样数</param>
+        /// <param name="maxCells">最大处理单元数（0=无限制）</param>
+        public void GeneratePoisson(int depth = 8, float samplesPerNode = 1.0f, int maxCells = 0)
+        {
+            if (_currentData == null || _currentData.PointCount == 0) return;
+
+            // 先清除点云显示
+            ClearPointCloud();
+
+            // 生成表面
+            var mesh = SurfaceTriangulator.GeneratePoissonSurface(_currentData, depth, samplesPerNode, maxCells);
+            if (mesh != null)
+            {
+                ShowSurfaceMesh(mesh, MediaColor.FromRgb(180, 255, 200));
+            }
+        }
+
+        /// <summary>3. 使用MLS移动最小二乘生成表面 适合需要平滑表面</summary>
+        /// <remarks>和去噪的场景，如地形建模</remarks>
+        /// <param name="searchRadius">搜索半径</param>
+        /// <param name="sampleStep">采样步长（1=全部点）</param>
+        /// <param name="maxNeighbors">最大邻居数量</param>
+        public void GenerateMLS(float searchRadius = 0.5f, int sampleStep = 1, int maxNeighbors = 12)
+        {
+            if (_currentData == null || _currentData.PointCount == 0) return;
+
+            // 先清除点云显示
+            ClearPointCloud();
+
+            // 生成表面
+            var mesh = SurfaceTriangulator.GenerateMLSSurface(_currentData, searchRadius, sampleStep, maxNeighbors);
+            if (mesh != null)
+            {
+                ShowSurfaceMesh(mesh, MediaColor.FromRgb(255, 220, 180));
+            }
+        }
+
+        /// <summary>
+        /// 4. 清除显示：所有点云和模型数据都清理掉
+        /// </summary>
+        public void ClearAll()
+        {
+            // 清除点云
+            ClearPointCloud();
+
+            // 清除表面
+            ClearSurface();
+
+            // 清除 Assimp Scene
+            ClearScene();
+
+            // 清除数据引用
+            _currentData = null;
+            _currentGeometry = null;
+            _displayRatio = 1.0f;
+            _showByZColor = false;
+        }
+
+        /// <summary>
+        /// 设置点大小
+        /// </summary>
+        public void SetPointSize(float pointSize)
+        {
+            _currentPointSize = pointSize;
+            if (_pointModel != null)
+            {
+                _pointModel.Size = new WpfSize(pointSize, pointSize);
+            }
+        }
+
+        /// <summary>
+        /// 设置是否按Z轴着色
+        /// </summary>
+        public void SetZColorEnabled(bool enabled, float pointSize = 2f)
+        {
+            _showByZColor = enabled;
+            if (_currentData != null && _pointModel != null)
+            {
+                // 重新构建点云以应用颜色
+                BuildAndShowPointCloud(pointSize);
+            }
+        }
+
+        /// <summary>直接加载 HelixToolkitScene 到视口（通过 SceneNodeGroupModel3D 桥接） 保留原始网格拓扑、材</summary>
+        /// <remarks>质和层次结构，不经过 PointCloudData 转换</remarks>
+        /// <param name="scene">Assimp 导入返回的 HelixToolkitScene（调用方负责生命周期管理）</param>
+        public void LoadScene(HelixToolkitScene scene)
+        {
+            if (scene == null || scene.Root == null)
+                throw new ArgumentNullException("scene", "Scene 或 Scene.Root 不能为 null");
+
+            // 清除现有内容
+            ClearAll();
+
+            // 创建 SceneNodeGroupModel3D 作为 SceneNode → Element3D 的桥梁
+            _sceneModel = new SceneNodeGroupModel3D();
+
+            // 注意：不能遍历 scene.Root.Items 将子节点逐个添加，
+            // 因为 Importer.Load() 返回的 Scene 中子节点已附加到 scene.Root 上，
+            // 再次 AddChildNode 会触发 "SceneNode already attach to a different node" 异常
+            _sceneModel.GroupNode.AddChildNode(scene.Root);
+
+            // 添加到视口
+            _viewport.Items.Add(_sceneModel);
+
+            // 自适应调整相机视角
+            FitViewToScene(scene.Root);
+        }
+
+        /// <summary>
         /// 设置点颜色（覆盖原有颜色）
         /// </summary>
         public void SetPointColor(MediaColor color)
@@ -811,7 +819,6 @@ namespace AdaWeldSystem.PCLOperate.Render
                     _viewport.IsZoomEnabled = true;
                     _viewport.IsPanEnabled = true;
                     _viewport.IsChangeFieldOfViewEnabled = true;
-                    //_viewport.CameraMode = CameraMode.Inspect;
                     _viewport.FixedRotationPointEnabled = true;
                     _viewport.RotateAroundMouseDownPoint = false;
                     break;
@@ -829,17 +836,14 @@ namespace AdaWeldSystem.PCLOperate.Render
                     _viewport.IsPanEnabled = true;
                     _viewport.IsChangeFieldOfViewEnabled = true;
 
-                    //_viewport.CameraMode = CameraMode.Inspect;
                     _viewport.RotateAroundMouseDownPoint = true;
                     _viewport.FixedRotationPointEnabled = false;
                     break;
             }
         }
 
-        /// <summary>
-        /// 重置相机到模型中心
-        /// 根据当前点云数据或 SceneModel 计算中心点，并将相机定位到合适距离
-        /// </summary>
+        /// <summary>重置相机到模型中心 根据当前点云数据或 SceneModel 计算</summary>
+        /// <remarks>中心点，并将相机定位到合适距离</remarks>
         public void ResetCameraToCenter()
         {
             System.Numerics.Vector3 center = GetModelCenter();
@@ -897,7 +901,7 @@ namespace AdaWeldSystem.PCLOperate.Render
                 {
                     var b = node.Bounds;
 
-                    // 检查是否为无效/空边界框：Minimum >= Maximum 是空边界框的典型特征
+                    // Minimum >= Maximum 即为空边界框
                     bool isEmpty = b.Minimum.X >= b.Maximum.X
                                 && b.Minimum.Y >= b.Maximum.Y
                                 && b.Minimum.Z >= b.Maximum.Z;
@@ -1026,47 +1030,18 @@ namespace AdaWeldSystem.PCLOperate.Render
             return new System.Numerics.Vector3((minX + maxX) / 2, (minY + maxY) / 2, (minZ + maxZ) / 2);
         }
 
-        /// <summary>
-        /// 初始化相机和视口配置（无参构造时调用）
-        /// </summary>
-        private void InitializeCamera()
-        {
-            _viewport.EffectsManager = new DefaultEffectsManager();
-            _viewport.BackgroundColor = MediaColor.FromRgb(20, 20, 30);
-            _viewport.ShowCoordinateSystem = true;
-            _viewport.ShowViewCube = true;
-            _viewport.ShowCameraTarget = true;
-            _viewport.RotateAroundMouseDownPoint = false;
-            _viewport.IsRotationEnabled = false;
-            _viewport.IsZoomEnabled = false;
-            _viewport.IsPanEnabled = false;
-
-            _viewport.Camera = new PerspectiveCamera
-            {
-                Position = new System.Windows.Media.Media3D.Point3D(5, 5, 10),
-                LookDirection = new System.Windows.Media.Media3D.Vector3D(-5, -5, -10),
-                UpDirection = new System.Windows.Media.Media3D.Vector3D(0, 1, 0),
-                FieldOfView = 45,
-                NearPlaneDistance = 0.001,
-                FarPlaneDistance = 100000
-            };
-        }
-
         public void Dispose()
         {
             ClearAll();
 
-            if (_viewport != null)
+            var effectsManager = _viewport.EffectsManager;
+            if (effectsManager is IDisposable disposable)
             {
-                var effectsManager = _viewport.EffectsManager;
-                if (effectsManager is IDisposable disposable)
-                {
-                    disposable.Dispose();
-                }
-                _viewport.EffectsManager = null;
-                _viewport.Items?.Clear();
-                _viewport.Dispose();
+                disposable.Dispose();
             }
+            _viewport.EffectsManager = null;
+            _viewport.Items?.Clear();
+            _viewport.Dispose();
         }
     }
 }

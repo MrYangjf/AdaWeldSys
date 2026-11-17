@@ -29,6 +29,9 @@
         private void InitializeComponent()
         {
             this.components = new System.ComponentModel.Container();
+            AntdUI.Tabs.StyleCard styleCard1 = new AntdUI.Tabs.StyleCard();
+            this.tabsIL = new AntdUI.Tabs();
+            this.tabPageLaserCapture = new AntdUI.TabPage();
             this.uiTableLayoutPanel1 = new System.Windows.Forms.TableLayoutPanel();
             this.panelControl = new AntdUI.Panel();
             this.btnParamEdit = new AntdUI.Button();
@@ -58,6 +61,8 @@
             this.lblContourPoint = new AntdUI.Label();
             this.dgvResult = new AntdUI.Table();
             this.lblMeasuredFps = new AntdUI.Label();
+            this.tabsIL.SuspendLayout();
+            this.tabPageLaserCapture.SuspendLayout();
             this.uiTableLayoutPanel1.SuspendLayout();
             this.panelControl.SuspendLayout();
             this.StatustabPanel.SuspendLayout();
@@ -66,6 +71,29 @@
             this.panelResult.SuspendLayout();
             this.tableLayoutPanel1.SuspendLayout();
             this.SuspendLayout();
+            // 
+            // tabsIL
+            // 
+            this.tabsIL.Controls.Add(this.tabPageLaserCapture);
+            this.tabsIL.Cursor = System.Windows.Forms.Cursors.Hand;
+            this.tabsIL.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.tabsIL.Location = new System.Drawing.Point(0, 0);
+            this.tabsIL.Name = "tabsIL";
+            this.tabsIL.Pages.Add(this.tabPageLaserCapture);
+            this.tabsIL.Size = new System.Drawing.Size(1762, 920);
+            this.tabsIL.Style = styleCard1;
+            this.tabsIL.TabIndex = 0;
+            this.tabsIL.Text = "线激光设置";
+            this.tabsIL.Type = AntdUI.TabType.Card;
+            // 
+            // tabPageLaserCapture
+            // 
+            this.tabPageLaserCapture.Controls.Add(this.uiTableLayoutPanel1);
+            this.tabPageLaserCapture.Location = new System.Drawing.Point(0, 31);
+            this.tabPageLaserCapture.Name = "tabPageLaserCapture";
+            this.tabPageLaserCapture.Size = new System.Drawing.Size(1762, 889);
+            this.tabPageLaserCapture.TabIndex = 0;
+            this.tabPageLaserCapture.Text = "线激光采集设置";
             // 
             // uiTableLayoutPanel1
             // 
@@ -81,11 +109,12 @@
             this.uiTableLayoutPanel1.Location = new System.Drawing.Point(0, 0);
             this.uiTableLayoutPanel1.Name = "uiTableLayoutPanel1";
             this.uiTableLayoutPanel1.RowCount = 4;
-            this.uiTableLayoutPanel1.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 55F));
-            this.uiTableLayoutPanel1.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 200F));
+            this.uiTableLayoutPanel1.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 64F));
+            this.uiTableLayoutPanel1.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 191F));
             this.uiTableLayoutPanel1.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 120F));
             this.uiTableLayoutPanel1.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Percent, 100F));
-            this.uiTableLayoutPanel1.Size = new System.Drawing.Size(1200, 700);
+            this.uiTableLayoutPanel1.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 20F));
+            this.uiTableLayoutPanel1.Size = new System.Drawing.Size(1762, 889);
             this.uiTableLayoutPanel1.TabIndex = 0;
             // 
             // panelControl
@@ -96,7 +125,7 @@
             this.panelControl.Controls.Add(this.btnParamEdit);
             this.panelControl.Controls.Add(this.btnAlgoEdit);
             this.panelControl.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.panelControl.Location = new System.Drawing.Point(703, 258);
+            this.panelControl.Location = new System.Drawing.Point(1265, 258);
             this.panelControl.Name = "panelControl";
             this.panelControl.Padding = new System.Windows.Forms.Padding(8);
             this.panelControl.Shadow = 5;
@@ -107,7 +136,7 @@
             // 
             this.btnParamEdit.BackHover = System.Drawing.Color.FromArgb(((int)(((byte)(3)))), ((int)(((byte)(169)))), ((int)(((byte)(244)))));
             this.btnParamEdit.Cursor = System.Windows.Forms.Cursors.Hand;
-            this.btnParamEdit.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.btnParamEdit.Font = new System.Drawing.Font("Microsoft YaHei UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.btnParamEdit.Ghost = true;
             this.btnParamEdit.IconPosition = AntdUI.TAlignMini.Top;
             this.btnParamEdit.IconRatio = 1.5F;
@@ -123,7 +152,7 @@
             // 
             this.btnAlgoEdit.BackHover = System.Drawing.Color.FromArgb(((int)(((byte)(3)))), ((int)(((byte)(169)))), ((int)(((byte)(244)))));
             this.btnAlgoEdit.Cursor = System.Windows.Forms.Cursors.Hand;
-            this.btnAlgoEdit.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.btnAlgoEdit.Font = new System.Drawing.Font("Microsoft YaHei UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.btnAlgoEdit.Ghost = true;
             this.btnAlgoEdit.IconPosition = AntdUI.TAlignMini.Top;
             this.btnAlgoEdit.IconRatio = 1.5F;
@@ -156,19 +185,19 @@
             this.StatustabPanel.Location = new System.Drawing.Point(3, 3);
             this.StatustabPanel.Name = "StatustabPanel";
             this.StatustabPanel.RowCount = 2;
-            this.StatustabPanel.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 30F));
+            this.StatustabPanel.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 45F));
             this.StatustabPanel.RowStyles.Add(new System.Windows.Forms.RowStyle());
-            this.StatustabPanel.Size = new System.Drawing.Size(1194, 49);
+            this.StatustabPanel.Size = new System.Drawing.Size(1756, 58);
             this.StatustabPanel.TabIndex = 17;
             // 
             // lblIP
             // 
             this.lblIP.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.lblIP.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.lblIP.Font = new System.Drawing.Font("Microsoft YaHei UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.lblIP.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(48)))), ((int)(((byte)(48)))), ((int)(((byte)(48)))));
-            this.lblIP.Location = new System.Drawing.Point(705, 3);
+            this.lblIP.Location = new System.Drawing.Point(1267, 3);
             this.lblIP.Name = "lblIP";
-            this.lblIP.Size = new System.Drawing.Size(73, 24);
+            this.lblIP.Size = new System.Drawing.Size(73, 39);
             this.lblIP.TabIndex = 1;
             this.lblIP.Text = "相机IP";
             // 
@@ -178,19 +207,19 @@
             this.alert_ConnStatus.Icon = AntdUI.TType.Error;
             this.alert_ConnStatus.Location = new System.Drawing.Point(3, 3);
             this.alert_ConnStatus.Name = "alert_ConnStatus";
-            this.alert_ConnStatus.Size = new System.Drawing.Size(114, 24);
+            this.alert_ConnStatus.Size = new System.Drawing.Size(114, 39);
             this.alert_ConnStatus.TabIndex = 16;
             this.alert_ConnStatus.Text = "未连接";
             // 
             // txtIP
             // 
             this.txtIP.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.txtIP.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
-            this.txtIP.Location = new System.Drawing.Point(781, 0);
+            this.txtIP.Font = new System.Drawing.Font("Microsoft YaHei UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.txtIP.Location = new System.Drawing.Point(1343, 0);
             this.txtIP.Margin = new System.Windows.Forms.Padding(0);
             this.txtIP.Name = "txtIP";
             this.txtIP.ReadOnly = true;
-            this.txtIP.Size = new System.Drawing.Size(253, 30);
+            this.txtIP.Size = new System.Drawing.Size(253, 45);
             this.txtIP.TabIndex = 2;
             this.txtIP.Text = "192.168.178.210";
             // 
@@ -199,14 +228,14 @@
             this.btnScan.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(3)))), ((int)(((byte)(169)))), ((int)(((byte)(244)))));
             this.btnScan.Cursor = System.Windows.Forms.Cursors.Hand;
             this.btnScan.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.btnScan.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.btnScan.Font = new System.Drawing.Font("Microsoft YaHei UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.btnScan.Ghost = true;
             this.btnScan.IconSvg = "SecurityScanOutlined";
-            this.btnScan.Location = new System.Drawing.Point(1034, 0);
+            this.btnScan.Location = new System.Drawing.Point(1596, 0);
             this.btnScan.Margin = new System.Windows.Forms.Padding(0);
             this.btnScan.MinimumSize = new System.Drawing.Size(1, 1);
             this.btnScan.Name = "btnScan";
-            this.btnScan.Size = new System.Drawing.Size(80, 30);
+            this.btnScan.Size = new System.Drawing.Size(80, 45);
             this.btnScan.TabIndex = 9;
             this.btnScan.Text = "扫描";
             // 
@@ -214,13 +243,13 @@
             // 
             this.btnConnect.Cursor = System.Windows.Forms.Cursors.Hand;
             this.btnConnect.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.btnConnect.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.btnConnect.Font = new System.Drawing.Font("Microsoft YaHei UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.btnConnect.IconSvg = "ApiOutlined";
-            this.btnConnect.Location = new System.Drawing.Point(1114, 0);
+            this.btnConnect.Location = new System.Drawing.Point(1676, 0);
             this.btnConnect.Margin = new System.Windows.Forms.Padding(0);
             this.btnConnect.MinimumSize = new System.Drawing.Size(1, 1);
             this.btnConnect.Name = "btnConnect";
-            this.btnConnect.Size = new System.Drawing.Size(80, 30);
+            this.btnConnect.Size = new System.Drawing.Size(80, 45);
             this.btnConnect.TabIndex = 3;
             this.btnConnect.Text = "连接";
             this.btnConnect.Type = AntdUI.TTypeMini.Error;
@@ -229,12 +258,12 @@
             // 
             this.divider1.ColorSplit = System.Drawing.Color.FromArgb(((int)(((byte)(3)))), ((int)(((byte)(169)))), ((int)(((byte)(244)))));
             this.StatustabPanel.SetColumnSpan(this.divider1, 6);
-            this.divider1.Dock = System.Windows.Forms.DockStyle.Top;
-            this.divider1.Location = new System.Drawing.Point(0, 30);
+            this.divider1.Dock = System.Windows.Forms.DockStyle.Bottom;
+            this.divider1.Location = new System.Drawing.Point(0, 48);
             this.divider1.Margin = new System.Windows.Forms.Padding(0);
             this.divider1.Name = "divider1";
             this.divider1.OrientationMargin = 0F;
-            this.divider1.Size = new System.Drawing.Size(1194, 19);
+            this.divider1.Size = new System.Drawing.Size(1756, 10);
             this.divider1.TabIndex = 17;
             this.divider1.Text = "";
             this.divider1.TextPadding = 0.1F;
@@ -254,11 +283,11 @@
             this.panel1.Controls.Add(this.lblJob);
             this.panel1.Controls.Add(this.swDisplay);
             this.panel1.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.panel1.Location = new System.Drawing.Point(703, 58);
+            this.panel1.Location = new System.Drawing.Point(1265, 67);
             this.panel1.Name = "panel1";
             this.panel1.Padding = new System.Windows.Forms.Padding(8);
             this.panel1.Shadow = 5;
-            this.panel1.Size = new System.Drawing.Size(494, 194);
+            this.panel1.Size = new System.Drawing.Size(494, 185);
             this.panel1.TabIndex = 18;
             this.panel1.Text = "panel1";
             // 
@@ -267,7 +296,7 @@
             this.btnLaser.BackActive = System.Drawing.Color.FromArgb(((int)(((byte)(76)))), ((int)(((byte)(175)))), ((int)(((byte)(80)))));
             this.btnLaser.BackHover = System.Drawing.Color.FromArgb(((int)(((byte)(3)))), ((int)(((byte)(169)))), ((int)(((byte)(244)))));
             this.btnLaser.Cursor = System.Windows.Forms.Cursors.Hand;
-            this.btnLaser.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.btnLaser.Font = new System.Drawing.Font("Microsoft YaHei UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.btnLaser.Ghost = true;
             this.btnLaser.IconSvg = "SunFilled";
             this.btnLaser.Location = new System.Drawing.Point(318, 140);
@@ -282,7 +311,7 @@
             this.btnCaptureCamera.BackActive = System.Drawing.Color.FromArgb(((int)(((byte)(76)))), ((int)(((byte)(175)))), ((int)(((byte)(80)))));
             this.btnCaptureCamera.BackHover = System.Drawing.Color.FromArgb(((int)(((byte)(3)))), ((int)(((byte)(169)))), ((int)(((byte)(244)))));
             this.btnCaptureCamera.Cursor = System.Windows.Forms.Cursors.Hand;
-            this.btnCaptureCamera.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.btnCaptureCamera.Font = new System.Drawing.Font("Microsoft YaHei UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.btnCaptureCamera.Ghost = true;
             this.btnCaptureCamera.IconSvg = "CameraFilled";
             this.btnCaptureCamera.Location = new System.Drawing.Point(16, 140);
@@ -295,7 +324,7 @@
             // btnApplyFps
             // 
             this.btnApplyFps.Cursor = System.Windows.Forms.Cursors.Hand;
-            this.btnApplyFps.Font = new System.Drawing.Font("宋体", 10F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.btnApplyFps.Font = new System.Drawing.Font("Microsoft YaHei UI", 10F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.btnApplyFps.Location = new System.Drawing.Point(375, 53);
             this.btnApplyFps.MinimumSize = new System.Drawing.Size(1, 1);
             this.btnApplyFps.Name = "btnApplyFps";
@@ -307,7 +336,7 @@
             // btnApplyJob
             // 
             this.btnApplyJob.Cursor = System.Windows.Forms.Cursors.Hand;
-            this.btnApplyJob.Font = new System.Drawing.Font("宋体", 10F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.btnApplyJob.Font = new System.Drawing.Font("Microsoft YaHei UI", 10F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.btnApplyJob.Location = new System.Drawing.Point(375, 97);
             this.btnApplyJob.MinimumSize = new System.Drawing.Size(1, 1);
             this.btnApplyJob.Name = "btnApplyJob";
@@ -318,7 +347,7 @@
             // 
             // cmbFps
             // 
-            this.cmbFps.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.cmbFps.Font = new System.Drawing.Font("Microsoft YaHei UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.cmbFps.Location = new System.Drawing.Point(121, 57);
             this.cmbFps.Margin = new System.Windows.Forms.Padding(4, 5, 4, 5);
             this.cmbFps.MinimumSize = new System.Drawing.Size(63, 0);
@@ -329,7 +358,7 @@
             // 
             // lblAutoDisplay
             // 
-            this.lblAutoDisplay.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.lblAutoDisplay.Font = new System.Drawing.Font("Microsoft YaHei UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.lblAutoDisplay.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(48)))), ((int)(((byte)(48)))), ((int)(((byte)(48)))));
             this.lblAutoDisplay.Location = new System.Drawing.Point(26, 19);
             this.lblAutoDisplay.Name = "lblAutoDisplay";
@@ -339,7 +368,7 @@
             // 
             // cmbJob
             // 
-            this.cmbJob.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.cmbJob.Font = new System.Drawing.Font("Microsoft YaHei UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.cmbJob.Location = new System.Drawing.Point(121, 97);
             this.cmbJob.Margin = new System.Windows.Forms.Padding(4, 5, 4, 5);
             this.cmbJob.MinimumSize = new System.Drawing.Size(63, 0);
@@ -350,7 +379,7 @@
             // 
             // lblFps
             // 
-            this.lblFps.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.lblFps.Font = new System.Drawing.Font("Microsoft YaHei UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.lblFps.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(48)))), ((int)(((byte)(48)))), ((int)(((byte)(48)))));
             this.lblFps.Location = new System.Drawing.Point(26, 57);
             this.lblFps.Name = "lblFps";
@@ -360,7 +389,7 @@
             // 
             // lblJob
             // 
-            this.lblJob.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.lblJob.Font = new System.Drawing.Font("Microsoft YaHei UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.lblJob.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(48)))), ((int)(((byte)(48)))), ((int)(((byte)(48)))));
             this.lblJob.Location = new System.Drawing.Point(26, 97);
             this.lblJob.Name = "lblJob";
@@ -380,10 +409,10 @@
             this.imageBox.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(30)))), ((int)(((byte)(30)))), ((int)(((byte)(30)))));
             this.imageBox.Dock = System.Windows.Forms.DockStyle.Fill;
             this.imageBox.FunctionalMode = Emgu.CV.UI.ImageBox.FunctionalModeOption.RightClickMenu;
-            this.imageBox.Location = new System.Drawing.Point(3, 58);
+            this.imageBox.Location = new System.Drawing.Point(3, 67);
             this.imageBox.Name = "imageBox";
             this.uiTableLayoutPanel1.SetRowSpan(this.imageBox, 3);
-            this.imageBox.Size = new System.Drawing.Size(694, 639);
+            this.imageBox.Size = new System.Drawing.Size(1256, 819);
             this.imageBox.SizeMode = System.Windows.Forms.PictureBoxSizeMode.StretchImage;
             this.imageBox.TabIndex = 0;
             this.imageBox.TabStop = false;
@@ -395,11 +424,11 @@
             this.panelResult.BorderWidth = 1F;
             this.panelResult.Controls.Add(this.tableLayoutPanel1);
             this.panelResult.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.panelResult.Location = new System.Drawing.Point(703, 378);
+            this.panelResult.Location = new System.Drawing.Point(1265, 378);
             this.panelResult.Name = "panelResult";
             this.panelResult.Padding = new System.Windows.Forms.Padding(8);
             this.panelResult.Shadow = 5;
-            this.panelResult.Size = new System.Drawing.Size(494, 319);
+            this.panelResult.Size = new System.Drawing.Size(494, 508);
             this.panelResult.TabIndex = 2;
             // 
             // tableLayoutPanel1
@@ -418,7 +447,7 @@
             this.tableLayoutPanel1.RowCount = 2;
             this.tableLayoutPanel1.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 30F));
             this.tableLayoutPanel1.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Percent, 100F));
-            this.tableLayoutPanel1.Size = new System.Drawing.Size(462, 287);
+            this.tableLayoutPanel1.Size = new System.Drawing.Size(462, 476);
             this.tableLayoutPanel1.TabIndex = 4;
             // 
             // lblSenorfps
@@ -451,7 +480,7 @@
             this.dgvResult.Gaps = new System.Drawing.Size(10, 10);
             this.dgvResult.Location = new System.Drawing.Point(3, 33);
             this.dgvResult.Name = "dgvResult";
-            this.dgvResult.Size = new System.Drawing.Size(456, 251);
+            this.dgvResult.Size = new System.Drawing.Size(456, 440);
             this.dgvResult.TabIndex = 1;
             // 
             // lblMeasuredFps
@@ -468,9 +497,11 @@
             // ILCamPage
             // 
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.None;
-            this.Controls.Add(this.uiTableLayoutPanel1);
+            this.Controls.Add(this.tabsIL);
             this.Name = "ILCamPage";
-            this.Size = new System.Drawing.Size(1200, 700);
+            this.Size = new System.Drawing.Size(1762, 920);
+            this.tabsIL.ResumeLayout(false);
+            this.tabPageLaserCapture.ResumeLayout(false);
             this.uiTableLayoutPanel1.ResumeLayout(false);
             this.panelControl.ResumeLayout(false);
             this.StatustabPanel.ResumeLayout(false);
@@ -484,6 +515,8 @@
 
         #endregion
 
+        private AntdUI.Tabs tabsIL;
+        private AntdUI.TabPage tabPageLaserCapture;
         private System.Windows.Forms.TableLayoutPanel uiTableLayoutPanel1;
         private Emgu.CV.UI.ImageBox imageBox;
         private AntdUI.Panel panelControl;

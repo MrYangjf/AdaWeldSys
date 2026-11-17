@@ -7,18 +7,17 @@ using System.Numerics;
 namespace AdaWeldSystem.PCLOperate.Render
 {
     /// <summary>
-    /// 表面三角剖分器 - 提供多种点云表面重建算法
-    /// 
-    /// 重要：所有采样步长参数由外部控制，内部不做任何降采样。
-    /// sampleStep = 1 表示使用全部点，sampleStep > 1 表示每隔 sampleStep 个点取一个。
+    /// 表面三角剖分器，提供多种点云表面重建算法。
+    /// 采样步长由外部控制，内部不做降采样。
+    /// sampleStep 为 1 表示使用全部点。
+    /// 大于 1 表示每隔 sampleStep 个点取一个。
     /// </summary>
     public static class SurfaceTriangulator
     {
         #region 1. 邻域搜索三角剖分
 
-        /// <summary>
-        /// 邻域搜索三角剖分 - 基于局部邻域的快速表面重建
-        /// </summary>
+        /// <summary>邻域搜索三角剖分 - 基于局部邻域的快速表面重</summary>
+        /// <remarks>建</remarks>
         /// <param name="data">点云数据</param>
         /// <param name="searchRadius">搜索半径</param>
         /// <param name="maxNeighbors">最大邻居数量</param>
@@ -183,6 +182,24 @@ namespace AdaWeldSystem.PCLOperate.Render
 
         #region 3. Alpha Shape 阿尔法形状
 
+        private static bool IsAlphaShapeValidFast(Vector3 p1, Vector3 p2, Vector3 p3, float alphaSquared)
+        {
+            float a = VectorMath.Distance(p2, p3);
+            float b = VectorMath.Distance(p1, p3);
+            float c = VectorMath.Distance(p1, p2);
+
+            float maxEdge = Math.Max(Math.Max(a, b), c);
+            float minEdge = Math.Min(Math.Min(a, b), c);
+            if (maxEdge > 1000 || minEdge < 0.001f || maxEdge / minEdge > 20)
+                return false;
+
+            float area = ComputeNormal(p1, p2, p3).Length() * 0.5f;
+            if (area < 0.0001f) return false;
+
+            float circumRadius = (a * b * c) / (4 * area);
+            return circumRadius * circumRadius <= 1.0f / alphaSquared;
+        }
+
         /// <summary>
         /// Alpha Shape 阿尔法形状表面重建
         /// </summary>
@@ -260,27 +277,48 @@ namespace AdaWeldSystem.PCLOperate.Render
             };
         }
 
-        private static bool IsAlphaShapeValidFast(Vector3 p1, Vector3 p2, Vector3 p3, float alphaSquared)
+        #endregion
+
+        #region 4. Delaunay 3D 三角剖分
+
+        private static bool IsDelaunayValidFast(Vector3 p1, Vector3 p2, Vector3 p3, List<Vector3> allPoints, SpatialIndex spatialIndex)
+        {
+            var center = (p1 + p2 + p3) / 3;
+            float radius = VectorMath.Distance(center, p1);
+
+            var nearby = spatialIndex.FindNeighborsInRadius(center, radius * 1.2f, allPoints);
+
+            int checkCount = 0;
+            foreach (int idx in nearby)
+            {
+                if (checkCount++ > 20) break;
+
+                var p = allPoints[idx];
+                if (p != p1 && p != p2 && p != p3)
+                {
+                    float dist = VectorMath.Distance(center, p);
+                    if (dist < radius * 0.95f)
+                        return false;
+                }
+            }
+
+            return true;
+        }
+
+        private static float ComputeTriangleQuality(Vector3 p1, Vector3 p2, Vector3 p3)
         {
             float a = VectorMath.Distance(p2, p3);
             float b = VectorMath.Distance(p1, p3);
             float c = VectorMath.Distance(p1, p2);
 
-            float maxEdge = Math.Max(Math.Max(a, b), c);
-            float minEdge = Math.Min(Math.Min(a, b), c);
-            if (maxEdge > 1000 || minEdge < 0.001f || maxEdge / minEdge > 20)
-                return false;
-
             float area = ComputeNormal(p1, p2, p3).Length() * 0.5f;
-            if (area < 0.0001f) return false;
+            if (area < 0.0001f) return 0;
 
             float circumRadius = (a * b * c) / (4 * area);
-            return circumRadius * circumRadius <= 1.0f / alphaSquared;
+            float inRadius = area / ((a + b + c) * 0.5f);
+
+            return inRadius / circumRadius;
         }
-
-        #endregion
-
-        #region 4. Delaunay 3D 三角剖分
 
         /// <summary>
         /// 3D Delaunay 三角剖分表面重建
@@ -364,48 +402,38 @@ namespace AdaWeldSystem.PCLOperate.Render
             };
         }
 
-        private static bool IsDelaunayValidFast(Vector3 p1, Vector3 p2, Vector3 p3, List<Vector3> allPoints, SpatialIndex spatialIndex)
-        {
-            var center = (p1 + p2 + p3) / 3;
-            float radius = VectorMath.Distance(center, p1);
-
-            var nearby = spatialIndex.FindNeighborsInRadius(center, radius * 1.2f, allPoints);
-
-            int checkCount = 0;
-            foreach (int idx in nearby)
-            {
-                if (checkCount++ > 20) break;
-
-                var p = allPoints[idx];
-                if (p != p1 && p != p2 && p != p3)
-                {
-                    float dist = VectorMath.Distance(center, p);
-                    if (dist < radius * 0.95f)
-                        return false;
-                }
-            }
-
-            return true;
-        }
-
-        private static float ComputeTriangleQuality(Vector3 p1, Vector3 p2, Vector3 p3)
-        {
-            float a = VectorMath.Distance(p2, p3);
-            float b = VectorMath.Distance(p1, p3);
-            float c = VectorMath.Distance(p1, p2);
-
-            float area = ComputeNormal(p1, p2, p3).Length() * 0.5f;
-            if (area < 0.0001f) return 0;
-
-            float circumRadius = (a * b * c) / (4 * area);
-            float inRadius = area / ((a + b + c) * 0.5f);
-
-            return inRadius / circumRadius;
-        }
-
         #endregion
 
         #region 5. Poisson 泊松重建
+
+        private static List<Vector3> EstimateNormalsFast(List<Vector3> points, SpatialIndex spatialIndex)
+        {
+            var normals = new List<Vector3>(points.Count);
+            float searchRadius = ComputeAverageSpacing(points) * 3;
+
+            for (int i = 0; i < points.Count; i++)
+            {
+                var neighbors = spatialIndex.FindNeighbors(i, searchRadius, 8);
+                normals.Add(EstimateNormalFast(points, i, neighbors));
+            }
+            return normals;
+        }
+
+        private static Vector3 EstimateNormalFast(List<Vector3> points, int index, List<int> neighbors)
+        {
+            if (neighbors.Count < 2)
+                return new Vector3(0, 1, 0);
+
+            var p = points[index];
+            var v1 = points[neighbors[0]] - p;
+            var v2 = points[neighbors[1]] - p;
+            var normal = VectorMath.Cross(v1, v2);
+
+            if (normal.LengthSquared() < 0.0001f)
+                return new Vector3(0, 1, 0);
+
+            return VectorMath.Normalize(normal);
+        }
 
         /// <summary>
         /// Poisson 泊松表面重建
@@ -567,38 +595,16 @@ namespace AdaWeldSystem.PCLOperate.Render
             );
         }
 
-        private static List<Vector3> EstimateNormalsFast(List<Vector3> points, SpatialIndex spatialIndex)
-        {
-            var normals = new List<Vector3>(points.Count);
-            float searchRadius = ComputeAverageSpacing(points) * 3;
-
-            for (int i = 0; i < points.Count; i++)
-            {
-                var neighbors = spatialIndex.FindNeighbors(i, searchRadius, 8);
-                normals.Add(EstimateNormalFast(points, i, neighbors));
-            }
-            return normals;
-        }
-
-        private static Vector3 EstimateNormalFast(List<Vector3> points, int index, List<int> neighbors)
-        {
-            if (neighbors.Count < 2)
-                return new Vector3(0, 1, 0);
-
-            var p = points[index];
-            var v1 = points[neighbors[0]] - p;
-            var v2 = neighbors.Count > 1 ? points[neighbors[1]] - p : new Vector3(0, 0, 1);
-            var normal = VectorMath.Cross(v1, v2);
-
-            if (normal.LengthSquared() < 0.0001f)
-                return new Vector3(0, 1, 0);
-
-            return VectorMath.Normalize(normal);
-        }
-
         #endregion
 
         #region 6. MLS 移动最小二乘
+
+        private static Vector3 ProjectToPlane(Vector3 point, Vector3 planePoint, Vector3 planeNormal)
+        {
+            var v = point - planePoint;
+            float dist = VectorMath.Dot(v, planeNormal);
+            return point - planeNormal * dist;
+        }
 
         /// <summary>
         /// MLS (Moving Least Squares) 移动最小二乘表面重建
@@ -729,13 +735,6 @@ namespace AdaWeldSystem.PCLOperate.Render
             return (centroid, new Vector3(0, 1, 0));
         }
 
-        private static Vector3 ProjectToPlane(Vector3 point, Vector3 planePoint, Vector3 planeNormal)
-        {
-            var v = point - planePoint;
-            float dist = VectorMath.Dot(v, planeNormal);
-            return point - planeNormal * dist;
-        }
-
         #endregion
 
         #region 私有方法
@@ -745,20 +744,6 @@ namespace AdaWeldSystem.PCLOperate.Render
             return data.HasColor
                 ? data.ColoredPoints.Select(p => new Vector3(p.X, p.Y, p.Z)).ToList()
                 : data.Points.Select(p => new Vector3(p.X, p.Y, p.Z)).ToList();
-        }
-
-        private static void AddTriangle(HelixToolkit.Vector3Collection positions, HelixToolkit.Vector3Collection normals, HelixToolkit.IntCollection indices, Vector3 p1, Vector3 p2, Vector3 p3, Vector3 normal)
-        {
-            int baseIndex = positions.Count;
-            positions.Add(p1);
-            positions.Add(p2);
-            positions.Add(p3);
-            normals.Add(normal);
-            normals.Add(normal);
-            normals.Add(normal);
-            indices.Add(baseIndex);
-            indices.Add(baseIndex + 1);
-            indices.Add(baseIndex + 2);
         }
 
         private static Vector3 ComputeNormal(Vector3 p1, Vector3 p2, Vector3 p3)

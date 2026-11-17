@@ -5,10 +5,7 @@ using System.Text;
 
 namespace AdaWeldSystem.FileOperate
 {
-    /// <summary>
-    /// INI 配置文件操作类
-    /// 支持默认创建、增加、修改、读取、保存配置
-    /// </summary>
+    /// <summary>INI 操作类：默认创建、增改、读写、保存。</summary>
     public class INIFile
     {
         #region 字段与属性
@@ -17,14 +14,10 @@ namespace AdaWeldSystem.FileOperate
         private readonly Dictionary<string, Dictionary<string, string>> _sections;
         private readonly object _lockObj = new object();
 
-        /// <summary>
-        /// INI 文件完整路径
-        /// </summary>
+        /// <summary>INI 文件完整路径</summary>
         public string FilePath => _filePath;
 
-        /// <summary>
-        /// 当前已加载的节(Section)数量
-        /// </summary>
+        /// <summary>当前已加载的节(Section)数量</summary>
         public int SectionCount
         {
             get
@@ -40,9 +33,7 @@ namespace AdaWeldSystem.FileOperate
 
         #region 构造函数
 
-        /// <summary>
-        /// 初始化 INIFile 实例，若文件不存在则自动创建空文件
-        /// </summary>
+        /// <summary>初始化 INIFile 实例，若文件不存在则自动创建空文件</summary>
         /// <param name="filePath">INI 文件路径（绝对路径或相对路径）</param>
         public INIFile(string filePath)
         {
@@ -63,14 +54,11 @@ namespace AdaWeldSystem.FileOperate
                 File.Create(_filePath).Dispose();
             }
         }
-
         #endregion
 
         #region 公共方法：读取
 
-        /// <summary>
-        /// 读取指定节和键的字符串值
-        /// </summary>
+        /// <summary>读取指定节和键的字符串值</summary>
         /// <param name="section">节名称</param>
         /// <param name="key">键名称</param>
         /// <param name="defaultValue">默认值（键不存在时返回）</param>
@@ -92,43 +80,37 @@ namespace AdaWeldSystem.FileOperate
             }
         }
 
-        /// <summary>
-        /// 读取指定节和键的整数值
-        /// </summary>
+        /// <summary>读取指定节和键的整数值</summary>
         /// <param name="section">节名称</param>
         /// <param name="key">键名称</param>
         /// <param name="defaultValue">默认值</param>
         /// <returns>整数值或默认值</returns>
         public int ReadInt(string section, string key, int defaultValue = 0)
         {
-            string value = ReadString(section, key, defaultValue.ToString());
-            if (int.TryParse(value, out int result))
+            string rawText = ReadString(section, key, defaultValue.ToString());
+            if (int.TryParse(rawText, out int result))
             {
                 return result;
             }
             return defaultValue;
         }
 
-        /// <summary>
-        /// 读取指定节和键的双精度浮点值
-        /// </summary>
+        /// <summary>读取指定节和键的双精度浮点值</summary>
         /// <param name="section">节名称</param>
         /// <param name="key">键名称</param>
         /// <param name="defaultValue">默认值</param>
         /// <returns>双精度值或默认值</returns>
         public double ReadDouble(string section, string key, double defaultValue = 0.0)
         {
-            string value = ReadString(section, key, defaultValue.ToString());
-            if (double.TryParse(value, out double result))
+            string rawText = ReadString(section, key, defaultValue.ToString());
+            if (double.TryParse(rawText, out double result))
             {
                 return result;
             }
             return defaultValue;
         }
 
-        /// <summary>
-        /// 读取指定节和键的布尔值
-        /// </summary>
+        /// <summary>读取指定节和键的布尔值</summary>
         /// <param name="section">节名称</param>
         /// <param name="key">键名称</param>
         /// <param name="defaultValue">默认值</param>
@@ -148,9 +130,7 @@ namespace AdaWeldSystem.FileOperate
             return defaultValue;
         }
 
-        /// <summary>
-        /// 获取指定节下的所有键值对
-        /// </summary>
+        /// <summary>获取指定节下的所有键值对</summary>
         /// <param name="section">节名称</param>
         /// <returns>键值对字典（只读副本）</returns>
         public Dictionary<string, string> GetSectionKeys(string section)
@@ -168,9 +148,7 @@ namespace AdaWeldSystem.FileOperate
             }
         }
 
-        /// <summary>
-        /// 获取所有节名称列表
-        /// </summary>
+        /// <summary>获取所有节名称列表</summary>
         /// <returns>节名称列表</returns>
         public List<string> GetAllSections()
         {
@@ -180,9 +158,7 @@ namespace AdaWeldSystem.FileOperate
             }
         }
 
-        /// <summary>
-        /// 判断指定节是否存在
-        /// </summary>
+        /// <summary>判断指定节是否存在</summary>
         /// <param name="section">节名称</param>
         /// <returns>是否存在</returns>
         public bool SectionExists(string section)
@@ -196,9 +172,7 @@ namespace AdaWeldSystem.FileOperate
             }
         }
 
-        /// <summary>
-        /// 判断指定节和键是否存在
-        /// </summary>
+        /// <summary>判断指定节和键是否存在</summary>
         /// <param name="section">节名称</param>
         /// <param name="key">键名称</param>
         /// <returns>是否存在</returns>
@@ -217,9 +191,7 @@ namespace AdaWeldSystem.FileOperate
 
         #region 公共方法：写入（增加/修改）
 
-        /// <summary>
-        /// 写入字符串值（节或键不存在则自动创建）
-        /// </summary>
+        /// <summary>写入字符串值（节或键不存在则自动创建）</summary>
         /// <param name="section">节名称</param>
         /// <param name="key">键名称</param>
         /// <param name="value">值</param>
@@ -241,9 +213,7 @@ namespace AdaWeldSystem.FileOperate
             }
         }
 
-        /// <summary>
-        /// 写入整数值
-        /// </summary>
+        /// <summary>写入整数值</summary>
         /// <param name="section">节名称</param>
         /// <param name="key">键名称</param>
         /// <param name="value">整数值</param>
@@ -252,9 +222,7 @@ namespace AdaWeldSystem.FileOperate
             WriteString(section, key, value.ToString());
         }
 
-        /// <summary>
-        /// 写入双精度浮点值
-        /// </summary>
+        /// <summary>写入双精度浮点值</summary>
         /// <param name="section">节名称</param>
         /// <param name="key">键名称</param>
         /// <param name="value">双精度值</param>
@@ -263,9 +231,7 @@ namespace AdaWeldSystem.FileOperate
             WriteString(section, key, value.ToString());
         }
 
-        /// <summary>
-        /// 写入布尔值
-        /// </summary>
+        /// <summary>写入布尔值</summary>
         /// <param name="section">节名称</param>
         /// <param name="key">键名称</param>
         /// <param name="value">布尔值</param>
@@ -278,9 +244,7 @@ namespace AdaWeldSystem.FileOperate
 
         #region 公共方法：删除
 
-        /// <summary>
-        /// 删除指定键
-        /// </summary>
+        /// <summary>删除指定键</summary>
         /// <param name="section">节名称</param>
         /// <param name="key">键名称</param>
         /// <returns>是否成功删除</returns>
@@ -305,9 +269,7 @@ namespace AdaWeldSystem.FileOperate
             }
         }
 
-        /// <summary>
-        /// 删除指定节（包含该节下所有键）
-        /// </summary>
+        /// <summary>删除指定节（包含该节下所有键）</summary>
         /// <param name="section">节名称</param>
         /// <returns>是否成功删除</returns>
         public bool DeleteSection(string section)
@@ -325,9 +287,7 @@ namespace AdaWeldSystem.FileOperate
 
         #region 公共方法：文件操作
 
-        /// <summary>
-        /// 将当前内存中的配置保存到 INI 文件
-        /// </summary>
+        /// <summary>将当前内存中的配置保存到 INI 文件</summary>
         public void SaveToFile()
         {
             lock (_lockObj)
@@ -348,9 +308,7 @@ namespace AdaWeldSystem.FileOperate
             }
         }
 
-        /// <summary>
-        /// 从 INI 文件重新加载配置（会覆盖内存中的当前数据）
-        /// </summary>
+        /// <summary>从 INI 文件重新加载配置（会覆盖内存中的当前数据）</summary>
         public void Reload()
         {
             lock (_lockObj)
@@ -363,9 +321,7 @@ namespace AdaWeldSystem.FileOperate
             }
         }
 
-        /// <summary>
-        /// 清空所有节和键（不自动保存到文件）
-        /// </summary>
+        /// <summary>清空所有节和键（不自动保存到文件）</summary>
         public void Clear()
         {
             lock (_lockObj)
@@ -378,9 +334,7 @@ namespace AdaWeldSystem.FileOperate
 
         #region 私有方法
 
-        /// <summary>
-        /// 从文件加载 INI 配置到内存
-        /// </summary>
+        /// <summary>从文件加载 INI 配置到内存</summary>
         private void LoadFromFile()
         {
             if (!File.Exists(_filePath))

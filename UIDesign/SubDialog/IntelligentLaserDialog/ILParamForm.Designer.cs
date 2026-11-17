@@ -72,7 +72,7 @@
             // btnFetch
             // 
             this.btnFetch.Cursor = System.Windows.Forms.Cursors.Hand;
-            this.btnFetch.Font = new System.Drawing.Font("宋体", 11F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.btnFetch.Font = new System.Drawing.Font("Microsoft YaHei UI", 11F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.btnFetch.Ghost = true;
             this.btnFetch.Location = new System.Drawing.Point(660, 0);
             this.btnFetch.MinimumSize = new System.Drawing.Size(1, 1);
@@ -84,7 +84,7 @@
             // lblConn
             // 
             this.lblConn.AutoSizeMode = AntdUI.TAutoSize.Auto;
-            this.lblConn.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.lblConn.Font = new System.Drawing.Font("Microsoft YaHei UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.lblConn.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(192)))), ((int)(((byte)(0)))), ((int)(((byte)(0)))));
             this.lblConn.Location = new System.Drawing.Point(4, 6);
             this.lblConn.Name = "lblConn";
@@ -95,7 +95,7 @@
             // uiTableParam
             // 
             this.uiTableParam.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.uiTableParam.Font = new System.Drawing.Font("宋体", 12F);
+            this.uiTableParam.Font = new System.Drawing.Font("Microsoft YaHei UI", 12F);
             this.uiTableParam.Gap = 12;
             this.uiTableParam.Location = new System.Drawing.Point(4, 49);
             this.uiTableParam.Margin = new System.Windows.Forms.Padding(4, 5, 4, 5);
@@ -117,7 +117,7 @@
             // btnCancel
             // 
             this.btnCancel.Cursor = System.Windows.Forms.Cursors.Hand;
-            this.btnCancel.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.btnCancel.Font = new System.Drawing.Font("Microsoft YaHei UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.btnCancel.Location = new System.Drawing.Point(668, 8);
             this.btnCancel.MinimumSize = new System.Drawing.Size(1, 1);
             this.btnCancel.Name = "btnCancel";
@@ -128,7 +128,7 @@
             // btnSave
             // 
             this.btnSave.Cursor = System.Windows.Forms.Cursors.Hand;
-            this.btnSave.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.btnSave.Font = new System.Drawing.Font("Microsoft YaHei UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.btnSave.Location = new System.Drawing.Point(580, 8);
             this.btnSave.MinimumSize = new System.Drawing.Size(1, 1);
             this.btnSave.Name = "btnSave";

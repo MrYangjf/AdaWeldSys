@@ -9,7 +9,7 @@ namespace AdaWeldSystem.EmguALG.RealtimeMonitor.WeldQuality
         public double PassScore { get; set; }
 
         /// <summary>
-        /// 创建配置并填入默认值（ADR-002：构造函数内初始化）
+        /// 创建配置并填入默认值
         /// </summary>
         public WeldQualityConfig()
         {

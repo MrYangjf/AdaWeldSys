@@ -1,16 +1,24 @@
-﻿using System;
+﻿﻿using System;
 using AdaWeldSystem.Comm.SystemComm;
 
 namespace AdaWeldSystem.MainDeviceControl.DeviceStateApiCore
 {
-    /// <summary>子设备连接态（两态，ConnectOn/ConnectOff 联动）。</summary>
+    /// <summary>模组物理设备状态（3 态）。</summary>
+    /// <remarks>与 <see cref="SubDeviceWeldStatus"/> 正交，本枚举是设备本体状况。
+    /// 例：保护镜超温两者都置，互不替代。</remarks>
     public enum SubDeviceState
     {
+        /// <summary>未连接（设备离线 / 初始化前 / 运行期断开）。</summary>
         Disconnected = 0,
-        Connected = 1
+
+        /// <summary>已连接且无故障。</summary>
+        Connected = 1,
+
+        /// <summary>硬件故障报警（如保护镜超温、从站报故障）。仍可能保持物理连接，故不降为 Disconnected。</summary>
+        Alarm = 2
     }
 
-    /// <summary>子设备焊接过程态（7 态，ADR-026 裁定 C2）。</summary>
+    /// <summary>模组焊接过程态（7 态）。</summary>
     public enum SubDeviceWeldStatus
     {
         NoReset = 0,
@@ -33,7 +41,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceStateApiCore
         Reseting = 5
     }
 
-    /// <summary>子设备连接态变更事件参数。</summary>
+    /// <summary>模组连接态变更事件参数。</summary>
     public class SubDeviceStateChangedEventArgs : EventArgs
     {
         /// <summary>切换前连接态。</summary>
@@ -49,7 +57,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceStateApiCore
         public DateTime Timestamp { get; set; }
     }
 
-    /// <summary>子设备焊接过程态变更事件参数。</summary>
+    /// <summary>模组焊接过程态变更事件参数。</summary>
     public class WeldStatusChangedEventArgs : EventArgs
     {
         /// <summary>切换前焊接过程态。</summary>
@@ -65,7 +73,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceStateApiCore
         public DateTime Timestamp { get; set; }
     }
 
-    /// <summary>子设备态基类（连接态 + 焊接过程态 + 设备安全）。</summary>
+    /// <summary>模组态基类（连接态 + 焊接过程态 + 设备安全）。</summary>
     /// <remarks>主设备运行态 MainDeviceStatus 不在本类承载，由 DeviceControlWork 统一持有。</remarks>
     public abstract class DeviceStateBase
     {
@@ -83,7 +91,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceStateApiCore
 
         #region 公共变量
 
-        /// <summary>当前子设备连接态。</summary>
+        /// <summary>当前模组连接态。</summary>
         public SubDeviceState State
         {
             get { return _state; }
@@ -96,7 +104,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceStateApiCore
             }
         }
 
-        /// <summary>当前子设备焊接过程态（单控制源，由流程方法联动驱动）。</summary>
+        /// <summary>当前焊接过程态（单控制源，由流程驱动）。</summary>
         public SubDeviceWeldStatus WeldStatus
         {
             get { return _weldStatus; }
@@ -119,29 +127,28 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceStateApiCore
                 _isAlarm = value;
                 if (_isAlarm)
                 {
-                    var handler = AlarmOccurred;
-                    if (handler != null) handler(this, EventArgs.Empty);
+                    AlarmOccurred?.Invoke(this, EventArgs.Empty);
                 }
             }
         }
 
-        /// <summary>子设备连接态切换事件。</summary>
+        /// <summary>模组连接态切换事件。</summary>
         public event EventHandler<SubDeviceStateChangedEventArgs> StateSwitched;
 
-        /// <summary>子设备焊接过程态变更事件。</summary>
+        /// <summary>模组焊接过程态变更事件。</summary>
         public event EventHandler<WeldStatusChangedEventArgs> WeldStatusChanged;
 
         /// <summary>急停/告警发生事件。</summary>
         public event EventHandler AlarmOccurred;
 
         /// <summary>连接尝试是否已出结果（成功或失败都置 true）。</summary>
-        /// <remarks>用于把「已确认失败」与「尚未有反馈」区分开：前者立即收敛，后者才需要等超时。</remarks>
+        /// <remarks>区分「已确认失败」与「尚未有反馈」：前者立即收敛。</remarks>
         public bool ConnectSettled
         {
             get { lock (_connectLock) { return _connectSettled; } }
         }
 
-        /// <summary>最近一次连接尝试的结果描述（成功为「已连接」，失败为失败原因）。</summary>
+        /// <summary>最近一次连接结果（成功「已连接」，失败为原因）。</summary>
         public string ConnectResult
         {
             get { lock (_connectLock) { return _connectResult; } }
@@ -149,7 +156,6 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceStateApiCore
 
         /// <summary>设备名称（日志/事件标识），子类必须实现。</summary>
         public abstract string StateName { get; }
-
         #endregion
 
         #region 公共函数
@@ -165,8 +171,8 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceStateApiCore
             State = newState;
         }
 
-        /// <summary>发起一次连接尝试（连接动作开始前调用，复位上次结果）。</summary>
-        /// <remarks>调用后 <see cref="ConnectSettled"/> 置 false，直到成功置 Connected 或调用 <see cref="MarkConnectFailed"/>。</remarks>
+        /// <summary>发起一次连接尝试（连接动作开始前调用，复位上</summary>
+        /// <remarks>调用后 <see cref="ConnectSettled"/> 置 false，直到成功置 Connected 或调用 <see cref="MarkConnectFailed"/>。 次结果）。</remarks>
         public void BeginConnectAttempt()
         {
             lock (_connectLock)
@@ -177,7 +183,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceStateApiCore
         }
 
         /// <summary>标记连接尝试已失败并置 Disconnected。</summary>
-        /// <remarks>异步连接线程拿到确定失败结果时调用，使等待方不必等超时即可收敛。</remarks>
+        /// <remarks>确定失败时调用，等待方不必等超时。</remarks>
         /// <param name="reason">失败原因（记入 <see cref="ConnectResult"/> 与状态切换原因）</param>
         public void MarkConnectFailed(string reason)
         {
@@ -187,7 +193,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceStateApiCore
         }
 
         /// <summary>切换焊接过程态（带原因），WeldStatus 唯一写入口。</summary>
-        /// <remarks>变更后执行步由调用方自行推进；与旧 SetStep 语义对齐。</remarks>
+        /// <remarks>变更后执行步由调用方自行推进。</remarks>
         /// <param name="newStatus">目标焊接过程态</param>
         /// <param name="reason">切换原因（记入事件参数与日志）</param>
         protected void SetWeldStatus(SubDeviceWeldStatus newStatus, string reason)
@@ -197,7 +203,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceStateApiCore
         }
 
         /// <summary>设备安全：急停。</summary>
-        /// <remarks>默认置 IsAlarm=true 并记录日志；子类（主设备侧）应重写以调用具体运动控制器/IO 的紧急停止。</remarks>
+        /// <remarks>默认置 IsAlarm=true 并记录日志；子类应重写以调用具体运动控制器/IO 急停。</remarks>
         public virtual void EmergencyStop()
         {
             IsAlarm = true;
@@ -231,38 +237,30 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceStateApiCore
         /// <param name="newState">切换后连接态</param>
         protected virtual void OnStateSwitched(SubDeviceState oldState, SubDeviceState newState)
         {
-            var handler = StateSwitched;
-            if (handler != null)
+            StateSwitched?.Invoke(this, new SubDeviceStateChangedEventArgs
             {
-                    handler(this, new SubDeviceStateChangedEventArgs
-                    {
-                        OldState = oldState,
-                        NewState = newState,
-                        Reason = _lastReason,
-                        Timestamp = DateTime.Now
-                    });
-                }
-                // 状态切换不记日志（ADR-028 报错分层：连接态经事件/状态栏呈现）
-            }
+                OldState = oldState,
+                NewState = newState,
+                Reason = _lastReason,
+                Timestamp = DateTime.Now
+            });
+            // 状态切换不记日志（连接态经事件/状态栏呈现）
+        }
 
         /// <summary>焊接过程态变更钩子：触发 WeldStatusChanged 事件并记录日志。</summary>
         /// <param name="oldStatus">切换前焊接过程态</param>
         /// <param name="newStatus">切换后焊接过程态</param>
         protected virtual void OnWeldStatusChanged(SubDeviceWeldStatus oldStatus, SubDeviceWeldStatus newStatus)
         {
-            var handler = WeldStatusChanged;
-            if (handler != null)
+            WeldStatusChanged?.Invoke(this, new WeldStatusChangedEventArgs
             {
-                    handler(this, new WeldStatusChangedEventArgs
-                    {
-                        OldStatus = oldStatus,
-                        NewStatus = newStatus,
-                        Reason = _lastReason,
-                        Timestamp = DateTime.Now
-                    });
-                }
-                // 状态切换不记日志（ADR-028 报错分层：焊接过程态经事件/状态栏呈现）
-            }
+                OldStatus = oldStatus,
+                NewStatus = newStatus,
+                Reason = _lastReason,
+                Timestamp = DateTime.Now
+            });
+            // 状态切换不记日志，经事件/状态栏呈现
+        }
 
         #endregion
     }

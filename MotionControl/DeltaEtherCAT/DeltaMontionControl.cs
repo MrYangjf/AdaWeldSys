@@ -15,12 +15,16 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
         #region 私有变量
 
         private const string Tag = "台达运控";
-        private const int InitialTimeoutSeconds = 30;
-        private const int InitialPollIntervalMs = 100;
+        // 初始化等待取自 ROOT/FLOW_TIMEOUT（运行期读取；缺省 30s / 100ms = 改造前行为）
+        private static int InitialTimeoutSeconds { get { return FlowTimeoutSettings.Current.MasterInitSeconds; } }
+        private static int InitialPollIntervalMs { get { return FlowTimeoutSettings.Current.MasterInitPollMs; } }
 
         private readonly ushort[] _cardNoList;
         private readonly DeltaSlaveScanner _slaveScanner;
         private ushort _existCardCount;
+
+        /// <summary>主站是否已打开（决定 Close 时是否执行 Master_Close）</summary>
+        private bool _masterOpened;
 
         #endregion
 
@@ -73,6 +77,9 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
                 return false;
             }
 
+            // 主站已打开：后续初始化失败也必须走 Close 释放
+            _masterOpened = true;
+
             if (_existCardCount == 0)
             {
                 strMsg = "主站打开成功但未检测到板卡";
@@ -83,13 +90,34 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
             for (ushort seq = 0; seq < _existCardCount; seq++)
             {
                 ushort cardNo = 0;
-                EtherCATMasterNative.CS_ECAT_Master_Get_CardSeq(seq, ref cardNo);
+                ret = EtherCATMasterNative.CS_ECAT_Master_Get_CardSeq(seq, ref cardNo);
+                if (ret != DeltaErrorCode.NO_ERROR)
+                {
+                    strMsg = string.Format("读取板卡序号失败 序号 {0} 错误码 {1} 描述 {2}",
+                        seq, ret, DeltaErrorCode.GetMessage(ret));
+                    Log(strMsg, MessageLevel.Error);
+                    return false;
+                }
+
                 ret = EtherCATMasterNative.CS_ECAT_Master_Initial(cardNo);
-                _cardNoList[seq] = ret == DeltaErrorCode.NO_ERROR ? cardNo : (ushort)99;
+                if (ret != DeltaErrorCode.NO_ERROR)
+                {
+                    strMsg = string.Format("主站初始化失败 卡号 {0} 错误码 {1} 描述 {2}",
+                        cardNo, ret, DeltaErrorCode.GetMessage(ret));
+                    Log(strMsg, MessageLevel.Error);
+                    // 哨兵卡号：关闭时跳过该卡的 Reset
+                    _cardNoList[seq] = (ushort)99;
+                    // 首卡失败即无法连接：立即失败，禁止空等超时
+                    if (seq == 0) return false;
+                    continue;
+                }
+
+                _cardNoList[seq] = cardNo;
             }
 
             _connectNo = _cardNoList[0];
-            Log(string.Format("主站打开成功 检测到板卡 {0} 张 当前卡号 {1}", _existCardCount, _connectNo));
+            Log(string.Format("主站打开成功 检测到板卡 {0} 张 当前卡号 {1}", _existCardCount, _connectNo),
+                MessageLevel.Debug);
             return true;
         }
 
@@ -122,7 +150,7 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
                 }
             }
 
-            Log("主站初始化完成");
+            Log("主站初始化完成", MessageLevel.Debug);
             return true;
         }
 
@@ -139,6 +167,20 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
             return opState == EtherCATMasterNative.OpStateOperational && alarmStatus == 0;
         }
 
+        /// <summary>输出扫描到的从站清单</summary>
+        /// <remarks>排障用，只进文件</remarks>
+        private void LogScanList()
+        {
+            for (int i = 0; i < _slaveScanner.SlaveInfos.Count; i++)
+            {
+                SlaveInfo slave = _slaveScanner.SlaveInfos[i];
+                Log(string.Format("从站 {0} 节点 {1} 设备 {2} 厂商 0x{3:X8} 产品码 0x{4:X8} 版本 0x{5:X8}",
+                    slave.SeqId, slave.NodeId, slave.DeviceName,
+                    slave.VendorId, slave.ProductCode, slave.RevisionNo),
+                    MessageLevel.Debug);
+            }
+        }
+
         #endregion
 
         #region 公共函数
@@ -148,7 +190,7 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
         /// <returns>成功返回 true</returns>
         public override bool Initialization(ref string strMsg)
         {
-            Log("台达运控开始初始化");
+            Log("台达运控开始初始化", MessageLevel.Debug);
 
             if (!OpenAndInitialCards(ref strMsg)) return false;
             if (!WaitInitialDone(ref strMsg)) return false;
@@ -161,13 +203,21 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
             }
 
             _isInitial = true;
-            Log(string.Format("台达运控初始化完成 从站数量 {0}", _slaveScanner.SlaveInfos.Count));
+            Log(string.Format("台达运控初始化完成 从站数量 {0}", _slaveScanner.SlaveInfos.Count),
+                MessageLevel.Debug);
+            LogScanList();
             return true;
         }
 
         /// <summary>关闭主站，先断伺服再复位各卡</summary>
         public override void Close()
         {
+            if (!_masterOpened)
+            {
+                _isInitial = false;
+                return;
+            }
+
             foreach (MontionAxis axis in _axes)
             {
                 axis.ServoOff();
@@ -182,6 +232,7 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
             }
 
             EtherCATMasterNative.CS_ECAT_Master_Close();
+            _masterOpened = false;
             _isInitial = false;
             Log("台达运控已关闭");
         }
@@ -200,15 +251,13 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
         {
             if (io == null) return;
 
-            InputIO input = io as InputIO;
-            if (input != null)
+            if (io is InputIO input)
             {
                 if (!_inPuts.Contains(input)) _inPuts.Add(input);
                 return;
             }
 
-            OutputIO output = io as OutputIO;
-            if (output != null && !_outPuts.Contains(output)) _outPuts.Add(output);
+            if (io is OutputIO output && !_outPuts.Contains(output)) _outPuts.Add(output);
         }
 
         /// <summary>获取全部轴</summary>
@@ -260,7 +309,8 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
             return ManufacturerType.Delta;
         }
 
-        /// <summary>检查总线是否全部就绪（逐从站读连接态与报警位，读共享内存非阻塞，供状态监督轮询）。</summary>
+        /// <summary>检查总线是否全部就绪（逐从站读连接态与报警</summary>
+        /// <remarks>位）</remarks>
         /// <param name="faultDesc">故障描述：首个非就绪从站的站号与现象；总线健康时为空串</param>
         /// <returns>所有从站均在运行态且无报警返回 true</returns>
         public override bool CheckBusOK(out string faultDesc)

@@ -1,45 +1,26 @@
-﻿using System;
+using System;
 using System.IO;
 
 namespace AdaWeldSystem.FileOperate
 {
     public class Log
     {
-        public Log(string strFileLogName)
-        {
-            LogFileName = strFileLogName;
-            InitLogDir();
-            CheckLogLife(LogDir);
-        }
+        private bool IsError = false;
+        private static readonly object m_lock = new object();
+
         public string LogFileName = "";
         public string LogFilePath = "";
         public string LogDir = "";
         public uint LogLiftCycle = 30;
         public int FileSize = 20;
         public string ErrorInfo = "";
-        private bool IsError = false;
-        private static object m_lock = new object();
+        public Log(string strFileLogName)
+        {
+            LogFileName = strFileLogName;
+            InitLogDir();
+            CheckLogLife(LogDir);
+        }
 
-        public void Debug(string strFunName, string strLogContent)
-        {
-            string str = string.Format("{0} [Debug][{1}] {2}", GetNowToString(), strFunName, strLogContent);
-            this.WriteLog(str);
-        }
-        public void Error(string strFunName, string strLogContent)
-        {
-            string str = string.Format("{0} [Error][{1}] {2}", GetNowToString(), strFunName, strLogContent);
-            this.WriteLog(str);
-        }
-        public void Info(string strFunName, string strLogContent)
-        {
-            string str = string.Format("{0} [Info][{1}] {2}", GetNowToString(), strFunName, strLogContent);
-            this.WriteLog(str);
-        }
-        public void Warn(string strFunName, string strLogContent)
-        {
-            string str = string.Format("{0} [Warn][{1}] {2}", GetNowToString(), strFunName, strLogContent);
-            this.WriteLog(str);
-        }
         private void CheckLogLife(string strPath)
         {
             DateTime LimitTime = DateTime.Now.AddDays(-LogLiftCycle);
@@ -98,7 +79,6 @@ namespace AdaWeldSystem.FileOperate
                     {
                         IsError = true;
                         ErrorInfo = string.Format("函数 {0} 创建日志目录失败 {1} 错误信息 {2}", name, path, exception.Message);
-                        path = "";
                     }
                 }
             }
@@ -186,5 +166,34 @@ namespace AdaWeldSystem.FileOperate
             }
         }
 
+        /// <summary>统一日志时间戳格式</summary>
+        /// <remarks>统一 24 小时制，避免丢失上下午语义。</remarks>
+        /// <param name="value">时间</param>
+        /// <returns>yyyy-MM-dd HH:mm:ss</returns>
+        public static string FormatTimestamp(DateTime value)
+        {
+            return value.ToString("yyyy-MM-dd HH:mm:ss");
+        }
+
+        public void Debug(string strFunName, string strLogContent)
+        {
+            string str = string.Format("{0} [Debug][{1}] {2}", GetNowToString(), strFunName, strLogContent);
+            this.WriteLog(str);
+        }
+        public void Error(string strFunName, string strLogContent)
+        {
+            string str = string.Format("{0} [Error][{1}] {2}", GetNowToString(), strFunName, strLogContent);
+            this.WriteLog(str);
+        }
+        public void Info(string strFunName, string strLogContent)
+        {
+            string str = string.Format("{0} [Info][{1}] {2}", GetNowToString(), strFunName, strLogContent);
+            this.WriteLog(str);
+        }
+        public void Warn(string strFunName, string strLogContent)
+        {
+            string str = string.Format("{0} [Warn][{1}] {2}", GetNowToString(), strFunName, strLogContent);
+            this.WriteLog(str);
+        }
     }
 }

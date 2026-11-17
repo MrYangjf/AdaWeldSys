@@ -25,14 +25,16 @@ namespace AdaWeldSystem.PCLOperate.Render
     }
 
     /// <summary>
-    /// 表面渲染参数配置类
-    /// 使用INI文件持久化渲染参数配置
+    /// 表面渲染参数配置类。
+    /// 使用 INI 文件持久化渲染参数。
     /// </summary>
     public static class RenderConfig
     {
         private const string Tag = "RenderConfig";
 
         /// <summary>统一日志出口（固定使用本类标签）</summary>
+        /// <param name="message">消息内容。</param>
+        /// <param name="level">日志级别。</param>
         private static void Log(string message, MessageLevel level = MessageLevel.Info)
         {
             GlobalCommData.ShowLog(Tag, message, level);
@@ -40,9 +42,9 @@ namespace AdaWeldSystem.PCLOperate.Render
 
         #region 常量与字段
 
-        /// <summary>INI配置文件路径</summary>
-        private static readonly string IniFilePath = Path.Combine(
-            AppDomain.CurrentDomain.BaseDirectory, "Config", "INI", "RenderConfig.ini");
+        /// <summary>INI 配置文件路径</summary>
+        private static readonly string IniFilePath =
+            Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Config", "PCLOperate", "Render_INI", "RenderConfig.ini");
 
         /// <summary>INI文件节名</summary>
         private const string IniSection = "RenderConfig";
@@ -57,10 +59,8 @@ namespace AdaWeldSystem.PCLOperate.Render
 
         #region 构造函数与初始化
 
-        /// <summary>
-        /// 静态构造函数 - 类首次使用时自动初始化
-        /// 检查配置文件是否存在，不存在则生成默认配置
-        /// </summary>
+        /// <summary>静态构造函数 - 类首次使用时自动初始化 检查配</summary>
+        /// <remarks>置文件是否存在，不存在则生成默认配置</remarks>
         static RenderConfig()
         {
             SelectedAlgorithm = SurfaceRenderAlgorithm.NeighborSearch;
@@ -90,10 +90,8 @@ namespace AdaWeldSystem.PCLOperate.Render
             EnsureInitialized();
         }
 
-        /// <summary>
-        /// 确保配置已初始化
-        /// 如果配置文件不存在，使用当前属性默认值生成默认INI文件
-        /// </summary>
+        /// <summary>确保配置已初始化 如果配置文件不存在，使用当</summary>
+        /// <remarks>前属性默认值生成默认INI文件</remarks>
         public static void EnsureInitialized()
         {
             if (_isInitialized)
@@ -211,6 +209,76 @@ namespace AdaWeldSystem.PCLOperate.Render
         #region 持久化方法
 
         /// <summary>
+        /// 从INI文件加载配置（内部实现）
+        /// </summary>
+        private static void LoadFromIniInternal()
+        {
+            var ini = new INIFile(IniFilePath);
+
+            // 加载算法选择
+            SelectedAlgorithm = (SurfaceRenderAlgorithm)ini.ReadInt(IniSection, "SelectedAlgorithm", 0);
+
+            // 加载邻域搜索参数
+            NeighborSearchRadius = (float)ini.ReadDouble(IniSection, "NeighborSearchRadius", 2.0);
+            NeighborMaxNeighbors = ini.ReadInt(IniSection, "NeighborMaxNeighbors", 30);
+            NeighborSampleStep = ini.ReadInt(IniSection, "NeighborSampleStep", 1);
+
+            // 加载Ball Pivoting参数
+            BallPivotingRadius = (float)ini.ReadDouble(IniSection, "BallPivotingRadius", 2.0);
+            BallPivotingSampleStep = ini.ReadInt(IniSection, "BallPivotingSampleStep", 1);
+            BallPivotingMaxNeighbors = ini.ReadInt(IniSection, "BallPivotingMaxNeighbors", 30);
+
+            // 加载Alpha Shape参数
+            AlphaShapeAlpha = (float)ini.ReadDouble(IniSection, "AlphaShapeAlpha", 2.0);
+            AlphaShapeSampleStep = ini.ReadInt(IniSection, "AlphaShapeSampleStep", 1);
+            AlphaShapeMaxNeighbors = ini.ReadInt(IniSection, "AlphaShapeMaxNeighbors", 30);
+
+            // 加载Delaunay参数
+            DelaunayQualityThreshold = (float)ini.ReadDouble(IniSection, "DelaunayQualityThreshold", 0.1);
+            DelaunaySearchRadiusMultiplier = (float)ini.ReadDouble(IniSection, "DelaunaySearchRadiusMultiplier", 1.5);
+            DelaunaySampleStep = ini.ReadInt(IniSection, "DelaunaySampleStep", 1);
+            DelaunayMaxNeighbors = ini.ReadInt(IniSection, "DelaunayMaxNeighbors", 30);
+
+            // 加载Poisson参数
+            PoissonDepth = ini.ReadInt(IniSection, "PoissonDepth", 8);
+            PoissonSamplesPerNode = ini.ReadInt(IniSection, "PoissonSamplesPerNode", 1);
+            PoissonMaxCells = ini.ReadInt(IniSection, "PoissonMaxCells", 100000);
+
+            // 加载MLS参数
+            MlsSearchRadius = (float)ini.ReadDouble(IniSection, "MlsSearchRadius", 2.0);
+            MlsSampleStep = ini.ReadInt(IniSection, "MlsSampleStep", 1);
+            MlsMaxNeighbors = ini.ReadInt(IniSection, "MlsMaxNeighbors", 30);
+
+            // 加载点云显示参数
+            PointSize = (float)ini.ReadDouble(IniSection, "PointSize", 2.0);
+            ZColorEnabled = ini.ReadBool(IniSection, "ZColorEnabled", false);
+            DisplayRatio = (float)ini.ReadDouble(IniSection, "DisplayRatio", 1.0);
+        }
+
+        /// <summary>从INI文件加载配置 公开方法，供外部手动触发配置</summary>
+        /// <remarks>加载</remarks>
+        public static void LoadFromIni()
+        {
+            lock (_lock)
+            {
+                try
+                {
+                    if (!File.Exists(IniFilePath))
+                    {
+                        SaveToIni();
+                        return;
+                    }
+
+                    LoadFromIniInternal();
+                }
+                catch (Exception ex)
+                {
+                    Log("RenderConfig加载失败 " + ex.Message, MessageLevel.Error);
+                }
+            }
+        }
+
+        /// <summary>
         /// 保存配置到INI文件
         /// </summary>
         public static void SaveToIni()
@@ -273,78 +341,6 @@ namespace AdaWeldSystem.PCLOperate.Render
                     Log("RenderConfig保存失败 " + ex.Message, MessageLevel.Error);
                 }
             }
-        }
-
-        /// <summary>
-        /// 从INI文件加载配置
-        /// 公开方法，供外部手动触发配置加载
-        /// </summary>
-        public static void LoadFromIni()
-        {
-            lock (_lock)
-            {
-                try
-                {
-                    if (!File.Exists(IniFilePath))
-                    {
-                        SaveToIni();
-                        return;
-                    }
-
-                    LoadFromIniInternal();
-                }
-                catch (Exception ex)
-                {
-                    Log("RenderConfig加载失败 " + ex.Message, MessageLevel.Error);
-                }
-            }
-        }
-
-        /// <summary>
-        /// 从INI文件加载配置（内部实现）
-        /// </summary>
-        private static void LoadFromIniInternal()
-        {
-            var ini = new INIFile(IniFilePath);
-
-            // 加载算法选择
-            SelectedAlgorithm = (SurfaceRenderAlgorithm)ini.ReadInt(IniSection, "SelectedAlgorithm", 0);
-
-            // 加载邻域搜索参数
-            NeighborSearchRadius = (float)ini.ReadDouble(IniSection, "NeighborSearchRadius", 2.0);
-            NeighborMaxNeighbors = ini.ReadInt(IniSection, "NeighborMaxNeighbors", 30);
-            NeighborSampleStep = ini.ReadInt(IniSection, "NeighborSampleStep", 1);
-
-            // 加载Ball Pivoting参数
-            BallPivotingRadius = (float)ini.ReadDouble(IniSection, "BallPivotingRadius", 2.0);
-            BallPivotingSampleStep = ini.ReadInt(IniSection, "BallPivotingSampleStep", 1);
-            BallPivotingMaxNeighbors = ini.ReadInt(IniSection, "BallPivotingMaxNeighbors", 30);
-
-            // 加载Alpha Shape参数
-            AlphaShapeAlpha = (float)ini.ReadDouble(IniSection, "AlphaShapeAlpha", 2.0);
-            AlphaShapeSampleStep = ini.ReadInt(IniSection, "AlphaShapeSampleStep", 1);
-            AlphaShapeMaxNeighbors = ini.ReadInt(IniSection, "AlphaShapeMaxNeighbors", 30);
-
-            // 加载Delaunay参数
-            DelaunayQualityThreshold = (float)ini.ReadDouble(IniSection, "DelaunayQualityThreshold", 0.1);
-            DelaunaySearchRadiusMultiplier = (float)ini.ReadDouble(IniSection, "DelaunaySearchRadiusMultiplier", 1.5);
-            DelaunaySampleStep = ini.ReadInt(IniSection, "DelaunaySampleStep", 1);
-            DelaunayMaxNeighbors = ini.ReadInt(IniSection, "DelaunayMaxNeighbors", 30);
-
-            // 加载Poisson参数
-            PoissonDepth = ini.ReadInt(IniSection, "PoissonDepth", 8);
-            PoissonSamplesPerNode = ini.ReadInt(IniSection, "PoissonSamplesPerNode", 1);
-            PoissonMaxCells = ini.ReadInt(IniSection, "PoissonMaxCells", 100000);
-
-            // 加载MLS参数
-            MlsSearchRadius = (float)ini.ReadDouble(IniSection, "MlsSearchRadius", 2.0);
-            MlsSampleStep = ini.ReadInt(IniSection, "MlsSampleStep", 1);
-            MlsMaxNeighbors = ini.ReadInt(IniSection, "MlsMaxNeighbors", 30);
-
-            // 加载点云显示参数
-            PointSize = (float)ini.ReadDouble(IniSection, "PointSize", 2.0);
-            ZColorEnabled = ini.ReadBool(IniSection, "ZColorEnabled", false);
-            DisplayRatio = (float)ini.ReadDouble(IniSection, "DisplayRatio", 1.0);
         }
 
         #endregion

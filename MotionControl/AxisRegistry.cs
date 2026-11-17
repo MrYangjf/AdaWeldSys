@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using AdaWeldSystem.MotionControl.DeltaEtherCAT;
 using AdaWeldSystem.MotionControl.IMotion;
 using AdaWeldSystem.Comm.SystemComm;
 using AdaWeldSystem.FileOperate;
@@ -6,18 +7,15 @@ using AdaWeldSystem.FileOperate;
 namespace AdaWeldSystem.MotionControl
 {
     /// <summary>轴注册表</summary>
-    /// <remarks>
-    /// 统一管理业务层用到的全部轴，按键名登记并保证它们都已注册进控制器。
-    /// 轴对象在构造时已向所属控制器自注册，AttachAll 再做一次幂等回灌，
-    /// 用于校验注册表与控制器集合一致，避免遗漏或重复。
-    /// </remarks>
+    /// <remarks>按键名登记全部轴并保证注册进控制器；
+    /// 轴构造时已自注册，AttachAll 校验两处集合一致。</remarks>
     public class AxisRegistry
     {
         #region 私有变量
 
         private const string Tag = "轴注册表";
 
-        private readonly Dictionary<string, MontionAxis> _items;
+        private readonly Dictionary<string, DeltaMontionAxis> _items;
 
         #endregion
 
@@ -33,7 +31,7 @@ namespace AdaWeldSystem.MotionControl
         /// <summary>创建空注册表</summary>
         public AxisRegistry()
         {
-            _items = new Dictionary<string, MontionAxis>();
+            _items = new Dictionary<string, DeltaMontionAxis>();
         }
 
         #endregion
@@ -55,7 +53,7 @@ namespace AdaWeldSystem.MotionControl
         /// <summary>登记轴，同名覆盖</summary>
         /// <param name="name">轴键名</param>
         /// <param name="axis">轴对象</param>
-        public void Register(string name, MontionAxis axis)
+        public void Register(string name, DeltaMontionAxis axis)
         {
             if (axis == null || string.IsNullOrEmpty(name)) return;
             _items[name] = axis;
@@ -64,10 +62,9 @@ namespace AdaWeldSystem.MotionControl
         /// <summary>取轴</summary>
         /// <param name="name">轴键名</param>
         /// <returns>轴对象，未找到返回 null</returns>
-        public MontionAxis Get(string name)
+        public DeltaMontionAxis Get(string name)
         {
-            MontionAxis axis;
-            return _items.TryGetValue(name, out axis) ? axis : null;
+            return _items.TryGetValue(name, out DeltaMontionAxis axis) ? axis : null;
         }
 
         /// <summary>判断是否已登记</summary>
@@ -80,9 +77,9 @@ namespace AdaWeldSystem.MotionControl
 
         /// <summary>取全部轴</summary>
         /// <returns>轴集合</returns>
-        public List<MontionAxis> GetAll()
+        public List<DeltaMontionAxis> GetAll()
         {
-            return new List<MontionAxis>(_items.Values);
+            return new List<DeltaMontionAxis>(_items.Values);
         }
 
         /// <summary>取全部轴键名</summary>
@@ -115,7 +112,7 @@ namespace AdaWeldSystem.MotionControl
             {
                 control.AddAxis(axis);
             }
-            Log(string.Format("已向控制器注册轴 {0} 个", _items.Count));
+            Log(string.Format("已向控制器注册轴 {0} 个", _items.Count), MessageLevel.Debug);
         }
 
         #endregion

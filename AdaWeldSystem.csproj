@@ -65,10 +65,6 @@
     <Reference Include="ScottPlot.WinForms">
       <HintPath>3rdDepend\ScottPlot.WinForms.dll</HintPath>
     </Reference>
-    <Reference Include="SRAPI_CSharp-x64">
-      <HintPath>3rdDepend\SRAPI_CSharp-x64.dll</HintPath>
-      <Private>True</Private>
-    </Reference>
     <Reference Include="IntelligentLaser_CSharp">
       <HintPath>3rdDepend\IntelligentLaser_CSharp.dll</HintPath>
       <Private>True</Private>
@@ -86,13 +82,14 @@
     <Reference Include="System.Windows.Forms" />
     <Reference Include="System.Xaml" />
     <Reference Include="System.Xml" />
+    <Reference Include="System.IO.Compression" />
+    <Reference Include="System.IO.Compression.FileSystem" />
     <Reference Include="WindowsBase" />
     <Reference Include="WindowsFormsIntegration" />
   </ItemGroup>
   <ItemGroup>
     <Compile Include="EmguALG\Core\Stages.cs" />
     <Compile Include="EmguALG\Core\ImageAlgorithm.cs" />
-    <Compile Include="EmguALG\Core\ImageRoiTools.cs" />
     <Compile Include="EmguALG\Abstractions\IAlgorithm.cs" />
     <Compile Include="EmguALG\Abstractions\IResultStore.cs" />
     <Compile Include="EmguALG\RealtimeMonitor\WireFeedDistance\WireFeedConfig.cs" />
@@ -101,8 +98,14 @@
     <Compile Include="EmguALG\RealtimeMonitor\WeldQuality\WeldQualityConfig.cs" />
     <Compile Include="EmguALG\RealtimeMonitor\WeldQuality\WeldQualityResult.cs" />
     <Compile Include="EmguALG\RealtimeMonitor\WeldQuality\WeldQualityAlgorithm.cs" />
+    <Compile Include="EmguALG\RealtimeMonitor\Playback\PlaybackFileInfo.cs" />
+    <Compile Include="EmguALG\RealtimeMonitor\Playback\PlaybackScanResult.cs" />
+    <Compile Include="EmguALG\RealtimeMonitor\Playback\PlaybackAlgorithm.cs" />
     <Compile Include="EmguALG\LineLaserContour\ILineLaserContourAlgorithm.cs" />
+    <Compile Include="EmguALG\LineLaserContour\LineLaserContourData.cs" />
     <Compile Include="EmguALG\LineLaserContour\LineLaserContourAlgorithm.cs" />
+    <Compile Include="EmguALG\Roi\ImageRoi.cs" />
+    <Compile Include="EmguALG\Roi\ImageRoiTool.cs" />
     <Compile Include="EmguALG\Manager\AlgorithmManager.cs" />
     <Compile Include="EmguALG\Manager\AlgorithmResultStore.cs" />
     <Compile Include="EmguALG\Manager\AlgorithmCompletedEventArgs.cs" />
@@ -112,7 +115,6 @@
     <Compile Include="EmguALG\Core\PreprocessConfig.cs" />
     <Compile Include="EmguALG\Core\UnitAttribute.cs" />
     <Compile Include="EmguALG\Core\RangeAttribute.cs" />
-    <Compile Include="EmguALG\RealtimeMonitor\RealtimeMonitorAlgorithm.cs" />
     <Compile Include="PCLOperate\Models\Point3D.cs" />
     <Compile Include="PCLOperate\Models\PointCloudData.cs" />
     <Compile Include="PCLOperate\DataIO\PointCloudReader.cs" />
@@ -121,31 +123,47 @@
     <Compile Include="PCLOperate\Render\RenderConfig.cs" />
     <Compile Include="PCLOperate\Render\SurfaceTriangulator.cs" />
     <Compile Include="Comm\SystemComm\SystemComm.cs" />
+    <Compile Include="Comm\SystemComm\PermissionLevel.cs" />
+    <Compile Include="Comm\SystemComm\DeviceWaitSettings.cs" />
     <Compile Include="Comm\Communication\CommunicationManager.cs" />
     <Compile Include="Comm\Communication\Abstractions\CommChannelBase.cs" />
     <Compile Include="Comm\Communication\Implementations\SiemensS7Comm.cs" />
     <Compile Include="Comm\Communication\Implementations\KukaRsiComm.cs" />
-    <Compile Include="Comm\Communication\Implementations\KukaEkiComm.cs" />
     <Compile Include="Comm\Communication\Implementations\EthernetXmlComm.cs" />
     <Compile Include="Comm\Communication\Implementations\InLaserModbusComm.cs" />
+    <Compile Include="FileOperate\ConfigPathMigrator.cs" />
+    <Compile Include="FileOperate\ConfigBackupHelper.cs" />
+    <Compile Include="FileOperate\ConfigSelfHeal.cs" />
     <Compile Include="FileOperate\INIFile.cs" />
     <Compile Include="FileOperate\Log.cs" />
     <Compile Include="FileOperate\XdocumentReaderWriter.cs" />
+    <Compile Include="UIDesign\SubDialog\CommConfigDialog\FileEditorForm.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="UIDesign\SubDialog\CommConfigDialog\FileEditorForm.Designer.cs">
+      <DependentUpon>FileEditorForm.cs</DependentUpon>
+    </Compile>
     <Compile Include="WeldParamControl\WeldParamData.cs" />
     <Compile Include="WeldParamControl\WeldParamManager.cs" />
     <Compile Include="WeldParamControl\WeldAlgorithmsConfig.cs" />
+    <Compile Include="WeldParamControl\WeldParamChangeLogger.cs" />
     <Compile Include="WeldParamControl\Abstractions\WeldAlgorithmBase.cs" />
     <Compile Include="WeldParamControl\Algorithms\SeamGuideSample.cs" />
     <Compile Include="WeldParamControl\Algorithms\WeldParamLookupAlgorithm.cs" />
     <Compile Include="WeldParamControl\Algorithms\WeldParamAdjustmentAlgorithm.cs" />
+    <Compile Include="WeldParamControl\Curves\TaLaCurveConfig.cs" />
     <Compile Include="WeldParamControl\Algorithms\SeamTrackingAlgorithm.cs" />
+    <Compile Include="WeldParamControl\Algorithms\SeamMapTrackingAlgorithm.cs" />
     <Compile Include="ProductFileControl\Abstractions\ProductRecordBase.cs" />
-    <Compile Include="ProductFileControl\Records\SeamTrackRecord.cs" />
-    <Compile Include="ProductFileControl\Records\WeldParamAdjustRecord.cs" />
+    <Compile Include="ProductFileControl\Records\LineLaserContourRecord.cs" />
+    <Compile Include="ProductFileControl\Records\WeldParamControlRecord.cs" />
+    <Compile Include="ProductFileControl\Records\RecordFileStore.cs" />
     <Compile Include="ProductFileControl\Records\WeldResultRecord.cs" />
+    <Compile Include="ProductFileControl\Records\SeamTraceYRecord.cs" />
     <Compile Include="ProductFileControl\ProductFileRecordManager.cs" />
     <!-- 设备控制核心（三态模型 + 5 子工作流 + 2 管控类） -->
     <Compile Include="MainDeviceControl\DeviceStateApiCore\CommandCore.cs" />
+    <Compile Include="MainDeviceControl\DeviceStateApiCore\DeviceInitOutcome.cs" />
     <Compile Include="MainDeviceControl\DeviceStateApiCore\DeviceStateBase.cs" />
     <Compile Include="MainDeviceControl\DeviceStateApiCore\DeviceWorkflowBase.cs" />
     <Compile Include="MainDeviceControl\DeviceWorkflow\LaserWeldHeadWorkflow.cs" />
@@ -154,6 +172,7 @@
     <Compile Include="MainDeviceControl\DeviceWorkflow\MotionControlWorkflow.cs" />
     <Compile Include="MainDeviceControl\DeviceWorkflow\WeldParamControlWorkflow.cs" />
     <Compile Include="MainDeviceControl\DeviceControlWork.cs" />
+    <Compile Include="MainDeviceControl\SimulationConfig.cs" />
     <Compile Include="MainDeviceControl\DeviceStatusWork.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
@@ -168,8 +187,8 @@
     <Compile Include="MonitorCam\IMonitorCam\MonitorCamType.cs" />
     <Compile Include="MonitorCam\IMonitorCam\MonitorCamEventArgs.cs" />
     <Compile Include="MonitorCam\IMonitorCam\IMonitorCamApi.cs" />
-    <Compile Include="MonitorCam\MecaVisionCam\MecaVisionCam.cs" />
-    <Compile Include="MonitorCam\MecaVisionCam\Native\MVSDK.cs" />
+    <Compile Include="MonitorCam\IMonitorCam\MonitorCamDeviceInfo.cs" />
+    <Compile Include="MonitorCam\HikCam\HikCam.cs" />
     <Compile Include="MonitorCam\MonitorCamConfig.cs" />
     <Compile Include="MonitorCam\MonitorCamManager.cs" />
     <Compile Include="MotionControl\MoveControlData.cs" />
@@ -189,15 +208,22 @@
     <Compile Include="MotionControl\DeltaEtherCAT\DeltaMontionControl.cs" />
     <Compile Include="MotionControl\DeltaEtherCAT\DeltaAxisConfig.cs" />
     <Compile Include="MotionControl\DeltaEtherCAT\DeltaMotionConfig.cs" />
+    <Compile Include="MotionControl\DeltaEtherCAT\DeltaTaHomeConfig.cs" />
     <Compile Include="MotionControl\DeltaEtherCAT\DeltaIOConfig.cs" />
     <Compile Include="MotionControl\DeltaEtherCAT\DeltaMontionAxis.cs" />
     <Compile Include="MotionControl\DeltaEtherCAT\DeltaInputIO.cs" />
     <Compile Include="MotionControl\DeltaEtherCAT\DeltaOutputIO.cs" />
+    <Compile Include="MotionControl\DeltaEtherCAT\MotionConfigImporter.cs" />
+    <Compile Include="MotionControl\DeltaEtherCAT\XlsxSheetReader.cs" />
+    <Compile Include="MotionControl\DeltaEtherCAT\DeltaControllerConfigImporter.cs" />
+    <Compile Include="MotionControl\DeltaEtherCAT\SystemConfigPackager.cs" />
     <Compile Include="MotionControl\DeltaEtherCAT\DeltaSlaveScanner.cs" />
+    <Compile Include="MotionControl\DeltaEtherCAT\DeltaSlaveDevice.cs" />
     <Compile Include="MotionControl\DeltaEtherCAT\Native\EtherCATMasterNative.cs" />
     <Compile Include="MotionControl\DeltaEtherCAT\Native\EtherCATMotionNative.cs" />
     <Compile Include="MotionControl\DeltaEtherCAT\Native\EtherCATIONative.cs" />
     <Compile Include="MotionControl\DeltaEtherCAT\Native\EtherCATAdvancedNative.cs" />
+    <Compile Include="MotionControl\DeltaEtherCAT\Native\EtherCATMotionBufferNative.cs" />
     <Compile Include="MotionControl\DeltaEtherCAT\Native\EtherCATPVTNative.cs" />
     <Compile Include="MotionControl\DeltaEtherCAT\Native\EtherCATEcam2Native.cs" />
     <Compile Include="MotionControl\DeltaEtherCAT\Native\DeltaErrorCode.cs" />
@@ -227,11 +253,20 @@
     <Compile Include="UIDesign\TabPage\ILCamPage.Designer.cs">
       <DependentUpon>ILCamPage.cs</DependentUpon>
     </Compile>
-    <Compile Include="UIDesign\TabPage\MotionControlPage.cs">
+    <Compile Include="UIDesign\TabPage\SystemControlPage.cs">
       <SubType>UserControl</SubType>
     </Compile>
-    <Compile Include="UIDesign\TabPage\MotionControlPage.Designer.cs">
-      <DependentUpon>MotionControlPage.cs</DependentUpon>
+    <Compile Include="UIDesign\TabPage\SystemControlPage.Designer.cs">
+      <DependentUpon>SystemControlPage.cs</DependentUpon>
+    </Compile>
+    <Compile Include="UIDesign\SubDialog\MotionControlDialog\AxisConfigForm.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="UIDesign\SubDialog\MotionControlDialog\IoConfigForm.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="UIDesign\SubDialog\MotionControlDialog\CylinderConfigForm.cs">
+      <SubType>UserControl</SubType>
     </Compile>
     <Compile Include="UIDesign\TabPage\MonitorCamPage.cs">
       <SubType>UserControl</SubType>
@@ -239,17 +274,23 @@
     <Compile Include="UIDesign\TabPage\MonitorCamPage.Designer.cs">
       <DependentUpon>MonitorCamPage.cs</DependentUpon>
     </Compile>
+    <EmbeddedResource Include="UIDesign\SubDialog\CommConfigDialog\FileEditorForm.resx">
+      <DependentUpon>FileEditorForm.cs</DependentUpon>
+    </EmbeddedResource>
     <EmbeddedResource Include="UIDesign\SubDialog\FormMainDialog\InitWaitingForm.resx">
       <DependentUpon>InitWaitingForm.cs</DependentUpon>
     </EmbeddedResource>
-    <EmbeddedResource Include="UIDesign\TabPage\CommPage.resx">
-      <DependentUpon>CommPage.cs</DependentUpon>
+    <EmbeddedResource Include="UIDesign\TabPage\FilebackupPage.resx">
+      <DependentUpon>FilebackupPage.cs</DependentUpon>
     </EmbeddedResource>
     <EmbeddedResource Include="UIDesign\TabPage\ILCamPage.resx">
       <DependentUpon>ILCamPage.cs</DependentUpon>
     </EmbeddedResource>
-    <EmbeddedResource Include="UIDesign\TabPage\MotionControlPage.resx">
-      <DependentUpon>MotionControlPage.cs</DependentUpon>
+    <EmbeddedResource Include="UIDesign\TabPage\MonitorCamPage.resx">
+      <DependentUpon>MonitorCamPage.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="UIDesign\TabPage\SystemControlPage.resx">
+      <DependentUpon>SystemControlPage.cs</DependentUpon>
     </EmbeddedResource>
     <EmbeddedResource Include="UIDesign\SubDialog\IntelligentLaserDialog\ILAlgoForm.resx">
       <DependentUpon>ILAlgoForm.cs</DependentUpon>
@@ -266,29 +307,23 @@
     <Compile Include="UIDesign\ControlPage\NavPage.Designer.cs">
       <DependentUpon>NavPage.cs</DependentUpon>
     </Compile>
-    <Compile Include="UIDesign\TabPage\ParamConfigPage.cs">
+    <Compile Include="UIDesign\TabPage\ProcessControlPage.cs">
       <SubType>UserControl</SubType>
     </Compile>
-    <Compile Include="UIDesign\TabPage\ParamConfigPage.Designer.cs">
-      <DependentUpon>ParamConfigPage.cs</DependentUpon>
+    <Compile Include="UIDesign\TabPage\ProcessControlPage.Designer.cs">
+      <DependentUpon>ProcessControlPage.cs</DependentUpon>
     </Compile>
-    <Compile Include="UIDesign\TabPage\CommPage.cs">
+    <Compile Include="UIDesign\TabPage\FilebackupPage.cs">
       <SubType>UserControl</SubType>
     </Compile>
-    <Compile Include="UIDesign\TabPage\CommPage.Designer.cs">
-      <DependentUpon>CommPage.cs</DependentUpon>
+    <Compile Include="UIDesign\TabPage\FilebackupPage.Designer.cs">
+      <DependentUpon>FilebackupPage.cs</DependentUpon>
     </Compile>
     <Compile Include="UIDesign\SubDialog\UserManagerDialog\UserEditForm.cs">
       <SubType>UserControl</SubType>
     </Compile>
     <Compile Include="UIDesign\SubDialog\UserManagerDialog\UserEditForm.Designer.cs">
       <DependentUpon>UserEditForm.cs</DependentUpon>
-    </Compile>
-    <Compile Include="UIDesign\TabPage\FileEditorPage.cs">
-      <SubType>UserControl</SubType>
-    </Compile>
-    <Compile Include="UIDesign\TabPage\FileEditorPage.Designer.cs">
-      <DependentUpon>FileEditorPage.cs</DependentUpon>
     </Compile>
     <Compile Include="UIDesign\SubDialog\ParamContolDialog\AutoParamForm.cs">
       <SubType>UserControl</SubType>
@@ -335,6 +370,12 @@
     <Compile Include="UIDesign\SubDialog\IntelligentLaserDialog\ILScanForm.Designer.cs">
       <DependentUpon>ILScanForm.cs</DependentUpon>
     </Compile>
+    <Compile Include="UIDesign\SubDialog\MonitorCamDialog\MonitorCamScanForm.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="UIDesign\SubDialog\MonitorCamDialog\MonitorCamScanForm.Designer.cs">
+      <DependentUpon>MonitorCamScanForm.cs</DependentUpon>
+    </Compile>
     <Compile Include="UIDesign\SubDialog\IntelligentLaserDialog\ILParamForm.cs">
       <SubType>UserControl</SubType>
     </Compile>
@@ -359,14 +400,12 @@
     <Compile Include="UIDesign\SubDialog\DataReviewerDialog\HelixRenderForm.Designer.cs">
       <DependentUpon>HelixRenderForm.cs</DependentUpon>
     </Compile>
-    <!-- 激光焊接头模块（含由 DataModels 迁入的 3 个数据类） -->
-    <Compile Include="LaserWeldHead\API\ILaserWeldHeadController.cs" />
-    <Compile Include="LaserWeldHead\LaserWeldHeadController.cs" />
-    <Compile Include="LaserWeldHead\LaserWeldHeadData.cs" />
+    <!-- 激光焊接头模块（ADR-042 三层：抽象层 + WsxScanCut 实现层 + Manager；2026-09-15 挂靠台达从站重构） -->
+    <Compile Include="MotionControl\WeldHeadSlaveDevice.cs" />
     <!-- 注：原 DeviceStateMachine/、DataModels/、Workflow\Safety\ 条目已随目录删除移除；
          安全检查（含互锁配置 SafetyFlow + 判定 SafetyInterlockChecker + 监控循环，2026-08-31 三合一，2026-09-02 更名）
          现为单文件 MainDeviceControl\DeviceStatusWork.cs（三线程 IOWork / EMGWork / StatusWork）；
-         整机主控为 MainDeviceControl\DeviceControlWork.cs（5 个子设备工作流在 MainDeviceControl\DeviceWorkflow\）；
+         整机主控为 MainDeviceControl\DeviceControlWork.cs（5 个模组工作流在 MainDeviceControl\DeviceWorkflow\）；
          FaultRecord/FaultCategory/FaultRecoveryManager/FaultRecordManager 已于 2026-09-04 经用户裁定整体移除（架构无故障恢复定义） -->
     <EmbeddedResource Include="UIDesign\SubDialog\DataReviewerDialog\RenderParamForm.resx">
       <DependentUpon>RenderParamForm.cs</DependentUpon>
@@ -396,14 +435,11 @@
     <EmbeddedResource Include="UIDesign\ControlPage\NavPage.resx">
       <DependentUpon>NavPage.cs</DependentUpon>
     </EmbeddedResource>
-    <EmbeddedResource Include="UIDesign\TabPage\ParamConfigPage.resx">
-      <DependentUpon>ParamConfigPage.cs</DependentUpon>
+    <EmbeddedResource Include="UIDesign\TabPage\ProcessControlPage.resx">
+      <DependentUpon>ProcessControlPage.cs</DependentUpon>
     </EmbeddedResource>
     <EmbeddedResource Include="UIDesign\SubDialog\UserManagerDialog\UserEditForm.resx">
       <DependentUpon>UserEditForm.cs</DependentUpon>
-    </EmbeddedResource>
-    <EmbeddedResource Include="UIDesign\TabPage\FileEditorPage.resx">
-      <DependentUpon>FileEditorPage.cs</DependentUpon>
     </EmbeddedResource>
     <EmbeddedResource Include="UIDesign\SubDialog\IntelligentLaserDialog\ILAlgorithmEditForm.resx">
       <DependentUpon>ILAlgorithmEditForm.cs</DependentUpon>
@@ -422,6 +458,9 @@
     </EmbeddedResource>
     <EmbeddedResource Include="UIDesign\SubDialog\IntelligentLaserDialog\ILScanForm.resx">
       <DependentUpon>ILScanForm.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="UIDesign\SubDialog\MonitorCamDialog\MonitorCamScanForm.resx">
+      <DependentUpon>MonitorCamScanForm.cs</DependentUpon>
     </EmbeddedResource>
     <EmbeddedResource Include="UIDesign\SubDialog\IntelligentLaserDialog\ILParamForm.resx">
       <DependentUpon>ILParamForm.cs</DependentUpon>
@@ -580,6 +619,11 @@
       <HintPath>3rdDepend\S7.Net.dll</HintPath>
       <Private>True</Private>
     </Reference>
+    <!-- 海康 MVS SDK .NET 封装（V2）：原生运行时由已安装的 MVS 客户端提供 -->
+    <Reference Include="MvCameraControl.Net">
+      <HintPath>3rdDepend\Hik\MvCameraControl.Net.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
     <!-- STTech.BytesIO — TCP 通讯 -->
     <Reference Include="STTech.BytesIO.Core">
       <HintPath>3rdDepend\STTech.BytesIO.Core.dll</HintPath>
@@ -712,7 +756,7 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
-    <Folder Include="UIDesign\SubDialog\MotionControlDialog\" />
+    <None Include="Resources\weldhead1.png" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- NuGet 本地化后原生 DLL 不再由 NuGet 自动部署，改为手动从 3rdDepend 拷贝到输出目录 -->
@@ -746,11 +790,6 @@
       <Native3rdDepend Include="3rdDepend\vcruntime140_1.dll" />
       <!-- 台达 EtherCAT 原生依赖：主站库（x64，与 PlatformTarget 一致，禁 AnyCPU） -->
       <Native3rdDepend Include="3rdDepend\EtherCAT_DLL_x64.dll" />
-      <!-- 麦格威 MVSDK 原生依赖（x64，与 PlatformTarget 一致）：MvApi 静态构造 LoadLibrary 加载，缺失时委托为 null 导致 NullReferenceException -->
-      <Native3rdDepend Include="3rdDepend\MecaVision\MVCAMSDK_X64.dll" />
-      <Native3rdDepend Include="3rdDepend\MecaVision\MVImageProcess_X64.DLL" />
-      <Native3rdDepend Include="3rdDepend\MecaVision\GiGeCamera_X64.Interface" />
-      <Native3rdDepend Include="3rdDepend\MecaVision\Usb3Camera0_X64.Interface" />
     </ItemGroup>
     <Copy SourceFiles="@(Native3rdDepend)" DestinationFolder="$(TargetDir)" SkipUnchangedFiles="true" />
     <!-- SQLite.Interop.dll 需按架构部署到 x64/x86 子目录 -->

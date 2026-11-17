@@ -1,3 +1,4 @@
+using AdaWeldSystem.LineLaserCam.ILineLaser;
 using AdaWeldSystem.LineLaserCam.IntelligentLaserCam;
 using AntdUI;
 using System;
@@ -37,7 +38,7 @@ namespace AdaWeldSystem.UIDesign.SubDialog.IntelligentLaserDialog
         {
             InitializeComponent();
             InitTableColumns();
-            // 事件订阅放代码后置（Designer 手写订阅会被设计器重新序列化时丢失）
+            // 事件订阅放代码后置，避免设计器序列化丢失
             btnCreate.Click += btnCreate_Click;
             btnchangeJob.Click += btnchangeJob_Click;
             btnDeleteJob.Click += btnDeleteJob_Click;
@@ -80,7 +81,7 @@ namespace AdaWeldSystem.UIDesign.SubDialog.IntelligentLaserDialog
             SetIlControlsEnabled(connected);
             if (connected)
             {
-                // 已连接：按 jobdesclist.json 构建 JOB 按钮流面板 + 拉取当前 JOB 实时参数（设备为唯一真相源）
+                // 已连接：按 jobdesclist.json 建 JOB 按钮流并拉参数
                 RefreshJobFlow();
                 RefreshJobParams();
             }
@@ -104,7 +105,7 @@ namespace AdaWeldSystem.UIDesign.SubDialog.IntelligentLaserDialog
         private void UpdateConnLabel()
         {
             if (_ilCamera == null) return;
-            // 直接读硬件真相源，不缓存本地连接副本（避免与 IsConnected 脱节）
+            // 直读硬件真相源，不缓存连接副本
             if (!_ilCamera.IsConnected)
             {
                 lblConn.Text = "英莱设备：未连接";
@@ -154,18 +155,16 @@ namespace AdaWeldSystem.UIDesign.SubDialog.IntelligentLaserDialog
                     Margin = new System.Windows.Forms.Padding(4)
                 };
                 int jobId = job.Id;
-                btn.Click += (s, e) => JobButton_Click(jobId);
+                btn.Click += (s, e) =>
+                {
+                    _selectedJobId = jobId;
+                    UpdateJobButtonsState();
+                };
                 _jobButtons[jobId] = btn;
                 flowPanel1.Controls.Add(btn);
             }
             // 选中态跟随设备当前 JOB（切 JOB 回调也会再次同步）
             SyncSelectedJobFromDevice();
-        }
-
-        private void JobButton_Click(int jobId)
-        {
-            _selectedJobId = jobId;
-            UpdateJobButtonsState();
         }
 
         private void SyncSelectedJobFromDevice()
@@ -208,7 +207,8 @@ namespace AdaWeldSystem.UIDesign.SubDialog.IntelligentLaserDialog
             int ret = _ilCamera.SwitchJob(_selectedJobId);
             if (ret != 0)
             {
-                AntdUI.Message.warn(this.FindForm(), string.Format("JOB {0} 切换失败, ret={1}", _selectedJobId, ret));
+                AntdUI.Message.warn(this.FindForm(), string.Format("JOB {0} 切换失败, {1}", _selectedJobId,
+                    _ilCamera.DescribeLastError(LineLaserErrorContext.ReturnCode)));
             }
         }
 
@@ -236,7 +236,8 @@ namespace AdaWeldSystem.UIDesign.SubDialog.IntelligentLaserDialog
             }
             else
             {
-                AntdUI.Message.warn(this.FindForm(), string.Format("JOB {0} 删除失败, ret={1}", _selectedJobId, ret));
+                AntdUI.Message.warn(this.FindForm(), string.Format("JOB {0} 删除失败, {1}", _selectedJobId,
+                    _ilCamera.DescribeLastError(LineLaserErrorContext.ReturnCode)));
             }
         }
 
@@ -251,10 +252,9 @@ namespace AdaWeldSystem.UIDesign.SubDialog.IntelligentLaserDialog
             try { list = _ilCamera.FetchAllJobParams(); }
             catch (Exception ex)
             {
-                GlobalCommData.ShowLog("AlgorithmEditForm", string.Format("读取英莱参数失败: {0}", ex.Message), MessageLevel.Error);
+                GlobalCommData.ShowLog("AlgorithmEditForm", string.Format("读取英莱参数失败 {0}", ex.Message), MessageLevel.Error);
             }
-            // 按当前 Job 接头类型 display 键集过滤（display 缺失/为空则回退显示全部；
-            // 过滤后为空同样回退全显——display 键与 SDK 参数名格式不匹配时保底，避免参数表空白）
+            // 按当前 Job 接头类型 display 键集过滤；键缺失或为空时回退显示全部（键名不匹配兜底）
             if (list != null && list.Count > 0)
             {
                 List<string> displayKeys = GetCurrentJobDisplayKeys();
@@ -289,12 +289,12 @@ namespace AdaWeldSystem.UIDesign.SubDialog.IntelligentLaserDialog
                 string keyCore = key.StartsWith("params_", StringComparison.OrdinalIgnoreCase)
                     ? key.Substring(7) : key;
                 if (keyCore.Equals(paramName, StringComparison.OrdinalIgnoreCase)) return true;
-                // 3) 词级后缀：参数名是 display 核心键的尾部（词边界 _ 分界，如 display params_inspect_min_angle ↔ 参数名 min_angle）
+                // 3) 词级后缀：参数名是核心键尾部（以 _ 分界）
                 if (keyCore.Length > paramName.Length
                     && keyCore.EndsWith(paramName, StringComparison.OrdinalIgnoreCase)
                     && keyCore[keyCore.Length - paramName.Length - 1] == '_')
                     return true;
-                // 4) 词级前缀：参数名更长且以 display 核心键开头（词边界，如参数名 params_inspect_min_angle_more ↔ display params_inspect_min_angle）
+                // 4) 词级前缀：参数名以核心键开头且更长（_ 分界）
                 if (paramName.Length > keyCore.Length
                     && paramName.StartsWith(keyCore, StringComparison.OrdinalIgnoreCase)
                     && paramName[keyCore.Length] == '_')
@@ -366,14 +366,14 @@ namespace AdaWeldSystem.UIDesign.SubDialog.IntelligentLaserDialog
             if (_ilCamera == null || !_ilCamera.IsConnected) return;
             try
             {
-                // 选中态跟随设备当前 JOB + 刷新参数表 + 更新连接/接头类型标签
+                // 跟随设备当前 JOB，刷新参数与连接标签
                 SyncSelectedJobFromDevice();
                 RefreshJobParams();
                 UpdateConnLabel();
             }
             catch (Exception ex)
             {
-                GlobalCommData.ShowLog("AlgorithmEditForm", string.Format("Job 参数刷新失败: {0}", ex.Message), MessageLevel.Error);
+                GlobalCommData.ShowLog("AlgorithmEditForm", string.Format("Job 参数刷新失败 {0}", ex.Message), MessageLevel.Error);
             }
         }
 
@@ -386,8 +386,7 @@ namespace AdaWeldSystem.UIDesign.SubDialog.IntelligentLaserDialog
                 AntdUI.Message.warn(this.FindForm(), "无法读取接头类型列表（jointtypelist.json 缺失或为空）");
                 return;
             }
-            // 弹窗内容：FlowLayoutPanel 内每个接头类型一个按钮（参照 ParamConfigPage.ShowInputStringDialog 范式：
-            // 内容控件必须给明确尺寸——Dock=Fill 的裸容器在 Modal 内容区高度塌缩为 0 导致空白）
+            // 弹窗内容：每接头类型一个按钮；内容控件须给明确尺寸（Dock=Fill 裸容器在 Modal 内高度塌缩为 0）
             var flow = new System.Windows.Forms.FlowLayoutPanel
             {
                 Width = 300,
@@ -418,13 +417,13 @@ namespace AdaWeldSystem.UIDesign.SubDialog.IntelligentLaserDialog
                     }
                     else
                     {
-                        AntdUI.Message.warn(this.FindForm(), string.Format("JOB 新建失败, ret={0}", ret));
+                        AntdUI.Message.warn(this.FindForm(), string.Format("JOB 新建失败, {0}",
+                            _ilCamera.DescribeLastError(LineLaserErrorContext.ReturnCode)));
                     }
                 };
                 flow.Controls.Add(b);
             }
-            // 参照 ParamConfigPage.ShowInputStringDialog 的 Modal.Config 4 参构造范式：
-            // TType.Info + 明确 Width，避免内容区高度/宽度异常导致空白
+            // Modal.Config 4 参构造：TType.Info + 明确 Width，避免内容区尺寸异常导致空白
             AntdUI.Modal.open(new AntdUI.Modal.Config(this.FindForm(), "新建JOB - 选择接头类型", flow, TType.Info)
             {
                 Width = 320,
@@ -435,8 +434,7 @@ namespace AdaWeldSystem.UIDesign.SubDialog.IntelligentLaserDialog
 
         private bool dgvILParams_CellEndEdit(object sender, AntdUI.TableEndEditEventArgs e)
         {
-            var row = e.Record as IlJobParamRow;
-            if (row == null || e.Value == null || e.Column.Key != "Value") return true;
+            if (!(e.Record is IlJobParamRow row) || e.Value == null || e.Column.Key != "Value") return true;
             if (_ilCamera == null || !_ilCamera.IsConnected) return false;
             if (_ilParams == null || _ilParamRows == null) return false;
 
@@ -456,7 +454,8 @@ namespace AdaWeldSystem.UIDesign.SubDialog.IntelligentLaserDialog
             int ret = _ilCamera.ApplyJobParams(edited);
             if (ret != 0)
             {
-                AntdUI.Message.warn(this.FindForm(), string.Format("参数 {0} 下发失败, ret={1}", src.Name, ret));
+                AntdUI.Message.warn(this.FindForm(), string.Format("参数 {0} 下发失败, {1}", src.Name,
+                    _ilCamera.DescribeLastError(LineLaserErrorContext.ReturnCode)));
                 return false; // 恢复单元格原值
             }
 
@@ -474,7 +473,7 @@ namespace AdaWeldSystem.UIDesign.SubDialog.IntelligentLaserDialog
             }
             catch (Exception ex)
             {
-                GlobalCommData.ShowLog("AlgorithmEditForm", string.Format("回读参数失败: {0}", ex.Message), MessageLevel.Error);
+                GlobalCommData.ShowLog("AlgorithmEditForm", string.Format("回读参数失败 {0}", ex.Message), MessageLevel.Error);
             }
             return true;
         }
@@ -484,14 +483,12 @@ namespace AdaWeldSystem.UIDesign.SubDialog.IntelligentLaserDialog
             if (src.ValueType == 1u) return true; // string 无需范围校验
             if (src.ValueType == 2u)
             {
-                double d;
-                if (!double.TryParse(raw, out d)) return false;
+                if (!double.TryParse(raw, out double d)) return false;
                 return !src.HasRange || (d >= src.FloatMin && d <= src.FloatMax);
             }
             if (src.ValueType == 3u)
             {
-                long l;
-                if (!long.TryParse(raw, out l)) return false;
+                if (!long.TryParse(raw, out long l)) return false;
                 return !src.HasRange || (l >= src.IntMin && l <= src.IntMax);
             }
             return false;
@@ -530,7 +527,7 @@ namespace AdaWeldSystem.UIDesign.SubDialog.IntelligentLaserDialog
         /// <summary>退订 Job 参数变更事件</summary>
         public void StopRefresh()
         {
-            // 由 AlgorithmEditForm.HandleDestroyed 调用（ADR-001：不在 .cs 重写 Dispose(bool)）；结果显示已迁移至 ILCamPage，本页不再订阅 ContourFrameReady。
+            // 由 AlgorithmEditForm.HandleDestroyed 调用；结果显示在 ILCamPage，本页不订阅轮廓帧就绪
             if (_ilCamera != null)
                 _ilCamera.JobParamsChanged -= OnJobParamsChanged;
         }

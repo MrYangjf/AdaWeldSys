@@ -1,14 +1,15 @@
-﻿using System;
+using System;
+using System.Collections.Generic;
 
 namespace AdaWeldSystem.MainDeviceControl.DeviceStateApiCore
 {
-    /// <summary>机器人指令协议常量（ADR-026 裁定 C3）。</summary>
+    /// <summary>机器人指令协议常量。</summary>
     /// <remarks>指令一律字符串常量、禁调用方自定义赋值；不监控机器人 pose；报文格式待协议细化，消费方以 // todo 占位。</remarks>
     public static class CommandCore
     {
-        #region 协议方向标识（原档 R002/R003）
+        #region 协议方向标识
 
-        /// <summary>接受指令方向标识（机器人 → 设备）。原档拼写 ReciveCommand，按正确英文落地。</summary>
+        /// <summary>接受指令方向标识（机器人 → 设备）。</summary>
         public const string ReceiveCommand = "RECEIVE";
 
         /// <summary>发送指令方向标识（设备 → 机器人）。</summary>
@@ -70,8 +71,8 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceStateApiCore
         /// <summary>下发：回安全停止位。</summary>
         public const string TxGoStopSafe = "TX_GO_STOP_SAFE";
 
-        /// <summary>下发：设备就绪，反馈机器人继续。</summary>
-        public const string TxOK = "TX_OK";
+        /// <summary>下发：焊接中异常，通知机器人停止动作。</summary>
+        public const string TxNG = "TX_NG";
 
         /// <summary>下发：急停 / 中止。</summary>
         public const string TxAbort = "TX_ABORT";
@@ -87,6 +88,37 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceStateApiCore
         {
             if (string.IsNullOrWhiteSpace(raw)) return string.Empty;
             return raw.Trim().ToUpperInvariant();
+        }
+
+        /// <summary>尝试把带坐标载荷的报文拆成「指令名 + 载荷」。</summary>
+        /// <remarks>报文格式：指令名 + 分隔符 + 数值列表。
+        /// 规整文本整体命中已知指令时按无载荷处理；头部不是已知指令返回 false。</remarks>
+        /// <param name="normalized">已规整（Trim + 大写）的报文</param>
+        /// <param name="command">输出：指令名（已知指令常量）</param>
+        /// <param name="payload">输出：指令名后的载荷原文（无载荷为空串）</param>
+        /// <returns>头部命中已知指令返回 true</returns>
+        public static bool TrySplitPayload(string normalized, out string command, out string payload)
+        {
+            command = normalized;
+            payload = string.Empty;
+            if (string.IsNullOrEmpty(normalized)) return false;
+            if (IsKnownCommand(normalized)) return true;
+
+            int cut = -1;
+            for (int i = 0; i < normalized.Length; i++)
+            {
+                char c = normalized[i];
+                if (c == ' ' || c == ',' || c == ';' || c == '\t') { cut = i; break; }
+                // 数值连写也可：遇数字/小数点/负号即截断
+                if (i > 0 && (char.IsDigit(c) || c == '.' || c == '-')) { cut = i; break; }
+            }
+            if (cut <= 0) return false;
+
+            string head = normalized.Substring(0, cut).TrimEnd(' ', ',', ';', '\t');
+            if (!IsKnownCommand(head)) return false;
+            command = head;
+            payload = normalized.Substring(cut).TrimStart(' ', ',', ';', '\t');
+            return true;
         }
 
         /// <summary>判断原始报文是否为已知指令。</summary>
@@ -113,8 +145,154 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceStateApiCore
                 || cmd == TxGoPreStop
                 || cmd == TxGoWeldStop
                 || cmd == TxGoStopSafe
-                || cmd == TxOK
+                || cmd == TxNG
                 || cmd == TxAbort;
+        }
+
+        #endregion
+
+        #region 指令释意字典（供 MainPage Dash 机器人指令显示）
+
+        /// <summary>指令 → 中文释意（供 MainPage Dash 和日志显示）。</summary>
+        /// <remarks>新增指令须同步在此字典加释意。</remarks>
+        public static readonly Dictionary<string, string> CommandDescriptions = new Dictionary<string, string>
+        {
+            // Rx（机器人 → 设备）
+            { RxHomePose, "机器人到归零位" },
+            { RxStartSafePose, "机器人到安全起始位" },
+            { RxPreWeldPose, "机器人到焊前位" },
+            { RxWeldStartPose, "机器人到焊接起始位" },
+            { RxPreStopPose, "机器人到预停位" },
+            { RxWeldStopPose, "机器人到焊接停止位" },
+            { RxStopSafePose, "机器人到安全停止位" },
+            { RxPreWeldRequest, "机器人请求进入焊前" },
+            { RxAbort, "机器人请求急停" },
+            // Tx（设备 → 机器人）
+            { TxGoHome, "下发回零指令" },
+            { TxGoStartSafe, "下发去安全起始位" },
+            { TxGoPreWeld, "下发去焊前位" },
+            { TxGoWeldStart, "下发去焊接起始位" },
+            { TxGoPreStop, "下发去预停位" },
+            { TxGoWeldStop, "下发去焊接停止位" },
+            { TxGoStopSafe, "下发回安全停止位" },
+            { TxNG, "焊接异常 通知机器人停止" },
+            { TxAbort, "下发急停指令" },
+        };
+
+        /// <summary>把指令常量翻译成中文释意（未命中返回原始指</summary>
+        /// <remarks>载荷报文先拆指令头再查字典。
+        /// 保证载荷报文也能显示释意。 令串）。</remarks>
+        /// <returns>结果文本。</returns>
+        public static string TranslateCommand(string command)
+        {
+            if (string.IsNullOrEmpty(command)) return "——";
+            string key = Normalize(command);
+            if (string.IsNullOrEmpty(key)) return "——";
+            // 带载荷报文：拆出指令头再查字典
+            if (TrySplitPayload(key, out string head, out _))
+            {
+                key = head;
+            }
+            return CommandDescriptions.TryGetValue(key, out var desc) ? desc : key;
+        }
+
+        #endregion
+
+        #region 数值码映射（RSI 数值化协议：上行 RxCmd / 下行 TxCmd）
+
+        /// <summary>上行指令码（RxCmd）→ 指令常量名。</summary>
+        /// <remarks>契约见 robot-comm-spec/WeldControlConfig.xml SEND 段与《机器人通讯指令表.xlsx》RX 编码表。
+        /// RSI 的 SEND 段 TYPE 仅 BOOL/DOUBLE/LONG 不含 STRING，故上行指令必须数值化。</remarks>
+        private static readonly Dictionary<int, string> RxCodeToCommand = new Dictionary<int, string>
+        {
+            { 1, RxHomePose },
+            { 2, RxStartSafePose },
+            { 3, RxPreWeldPose },
+            { 4, RxWeldStartPose },
+            { 5, RxPreStopPose },
+            { 6, RxWeldStopPose },
+            { 7, RxStopSafePose },
+            { 8, RxPreWeldRequest },
+            { 9, RxAbort }
+        };
+
+        /// <summary>下行指令码（TxCmd）→ 指令常量名。</summary>
+        /// <remarks>契约见《配置_本机(上位机)_RSI统一通讯配置.xml》。
+        /// 8=TX_NG 焊接异常，9=TX_ABORT，10 备用不映射；原 TX_OK 已由机器人侧移除。</remarks>
+        private static readonly Dictionary<int, string> TxCodeToCommand = new Dictionary<int, string>
+        {
+            { 1, TxGoHome },
+            { 2, TxGoStartSafe },
+            { 3, TxGoPreWeld },
+            { 4, TxGoWeldStart },
+            { 5, TxGoPreStop },
+            { 6, TxGoWeldStop },
+            { 7, TxGoStopSafe },
+            { 8, TxNG },
+            { 9, TxAbort }
+        };
+
+        /// <summary>指令常量名 → 下行指令码（TxCmd 数值码）。</summary>
+        private static readonly Dictionary<string, int> CommandToTxCode = BuildTxCodeReverse();
+
+        /// <summary>构造下行指令码反查表（由 TxCodeToCommand 反向生成，避免两处手</summary>
+        /// <remarks>写不同步）。</remarks>
+        /// <returns>指令常量名 → 数值码</returns>
+        private static Dictionary<string, int> BuildTxCodeReverse()
+        {
+            Dictionary<string, int> map = new Dictionary<string, int>();
+            foreach (KeyValuePair<int, string> kv in TxCodeToCommand)
+            {
+                map[kv.Value] = kv.Key;
+            }
+            return map;
+        }
+
+        /// <summary>上行指令码 → 指令常量名。</summary>
+        /// <param name="rxCode">上行数值码（0=无指令）</param>
+        /// <returns>命中返回指令常量名；未命中返回空串</returns>
+        public static string RxCodeToCommandName(int rxCode)
+        {
+            return RxCodeToCommand.TryGetValue(rxCode, out string name) ? name : string.Empty;
+        }
+
+        /// <summary>下行指令码 → 指令常量名。</summary>
+        /// <param name="txCode">下行数值码（0=无指令）</param>
+        /// <returns>命中返回指令常量名；未命中返回空串</returns>
+        public static string TxCodeToCommandName(int txCode)
+        {
+            return TxCodeToCommand.TryGetValue(txCode, out string name) ? name : string.Empty;
+        }
+
+        /// <summary>下行指令常量名 → 数值码。</summary>
+        /// <param name="command">指令常量名（如 TxGoHome）</param>
+        /// <returns>命中返回数值码；未命中返回 0</returns>
+        public static int CommandToTxCodeValue(string command)
+        {
+            if (string.IsNullOrEmpty(command)) return 0;
+            return CommandToTxCode.TryGetValue(Normalize(command), out int code) ? code : 0;
+        }
+
+        /// <summary>上行指令码 → 中文释意（调试面板用；未命中返回码</summary>
+        /// <remarks>值文本）。</remarks>
+        /// <param name="rxCode">上行数值码</param>
+        /// <returns>释意文本</returns>
+        public static string DescribeRxCode(int rxCode)
+        {
+            string name = RxCodeToCommandName(rxCode);
+            if (string.IsNullOrEmpty(name)) return rxCode == 0 ? "无指令" : string.Format("未知上行码 {0}", rxCode);
+            return TranslateCommand(name);
+        }
+
+        /// <summary>下行指令码 → 中文释意（调试面板用；未命中返回码</summary>
+        /// <remarks>值文本）。</remarks>
+        /// <param name="txCode">下行数值码</param>
+        /// <returns>释意文本</returns>
+        public static string DescribeTxCode(int txCode)
+        {
+            string name = TxCodeToCommandName(txCode);
+            if (string.IsNullOrEmpty(name)) return txCode == 0 ? "无指令" : string.Format("未知下行码 {0}", txCode);
+            return TranslateCommand(name);
         }
 
         #endregion

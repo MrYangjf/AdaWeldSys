@@ -4,8 +4,8 @@ using Emgu.CV;
 namespace AdaWeldSystem.EmguALG.Abstractions
 {
     /// <summary>
-    /// 算法抽象：输入统一为监控相机图像 Mat，输出强类型结果。
-    /// 与 IMonitorCamApi 同构的「抽象先行」契约，使换算法后端时 UI 与业务层零改动。
+    /// 算法抽象：输入相机图像 Mat，输出强类型结果。
+    /// 抽象先行：换后端时 UI 与业务层零改动。
     /// </summary>
     /// <typeparam name="TResult">算法结果类型，须派生自 AlgorithmResult</typeparam>
     public interface IAlgorithm<TResult> where TResult : AlgorithmResult
@@ -13,7 +13,7 @@ namespace AdaWeldSystem.EmguALG.Abstractions
         /// <summary>算法名称（用于日志与结果标识）</summary>
         string AlgorithmName { get; }
 
-        /// <summary>是否正在执行（防重入：同一算法实例不允许并发执行）</summary>
+        /// <summary>是否正在执行（防重入，不允许并发）</summary>
         bool IsBusy { get; }
 
         /// <summary>

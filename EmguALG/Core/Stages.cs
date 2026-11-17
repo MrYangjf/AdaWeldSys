@@ -7,23 +7,17 @@ using Emgu.CV.CvEnum;
 namespace AdaWeldSystem.EmguALG.Core
 {   
     /// <summary>
-    /// 阶段配置抽象基类 - 提供属性变更通知与算子参数管理
+    /// 阶段配置抽象基类：属性变更通知与算子参数
     /// </summary>
     public abstract class StageBase : INotifyPropertyChanged
     {
+        private Dictionary<string, string> _parameters = new Dictionary<string, string>();
         public event PropertyChangedEventHandler PropertyChanged;
         protected void OnPropertyChanged([CallerMemberName] string name = null) =>
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
 
         protected abstract Dictionary<string, string> GetDefaultParametersForOperation(Enum operation);
 
-        protected void ResetParametersForOperation(Enum newOp)
-        {
-            Parameters = GetDefaultParametersForOperation(newOp);
-            OnPropertyChanged(nameof(Parameters));
-        }
-
-        private Dictionary<string, string> _parameters = new Dictionary<string, string>();
         [Category("参数"), Description("算子参数")]
         public Dictionary<string, string> Parameters
         {
@@ -33,6 +27,12 @@ namespace AdaWeldSystem.EmguALG.Core
                 _parameters = value ?? new Dictionary<string, string>();
                 OnPropertyChanged();
             }
+        }
+
+        protected void ResetParametersForOperation(Enum newOp)
+        {
+            Parameters = GetDefaultParametersForOperation(newOp);
+            OnPropertyChanged(nameof(Parameters));
         }
     }
 
@@ -158,7 +158,7 @@ namespace AdaWeldSystem.EmguALG.Core
     }
 
     /// <summary>
-    /// 边缘检测阶段配置 - 管理边缘检测算子类型与参数
+    /// 边缘检测阶段配置（算子与参数）
     /// </summary>
     [TypeConverter(typeof(ExpandableObjectConverter))]
     public class EdgeDetectionStage : StageBase
@@ -223,7 +223,7 @@ namespace AdaWeldSystem.EmguALG.Core
     }
 
     /// <summary>
-    /// 特征提取阶段配置 - 管理特征提取算子类型与轮廓近似算法
+    /// 特征提取阶段配置（算子与近似算法）
     /// </summary>
     [TypeConverter(typeof(ExpandableObjectConverter))]
     public class FeatureExtractionStage : StageBase
@@ -293,7 +293,7 @@ namespace AdaWeldSystem.EmguALG.Core
     }
 
     /// <summary>
-    /// 模板匹配阶段配置 - 管理模板匹配算子类型与结果显示开关
+    /// 模板匹配阶段配置（算子与显示开关）
     /// </summary>
     [TypeConverter(typeof(ExpandableObjectConverter))]
     public class TemplateMatchStage : StageBase
@@ -344,12 +344,28 @@ namespace AdaWeldSystem.EmguALG.Core
     }
 
     /// <summary>
-    /// 流水线完整配置 - 聚合所有阶段配置并提供深拷贝
+    /// 流水线完整配置：聚合各阶段并支持深拷贝
     /// </summary>
     [TypeConverter(typeof(ExpandableObjectConverter))]
     public class PipelineConfig
     {
         // 构造函数：初始化各阶段配置并写入默认参数
+        [Category("1. 滤波"), DisplayName("滤波阶段")]
+        public FilterStage Filter { get; set; }
+
+        [Category("2. 形态学"), DisplayName("形态学阶段")]
+        public MorphologyStage Morphology { get; set; }
+
+        [Category("3. 边缘检测"), DisplayName("边缘检测阶段")]
+        public EdgeDetectionStage EdgeDetection { get; set; }
+
+        [Category("4. 特征提取"), DisplayName("特征提取阶段")]
+        public FeatureExtractionStage FeatureExtraction { get; set; }
+
+        [Category("5. 模板匹配"), DisplayName("模板匹配阶段")]
+        public TemplateMatchStage TemplateMatch { get; set; }
+
+        // 深拷贝整个流水线配置
         public PipelineConfig()
         {
             Filter = new FilterStage();
@@ -372,30 +388,16 @@ namespace AdaWeldSystem.EmguALG.Core
             TemplateMatch.Parameters["template"] = "template.jpg";
         }
 
-        [Category("1. 滤波"), DisplayName("滤波阶段")]
-        public FilterStage Filter { get; set; }
-
-        [Category("2. 形态学"), DisplayName("形态学阶段")]
-        public MorphologyStage Morphology { get; set; }
-
-        [Category("3. 边缘检测"), DisplayName("边缘检测阶段")]
-        public EdgeDetectionStage EdgeDetection { get; set; }
-
-        [Category("4. 特征提取"), DisplayName("特征提取阶段")]
-        public FeatureExtractionStage FeatureExtraction { get; set; }
-
-        [Category("5. 模板匹配"), DisplayName("模板匹配阶段")]
-        public TemplateMatchStage TemplateMatch { get; set; }
-
-        // 深拷贝整个流水线配置
         public PipelineConfig Clone()
         {
-            var clone = new PipelineConfig();
-            clone.Filter = Filter?.Clone();
-            clone.Morphology = Morphology?.Clone();
-            clone.EdgeDetection = EdgeDetection?.Clone();
-            clone.FeatureExtraction = FeatureExtraction?.Clone();
-            clone.TemplateMatch = TemplateMatch?.Clone();
+            var clone = new PipelineConfig
+            {
+                Filter = Filter?.Clone(),
+                Morphology = Morphology?.Clone(),
+                EdgeDetection = EdgeDetection?.Clone(),
+                FeatureExtraction = FeatureExtraction?.Clone(),
+                TemplateMatch = TemplateMatch?.Clone()
+            };
             return clone;
         }
     }

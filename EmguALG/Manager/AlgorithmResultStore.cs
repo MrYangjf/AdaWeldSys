@@ -4,8 +4,8 @@ using AdaWeldSystem.EmguALG.Core;
 namespace AdaWeldSystem.EmguALG.Manager
 {
     /// <summary>
-    /// 结果缓存（池化快照 + 版本号）：算法线程写入，UI 线程按版本号拉取。
-    /// 与监控相机帧缓存、线激光轮廓缓存同构，避免高频结果走事件造成事件风暴。
+    /// 结果缓存：池化快照 + 版本号，线程安全拉取。
+    /// 避免高频结果走事件造成风暴。
     /// </summary>
     /// <typeparam name="TResult">缓存的结果类型</typeparam>
     public sealed class AlgorithmResultStore<TResult> : IResultStore<TResult> where TResult : AlgorithmResult

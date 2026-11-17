@@ -6,14 +6,17 @@ using System.Text;
 namespace AdaWeldSystem.SQLiteDBControl.SQLiteCore
 {
     /// <summary>
-    /// SQLite数据库基础操作类
-    /// 提供连接管理、SQL执行、数据查询等底层数据库操作
+    /// SQLite 数据库基础操作类。
+    /// 提供连接管理、SQL 执行与数据查询等底层操作。
     /// </summary>
     public class SQLiteDataBase
     {
         private SQLiteConnection _connection;
         private string _connectionString;
         private bool _disposed;
+
+        /// <summary>连接锁：界面与落库线程共用单连接，须串行。</summary>
+        private readonly object _sync = new object();
 
         /// <summary>
         /// 默认构造函数
@@ -33,7 +36,7 @@ namespace AdaWeldSystem.SQLiteDBControl.SQLiteCore
         }
 
         /// <summary>
-        /// 释放资源（按 ADR-020 使用标准 IDisposable.Dispose，不重写 Dispose(bool)）
+        /// 释放资源（标准 IDisposable.Dispose，不重写 Dispose(bool)）
         /// </summary>
         public void Dispose()
         {
@@ -67,13 +70,16 @@ namespace AdaWeldSystem.SQLiteDBControl.SQLiteCore
         /// </summary>
         public void OnInitConnect()
         {
-            if (_connection == null)
+            lock (_sync)
             {
-                throw new InvalidOperationException("数据库连接未初始化，请先调用构造函数或ConnectDBFile方法");
-            }
-            if (_connection.State != ConnectionState.Open)
-            {
-                _connection.Open();
+                if (_connection == null)
+                {
+                    throw new InvalidOperationException("数据库连接未初始化，请先调用构造函数或ConnectDBFile方法");
+                }
+                if (_connection.State != ConnectionState.Open)
+                {
+                    _connection.Open();
+                }
             }
         }
 
@@ -82,9 +88,12 @@ namespace AdaWeldSystem.SQLiteDBControl.SQLiteCore
         /// </summary>
         public void ExitConnect()
         {
-            if (_connection != null && _connection.State == ConnectionState.Open)
+            lock (_sync)
             {
-                _connection.Close();
+                if (_connection != null && _connection.State == ConnectionState.Open)
+                {
+                    _connection.Close();
+                }
             }
         }
 
@@ -105,23 +114,7 @@ namespace AdaWeldSystem.SQLiteDBControl.SQLiteCore
         /// <returns>执行成功返回true，失败返回false</returns>
         public bool ExecuteSQL(string strSQL)
         {
-            OnInitConnect();
-            try
-            {
-                using (var cmd = new SQLiteCommand(strSQL, _connection))
-                {
-                    int count = cmd.ExecuteNonQuery();
-                    return count >= 0;
-                }
-            }
-            catch (Exception e)
-            {
-                throw new SQLiteException(string.Format("执行SQL失败 SqlString {0} 异常信息 {1}", strSQL, e.Message), e);
-            }
-            finally
-            {
-                ExitConnect();
-            }
+            return ExecuteSQL(strSQL, null);
         }
 
         /// <summary>
@@ -132,26 +125,29 @@ namespace AdaWeldSystem.SQLiteDBControl.SQLiteCore
         /// <returns>执行成功返回true，失败返回false</returns>
         public bool ExecuteSQL(string strSQL, SQLiteParameter[] parameters)
         {
-            OnInitConnect();
-            try
+            lock (_sync)
             {
-                using (var cmd = new SQLiteCommand(strSQL, _connection))
+                OnInitConnect();
+                try
                 {
-                    if (parameters != null)
+                    using (var cmd = new SQLiteCommand(strSQL, _connection))
                     {
-                        cmd.Parameters.AddRange(parameters);
+                        if (parameters != null)
+                        {
+                            cmd.Parameters.AddRange(parameters);
+                        }
+                        int count = cmd.ExecuteNonQuery();
+                        return count >= 0;
                     }
-                    int count = cmd.ExecuteNonQuery();
-                    return count >= 0;
                 }
-            }
-            catch (Exception e)
-            {
-                throw new SQLiteException(string.Format("执行SQL失败 SqlString {0} 异常信息 {1}", strSQL, e.Message), e);
-            }
-            finally
-            {
-                ExitConnect();
+                catch (Exception e)
+                {
+                    throw new SQLiteException(string.Format("执行SQL失败 SqlString {0} 异常信息 {1}", strSQL, e.Message), e);
+                }
+                finally
+                {
+                    ExitConnect();
+                }
             }
         }
 
@@ -162,24 +158,7 @@ namespace AdaWeldSystem.SQLiteDBControl.SQLiteCore
         /// <returns>查询结果DataSet</returns>
         public DataSet GetDataSet(string strSQL)
         {
-            var dataset = new DataSet();
-            OnInitConnect();
-            try
-            {
-                using (var adapter = new SQLiteDataAdapter(strSQL, _connection))
-                {
-                    adapter.Fill(dataset);
-                }
-            }
-            catch (Exception e)
-            {
-                throw new SQLiteException(string.Format("GetDataSet失败 SqlString {0} 异常信息 {1}", strSQL, e.Message), e);
-            }
-            finally
-            {
-                ExitConnect();
-            }
-            return dataset;
+            return GetDataSet(strSQL, null);
         }
 
         /// <summary>
@@ -190,28 +169,31 @@ namespace AdaWeldSystem.SQLiteDBControl.SQLiteCore
         /// <returns>查询结果DataSet</returns>
         public DataSet GetDataSet(string strSQL, SQLiteParameter[] parameters)
         {
-            var dataset = new DataSet();
-            OnInitConnect();
-            try
+            lock (_sync)
             {
-                using (var adapter = new SQLiteDataAdapter(strSQL, _connection))
+                var dataset = new DataSet();
+                OnInitConnect();
+                try
                 {
-                    if (parameters != null)
+                    using (var adapter = new SQLiteDataAdapter(strSQL, _connection))
                     {
-                        adapter.SelectCommand.Parameters.AddRange(parameters);
+                        if (parameters != null)
+                        {
+                            adapter.SelectCommand.Parameters.AddRange(parameters);
+                        }
+                        adapter.Fill(dataset);
                     }
-                    adapter.Fill(dataset);
                 }
+                catch (Exception e)
+                {
+                    throw new SQLiteException(string.Format("GetDataSet失败 SqlString {0} 异常信息 {1}", strSQL, e.Message), e);
+                }
+                finally
+                {
+                    ExitConnect();
+                }
+                return dataset;
             }
-            catch (Exception e)
-            {
-                throw new SQLiteException(string.Format("GetDataSet失败 SqlString {0} 异常信息 {1}", strSQL, e.Message), e);
-            }
-            finally
-            {
-                ExitConnect();
-            }
-            return dataset;
         }
 
         /// <summary>
@@ -221,28 +203,28 @@ namespace AdaWeldSystem.SQLiteDBControl.SQLiteCore
         /// <returns>存在返回true，不存在返回false</returns>
         public bool IsExistTable(string tableName)
         {
-            if (_connection == null)
+            lock (_sync)
             {
-                return false;
-            }
-
-            try
-            {
-                _connection.Open();
-                DataTable schemaTable = _connection.GetSchema("Tables");
-                string filter = string.Format("TABLE_TYPE='table' AND TABLE_NAME='{0}'", tableName);
-                DataRow[] rows = schemaTable.Select(filter);
-                return rows.Length > 0;
-            }
-            catch
-            {
-                return false;
-            }
-            finally
-            {
-                if (_connection.State == ConnectionState.Open)
+                if (_connection == null)
                 {
-                    _connection.Close();
+                    return false;
+                }
+
+                try
+                {
+                    _connection.Open();
+                    DataTable schemaTable = _connection.GetSchema("Tables");
+                    string filter = string.Format("TABLE_TYPE='table' AND TABLE_NAME='{0}'", tableName);
+                    DataRow[] rows = schemaTable.Select(filter);
+                    return rows.Length > 0;
+                }
+                catch
+                {
+                    return false;
+                }
+                finally
+                {
+                    ExitConnect();
                 }
             }
         }
@@ -253,44 +235,44 @@ namespace AdaWeldSystem.SQLiteDBControl.SQLiteCore
         /// <param name="n">保留天数，之前的表全部删除</param>
         public void DropDateTable(double n)
         {
-            if (_connection == null)
+            lock (_sync)
             {
-                return;
-            }
-
-            try
-            {
-                _connection.Open();
-                DataTable schemaTable = _connection.GetSchema("Tables", new string[] { null, null, null, "TABLE" });
-                for (int i = 0; i < schemaTable.Rows.Count; i++)
+                if (_connection == null)
                 {
-                    try
+                    return;
+                }
+
+                try
+                {
+                    _connection.Open();
+                    DataTable schemaTable = _connection.GetSchema("Tables", new string[] { null, null, null, "TABLE" });
+                    for (int i = 0; i < schemaTable.Rows.Count; i++)
                     {
-                        string tableName = schemaTable.Rows[i][2].ToString();
-                        if (DateTime.TryParseExact(tableName, "yyyyMMdd", null, System.Globalization.DateTimeStyles.None, out DateTime tableDate))
+                        try
                         {
-                            DateTime cutoffDate = DateTime.Now.AddDays(-n);
-                            if (tableDate <= cutoffDate)
+                            string tableName = schemaTable.Rows[i][2].ToString();
+                            if (DateTime.TryParseExact(tableName, "yyyyMMdd", null, System.Globalization.DateTimeStyles.None, out DateTime tableDate))
                             {
-                                string sqlStr = string.Format("DROP TABLE IF EXISTS '{0}'", tableName);
-                                using (var cmd = new SQLiteCommand(sqlStr, _connection))
+                                DateTime cutoffDate = DateTime.Now.AddDays(-n);
+                                if (tableDate <= cutoffDate)
                                 {
-                                    cmd.ExecuteNonQuery();
+                                    string sqlStr = string.Format("DROP TABLE IF EXISTS '{0}'", tableName);
+                                    using (var cmd = new SQLiteCommand(sqlStr, _connection))
+                                    {
+                                        cmd.ExecuteNonQuery();
+                                    }
                                 }
                             }
                         }
-                    }
-                    catch
-                    {
-                        // 静默处理单个表删除失败
+                        catch
+                        {
+                            // 静默处理单个表删除失败
+                        }
                     }
                 }
-            }
-            finally
-            {
-                if (_connection.State == ConnectionState.Open)
+                finally
                 {
-                    _connection.Close();
+                    ExitConnect();
                 }
             }
         }
@@ -313,36 +295,39 @@ namespace AdaWeldSystem.SQLiteDBControl.SQLiteCore
         /// <returns>创建成功返回true，失败返回false</returns>
         public bool CreateTable(string strTableName, string[] tableColumn)
         {
-            if (tableColumn == null || tableColumn.Length == 0)
+            lock (_sync)
             {
-                return false;
-            }
-
-            try
-            {
-                if (!IsExistTable(strTableName))
+                if (tableColumn == null || tableColumn.Length == 0)
                 {
-                    var sb = new StringBuilder();
-                    for (int i = 0; i < tableColumn.Length; i++)
-                    {
-                        sb.Append(",[").Append(tableColumn[i]).Append("] char(10) not null");
-                    }
-                    OnInitConnect();
-                    string strSQL = string.Format("CREATE TABLE {0}([AUTOID] INTEGER PRIMARY KEY AUTOINCREMENT{1})", strTableName, sb.ToString());
-                    using (var cmd = new SQLiteCommand(strSQL, _connection))
-                    {
-                        cmd.ExecuteNonQuery();
-                    }
+                    return false;
                 }
-                return true;
-            }
-            catch (Exception e)
-            {
-                throw new SQLiteException(string.Format("创建表失败 {0}", e.Message), e);
-            }
-            finally
-            {
-                ExitConnect();
+
+                try
+                {
+                    if (!IsExistTable(strTableName))
+                    {
+                        var sb = new StringBuilder();
+                        for (int i = 0; i < tableColumn.Length; i++)
+                        {
+                            sb.Append(",[").Append(tableColumn[i]).Append("] char(10) not null");
+                        }
+                        OnInitConnect();
+                        string strSQL = string.Format("CREATE TABLE {0}([AUTOID] INTEGER PRIMARY KEY AUTOINCREMENT{1})", strTableName, sb.ToString());
+                        using (var cmd = new SQLiteCommand(strSQL, _connection))
+                        {
+                            cmd.ExecuteNonQuery();
+                        }
+                    }
+                    return true;
+                }
+                catch (Exception e)
+                {
+                    throw new SQLiteException(string.Format("创建表失败 {0}", e.Message), e);
+                }
+                finally
+                {
+                    ExitConnect();
+                }
             }
         }
 
@@ -355,33 +340,36 @@ namespace AdaWeldSystem.SQLiteDBControl.SQLiteCore
         /// <returns>创建成功返回true，失败返回false</returns>
         public bool CreateTable(string strTableName, string[] tableColumn, int[] columnLength)
         {
-            if (tableColumn == null || tableColumn.Length == 0 || columnLength == null || columnLength.Length != tableColumn.Length)
+            lock (_sync)
             {
-                return false;
-            }
+                if (tableColumn == null || tableColumn.Length == 0 || columnLength == null || columnLength.Length != tableColumn.Length)
+                {
+                    return false;
+                }
 
-            try
-            {
-                var sb = new StringBuilder();
-                for (int i = 0; i < tableColumn.Length; i++)
+                try
                 {
-                    sb.Append(",[").Append(tableColumn[i]).Append("] char(").Append(columnLength[i]).Append(") not null");
+                    var sb = new StringBuilder();
+                    for (int i = 0; i < tableColumn.Length; i++)
+                    {
+                        sb.Append(",[").Append(tableColumn[i]).Append("] char(").Append(columnLength[i]).Append(") not null");
+                    }
+                    OnInitConnect();
+                    string strSQL = string.Format("CREATE TABLE {0}([AUTOID] INTEGER PRIMARY KEY AUTOINCREMENT{1})", strTableName, sb.ToString());
+                    using (var cmd = new SQLiteCommand(strSQL, _connection))
+                    {
+                        cmd.ExecuteNonQuery();
+                    }
+                    return true;
                 }
-                OnInitConnect();
-                string strSQL = string.Format("CREATE TABLE {0}([AUTOID] INTEGER PRIMARY KEY AUTOINCREMENT{1})", strTableName, sb.ToString());
-                using (var cmd = new SQLiteCommand(strSQL, _connection))
+                catch (Exception e)
                 {
-                    cmd.ExecuteNonQuery();
+                    throw new SQLiteException(string.Format("创建表失败 {0}", e.Message), e);
                 }
-                return true;
-            }
-            catch (Exception e)
-            {
-                throw new SQLiteException(string.Format("创建表失败 {0}", e.Message), e);
-            }
-            finally
-            {
-                ExitConnect();
+                finally
+                {
+                    ExitConnect();
+                }
             }
         }
 
@@ -535,14 +523,7 @@ namespace AdaWeldSystem.SQLiteDBControl.SQLiteCore
         /// <returns>查询结果字符串</returns>
         public string GetDataString(string sqlString)
         {
-            DataSet dataset = GetDataSet(sqlString);
-            dataset.CaseSensitive = false;
-            if (dataset.Tables.Count > 0 && dataset.Tables[0].Rows.Count > 0)
-            {
-                object value = dataset.Tables[0].Rows[0].ItemArray.GetValue(0);
-                return value != null ? value.ToString() : string.Empty;
-            }
-            return string.Empty;
+            return GetDataString(sqlString, null);
         }
 
         /// <summary>

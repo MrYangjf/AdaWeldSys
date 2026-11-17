@@ -4,10 +4,7 @@ using AdaWeldSystem.LineLaserCam.ILineLaser;
 namespace AdaWeldSystem.LineLaserCam
 {
     /// <summary>线激光相机注册表</summary>
-    /// <remarks>
-    /// 统一管理业务层用到的全部线激光相机，按键名登记并保证同一键名只有一个实例。
-    /// 登记与退订由 LineLaserManager 负责（登记即订阅事件），本表只做索引与枚举。
-    /// </remarks>
+    /// <remarks>按键名登记且同键名唯一；登记/退订由 LineLaserManager 负责，本表只做索引与枚举。</remarks>
     public class CameraRegistry
     {
         #region 私有变量
@@ -49,8 +46,7 @@ namespace AdaWeldSystem.LineLaserCam
         /// <returns>相机对象，未找到返回 null</returns>
         public LineLaserCameraBase Get(string name)
         {
-            LineLaserCameraBase camera;
-            return _items.TryGetValue(name, out camera) ? camera : null;
+            return _items.TryGetValue(name, out LineLaserCameraBase camera) ? camera : null;
         }
 
         /// <summary>判断是否已登记</summary>

@@ -1,10 +1,6 @@
-﻿namespace AdaWeldSystem.LineLaserCam.ILineLaser
+﻿﻿namespace AdaWeldSystem.LineLaserCam.ILineLaser
 {
     /// <summary>线激光相机种类</summary>
-    /// <remarks>
-    /// 2026-09-08 重构：SmartRay 与海康机器人 3D 两套实现已从代码库移除，
-    /// 线激光族只保留英莱（真实）与虚拟（调试）两类。
-    /// </remarks>
     public enum LineLaserKind
     {
         /// <summary>未配置相机</summary>
@@ -19,8 +15,9 @@
 
     /// <summary>线激光相机连接状态</summary>
     /// <remarks>
-    /// 相机自身只关心「是否已连上硬件 / 是否正在出图」，
-    /// 与工作流程状态相互独立（[[decisions/ADR-013-CameraConnectionStateDecoupled]]）。
+    /// 相机自身只关心「是否已连上硬件」。
+    /// 也只关心「是否正在出图」。
+    /// 与工作流程状态相互独立。
     /// </remarks>
     public enum LineLaserConnectionState
     {
@@ -32,5 +29,21 @@
 
         /// <summary>已连接且正在采集/出图中（工作流处于采集态）</summary>
         Working
+    }
+
+    /// <summary>线激光失败语境（决定 DescribeLastError 返回的描述种类）</summary>
+    public enum LineLaserErrorContext
+    {
+        /// <summary>连接失败（SDK 连接返回码 / 服务位掩码）</summary>
+        Connection,
+
+        /// <summary>初始化失败（SDK 初始化或状态校验）</summary>
+        Initialization,
+
+        /// <summary>识别失败（算法解析结果，读 ParseRes / ErrorCode）</summary>
+        Recognition,
+
+        /// <summary>指令返回码（切 JOB、建 JOB、删 JOB、参数下发等）</summary>
+        ReturnCode
     }
 }

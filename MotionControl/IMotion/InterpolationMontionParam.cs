@@ -3,17 +3,7 @@ namespace AdaWeldSystem.MotionControl.IMotion
     /// <summary>插补运动参数</summary>
     public class InterpolationMontionParam
     {
-        /// <summary>创建插补参数</summary>
-        /// <param name="montionType">插补类型</param>
-        /// <param name="axisCount">参与插补的轴数</param>
-        public InterpolationMontionParam(InterpolationType montionType, ushort axisCount)
-        {
-            MontionType = montionType;
-            _axisCount = axisCount;
-            lstAxis = new ushort[axisCount];
-            lstTargetPos = new double[axisCount];
-            lstCenterPos = new double[axisCount];
-        }
+        private readonly ushort _axisCount;
 
         /// <summary>插补类型</summary>
         public InterpolationType MontionType { get; set; }
@@ -54,9 +44,19 @@ namespace AdaWeldSystem.MotionControl.IMotion
         /// <summary>停止速度（工程单位/秒）</summary>
         public double _stopVel;
 
-        private readonly ushort _axisCount;
-
         /// <summary>参与插补的轴数</summary>
         public ushort AxisCount { get { return _axisCount; } }
+
+        /// <summary>创建插补参数</summary>
+        /// <param name="montionType">插补类型</param>
+        /// <param name="axisCount">参与插补的轴数</param>
+        public InterpolationMontionParam(InterpolationType montionType, ushort axisCount)
+        {
+            MontionType = montionType;
+            _axisCount = axisCount;
+            lstAxis = new ushort[axisCount];
+            lstTargetPos = new double[axisCount];
+            lstCenterPos = new double[axisCount];
+        }
     }
 }

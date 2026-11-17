@@ -7,15 +7,12 @@ using System.Windows.Forms;
 
 namespace AdaWeldSystem.UIDesign.SubDialog.DataReviewerDialog
 {
-    /// <summary>
-    /// 记录配置对话框
-    /// 用于设置临时文件和保存文件的保存路径，以及混淆选项
-    /// </summary>
+    /// <summary>记录配置：保存路径/pDat 混淆/保留天数</summary>
     public partial class RecordConfigForm : UserControl
     {
         AntdUI.FolderBrowserDialog folderDialog = new AntdUI.FolderBrowserDialog();
 
-        // 复刻 AntdUI demo SystemSet 模式：注入父 Window，内部方法用 this.Window 作 owner
+        // 注入父 Window，内部方法用 this.Window 作 owner
         private readonly Window Window;
 
         public RecordConfigForm() : this(null) { }
@@ -27,21 +24,14 @@ namespace AdaWeldSystem.UIDesign.SubDialog.DataReviewerDialog
             LoadConfig();
         }
 
-        /// <summary>
-        /// 从INI加载配置到界面
-        /// </summary>
+        /// <summary>从INI加载配置到界面</summary>
         private void LoadConfig()
         {
-            // 读规范化后的路径（ProductFileRecordManager 已在构造时对空路径回退默认值）
-            string recordDir = ProductFileRecordManager.Instance.RecordDirectory;
-            string tempDir = ProductFileRecordManager.Instance.TempDirectory;
-            bool useObfuscation = ProductFileRecordManager.Instance.UseObfuscation;
+            txtRecordPath.Text = ProductFileRecordManager.Instance.RecordDirectory;
+            chkUseObfuscation.Checked = ProductFileRecordManager.Instance.UseObfuscation;
+            chkRecordEveryFrame.Checked = ProductFileRecordManager.Instance.RecordEveryFrame;
+            txtRetention.Text = ProductFileRecordManager.Instance.RetentionDays.ToString();
 
-            txtRecordPath.Text = recordDir;
-            txtTempPath.Text = tempDir;
-            chkUseObfuscation.Checked = useObfuscation;
-
-            // 提示路径回退信息（配置路径为空时已回退默认）
             string fallback = ProductFileRecordManager.Instance.PathFallbackMessage;
             if (!string.IsNullOrEmpty(fallback))
             {
@@ -49,22 +39,29 @@ namespace AdaWeldSystem.UIDesign.SubDialog.DataReviewerDialog
             }
         }
 
-        /// <summary>
-        /// 保存配置到INI并更新管理器
-        /// </summary>
+        /// <summary>保存配置到INI并更新管理器</summary>
         private void SaveConfig()
         {
+            if (!int.TryParse(txtRetention.Text.Trim(), out int retainDays) || retainDays < 0)
+            {
+                AntdUI.Message.error(this.Window, "记录保留天数须为不小于0的整数（0=永久保留）！");
+                return;
+            }
 
             ProductFileRecordManager.Instance.ConfigFile.WriteString("Paths", "RecordDirectory", txtRecordPath.Text);
-            ProductFileRecordManager.Instance.ConfigFile.WriteString("Paths", "TempDirectory", txtTempPath.Text);
             ProductFileRecordManager.Instance.ConfigFile.WriteBool("Settings", "UseObfuscation", chkUseObfuscation.Checked);
+            ProductFileRecordManager.Instance.ConfigFile.WriteBool("Settings", "RecordEveryFrame", chkRecordEveryFrame.Checked);
+            ProductFileRecordManager.Instance.ConfigFile.WriteInt("Settings", "RetentionDays", retainDays);
 
-            // 同步更新 ProductFileRecordManager
             ProductFileRecordManager.Instance.RecordDirectory = txtRecordPath.Text;
-            ProductFileRecordManager.Instance.TempDirectory = txtTempPath.Text;
             ProductFileRecordManager.Instance.UseObfuscation = chkUseObfuscation.Checked;
+            ProductFileRecordManager.Instance.RecordEveryFrame = chkRecordEveryFrame.Checked;
+            ProductFileRecordManager.Instance.RetentionDays = retainDays;
 
             ProductFileRecordManager.Instance.ConfigFile.SaveToFile();
+
+            // 保存后立即按新保留天数清理过期记录
+            ProductFileRecordManager.Instance.CleanupExpiredRecords();
 
             AntdUI.Message.success(this.Window, "配置已保存！");
         }
@@ -80,43 +77,19 @@ namespace AdaWeldSystem.UIDesign.SubDialog.DataReviewerDialog
 
         }
 
-        private void btnBrowseTemp_Click(object sender, EventArgs e)
-        {
-            folderDialog.DirectoryPath = txtTempPath.Text;
-
-            if (folderDialog.ShowDialog() == DialogResult.OK)
-            {
-                txtTempPath.Text = folderDialog.DirectoryPath;
-            }
-
-        }
-
         private void btnSave_Click(object sender, EventArgs e)
         {
             try
             {
-                // 验证路径有效性
                 if (string.IsNullOrWhiteSpace(txtRecordPath.Text))
                 {
                     AntdUI.Message.error(this.Window, "记录文件路径不能为空！");
                     return;
                 }
 
-                if (string.IsNullOrWhiteSpace(txtTempPath.Text))
-                {
-                    AntdUI.Message.error(this.Window, "临时文件路径不能为空！");
-                    return;
-                }
-
-                // 确保目录存在
                 if (!Directory.Exists(txtRecordPath.Text))
                 {
                     Directory.CreateDirectory(txtRecordPath.Text);
-                }
-
-                if (!Directory.Exists(txtTempPath.Text))
-                {
-                    Directory.CreateDirectory(txtTempPath.Text);
                 }
 
                 SaveConfig();

@@ -1,4 +1,5 @@
 ﻿using AdaWeldSystem.EmguALG.Abstractions;
+using AdaWeldSystem.EmguALG.Core;
 using Emgu.CV;
 using System;
 using System.Diagnostics;
@@ -6,8 +7,8 @@ using System.Diagnostics;
 namespace AdaWeldSystem.EmguALG.RealtimeMonitor.WeldQuality
 {
     /// <summary>
-    /// 焊接质量检测（焊中）：识别焊道成形与缺陷，输出质量分与合格判定。
-    /// 纯算子实现仍在 ImageAlgorithm（ADR-038：算子库唯一文件），本类只做契约封装与计时。
+    /// 焊接质量检测（焊中）：输出质量分与判定。
+    /// 纯算子在 ImageAlgorithm，本类封装与计时。
     /// </summary>
     public sealed class WeldQualityAlgorithm : IAlgorithm<WeldQualityResult>, IConfigurableAlgorithm<WeldQualityConfig>
     {
@@ -69,8 +70,10 @@ namespace AdaWeldSystem.EmguALG.RealtimeMonitor.WeldQuality
         {
             if (IsBusy)
             {
-                WeldQualityResult busy = new WeldQualityResult();
-                busy.ErrorMessage = "算法正在执行，已拒绝重入";
+                WeldQualityResult busy = new WeldQualityResult
+                {
+                    ErrorMessage = "算法正在执行，已拒绝重入"
+                };
                 return busy;
             }
 
@@ -81,8 +84,10 @@ namespace AdaWeldSystem.EmguALG.RealtimeMonitor.WeldQuality
                 WeldQualityResult result = ImageAlgorithm.DetectWeldQuality(input, _config);
                 if (result == null)
                 {
-                    result = new WeldQualityResult();
-                    result.ErrorMessage = "焊接质量检测无结果";
+                    result = new WeldQualityResult
+                    {
+                        ErrorMessage = "焊接质量检测无结果"
+                    };
                     return result;
                 }
                 result.Success = true;
@@ -92,10 +97,12 @@ namespace AdaWeldSystem.EmguALG.RealtimeMonitor.WeldQuality
             }
             catch (Exception ex)
             {
-                WeldQualityResult failed = new WeldQualityResult();
-                failed.ErrorMessage = ex.Message;
-                failed.Algorithm = _algorithmName;
-                failed.ElapsedMs = watch.Elapsed.TotalMilliseconds;
+                WeldQualityResult failed = new WeldQualityResult
+                {
+                    ErrorMessage = ex.Message,
+                    Algorithm = _algorithmName,
+                    ElapsedMs = watch.Elapsed.TotalMilliseconds
+                };
                 return failed;
             }
             finally

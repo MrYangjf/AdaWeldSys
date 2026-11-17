@@ -100,7 +100,7 @@ namespace AdaWeldSystem.UIDesign.SubDialog.DataReviewerDialog
             // 
             this.uiGroupBox1.Controls.Add(this.uiComboBox1);
             this.uiGroupBox1.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.uiGroupBox1.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.uiGroupBox1.Font = new System.Drawing.Font("Microsoft YaHei UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.uiGroupBox1.Location = new System.Drawing.Point(10, 10);
             this.uiGroupBox1.Margin = new System.Windows.Forms.Padding(0, 0, 0, 5);
             this.uiGroupBox1.MinimumSize = new System.Drawing.Size(1, 1);
@@ -113,7 +113,7 @@ namespace AdaWeldSystem.UIDesign.SubDialog.DataReviewerDialog
             // uiComboBox1
             // 
             this.uiComboBox1.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.uiComboBox1.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.uiComboBox1.Font = new System.Drawing.Font("Microsoft YaHei UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.uiComboBox1.Location = new System.Drawing.Point(10, 32);
             this.uiComboBox1.Margin = new System.Windows.Forms.Padding(4, 5, 4, 5);
             this.uiComboBox1.MinimumSize = new System.Drawing.Size(63, 0);
@@ -127,7 +127,7 @@ namespace AdaWeldSystem.UIDesign.SubDialog.DataReviewerDialog
             // 
             this.uiGroupBox2.Controls.Add(this.tableLayoutPanelParam);
             this.uiGroupBox2.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.uiGroupBox2.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.uiGroupBox2.Font = new System.Drawing.Font("Microsoft YaHei UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.uiGroupBox2.Location = new System.Drawing.Point(10, 95);
             this.uiGroupBox2.Margin = new System.Windows.Forms.Padding(0, 5, 0, 5);
             this.uiGroupBox2.MinimumSize = new System.Drawing.Size(1, 1);
@@ -159,7 +159,7 @@ namespace AdaWeldSystem.UIDesign.SubDialog.DataReviewerDialog
             // 
             this.uiGroupBox3.Controls.Add(this.tableLayoutPanelCloud);
             this.uiGroupBox3.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.uiGroupBox3.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.uiGroupBox3.Font = new System.Drawing.Font("Microsoft YaHei UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.uiGroupBox3.Location = new System.Drawing.Point(10, 329);
             this.uiGroupBox3.Margin = new System.Windows.Forms.Padding(0, 5, 0, 5);
             this.uiGroupBox3.MinimumSize = new System.Drawing.Size(1, 1);
@@ -193,7 +193,7 @@ namespace AdaWeldSystem.UIDesign.SubDialog.DataReviewerDialog
             // 
             // uiSymbolLabelPointSize
             // 
-            this.uiSymbolLabelPointSize.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.uiSymbolLabelPointSize.Font = new System.Drawing.Font("Microsoft YaHei UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.uiSymbolLabelPointSize.Location = new System.Drawing.Point(0, 0);
             this.uiSymbolLabelPointSize.MinimumSize = new System.Drawing.Size(1, 1);
             this.uiSymbolLabelPointSize.Name = "uiSymbolLabelPointSize";
@@ -206,7 +206,7 @@ namespace AdaWeldSystem.UIDesign.SubDialog.DataReviewerDialog
             // 
             this.PointSize.Cursor = System.Windows.Forms.Cursors.IBeam;
             this.PointSize.DecimalPlaces = 2;
-            this.PointSize.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.PointSize.Font = new System.Drawing.Font("Microsoft YaHei UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.PointSize.Location = new System.Drawing.Point(0, 0);
             this.PointSize.Margin = new System.Windows.Forms.Padding(5, 3, 5, 3);
             this.PointSize.Maximum = 10M;
@@ -222,7 +222,7 @@ namespace AdaWeldSystem.UIDesign.SubDialog.DataReviewerDialog
             // 
             // uiSymbolLabelDisplayRatio
             // 
-            this.uiSymbolLabelDisplayRatio.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.uiSymbolLabelDisplayRatio.Font = new System.Drawing.Font("Microsoft YaHei UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.uiSymbolLabelDisplayRatio.Location = new System.Drawing.Point(0, 0);
             this.uiSymbolLabelDisplayRatio.MinimumSize = new System.Drawing.Size(1, 1);
             this.uiSymbolLabelDisplayRatio.Name = "uiSymbolLabelDisplayRatio";
@@ -235,7 +235,7 @@ namespace AdaWeldSystem.UIDesign.SubDialog.DataReviewerDialog
             // 
             this.DisplayRatio.Cursor = System.Windows.Forms.Cursors.IBeam;
             this.DisplayRatio.DecimalPlaces = 2;
-            this.DisplayRatio.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.DisplayRatio.Font = new System.Drawing.Font("Microsoft YaHei UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.DisplayRatio.Location = new System.Drawing.Point(0, 0);
             this.DisplayRatio.Margin = new System.Windows.Forms.Padding(5, 3, 5, 3);
             this.DisplayRatio.Maximum = 1M;
@@ -252,7 +252,7 @@ namespace AdaWeldSystem.UIDesign.SubDialog.DataReviewerDialog
             // ZColorEnabled
             // 
             this.ZColorEnabled.Cursor = System.Windows.Forms.Cursors.Hand;
-            this.ZColorEnabled.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.ZColorEnabled.Font = new System.Drawing.Font("Microsoft YaHei UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.ZColorEnabled.Location = new System.Drawing.Point(0, 0);
             this.ZColorEnabled.MinimumSize = new System.Drawing.Size(1, 1);
             this.ZColorEnabled.Name = "ZColorEnabled";
@@ -281,7 +281,7 @@ namespace AdaWeldSystem.UIDesign.SubDialog.DataReviewerDialog
             // btnSave
             // 
             this.btnSave.Cursor = System.Windows.Forms.Cursors.Hand;
-            this.btnSave.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.btnSave.Font = new System.Drawing.Font("Microsoft YaHei UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.btnSave.Location = new System.Drawing.Point(190, 10);
             this.btnSave.Margin = new System.Windows.Forms.Padding(3, 10, 3, 10);
             this.btnSave.MinimumSize = new System.Drawing.Size(1, 1);
@@ -294,7 +294,7 @@ namespace AdaWeldSystem.UIDesign.SubDialog.DataReviewerDialog
             // btnCancel
             // 
             this.btnCancel.Cursor = System.Windows.Forms.Cursors.Hand;
-            this.btnCancel.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.btnCancel.Font = new System.Drawing.Font("Microsoft YaHei UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.btnCancel.Location = new System.Drawing.Point(377, 10);
             this.btnCancel.Margin = new System.Windows.Forms.Padding(3, 10, 3, 10);
             this.btnCancel.MinimumSize = new System.Drawing.Size(1, 1);
@@ -306,7 +306,7 @@ namespace AdaWeldSystem.UIDesign.SubDialog.DataReviewerDialog
             // 
             // uiSymbolLabelNeighborRadius
             // 
-            this.uiSymbolLabelNeighborRadius.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.uiSymbolLabelNeighborRadius.Font = new System.Drawing.Font("Microsoft YaHei UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.uiSymbolLabelNeighborRadius.Location = new System.Drawing.Point(0, 0);
             this.uiSymbolLabelNeighborRadius.MinimumSize = new System.Drawing.Size(1, 1);
             this.uiSymbolLabelNeighborRadius.Name = "uiSymbolLabelNeighborRadius";
@@ -318,7 +318,7 @@ namespace AdaWeldSystem.UIDesign.SubDialog.DataReviewerDialog
             // NeighborSearchRadius
             // 
             this.NeighborSearchRadius.Cursor = System.Windows.Forms.Cursors.IBeam;
-            this.NeighborSearchRadius.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.NeighborSearchRadius.Font = new System.Drawing.Font("Microsoft YaHei UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.NeighborSearchRadius.Location = new System.Drawing.Point(0, 0);
             this.NeighborSearchRadius.Margin = new System.Windows.Forms.Padding(5, 3, 5, 3);
             this.NeighborSearchRadius.Maximum = 100M;
@@ -334,7 +334,7 @@ namespace AdaWeldSystem.UIDesign.SubDialog.DataReviewerDialog
             // 
             // uiSymbolLabelNeighborMaxNeighbors
             // 
-            this.uiSymbolLabelNeighborMaxNeighbors.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.uiSymbolLabelNeighborMaxNeighbors.Font = new System.Drawing.Font("Microsoft YaHei UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.uiSymbolLabelNeighborMaxNeighbors.Location = new System.Drawing.Point(0, 0);
             this.uiSymbolLabelNeighborMaxNeighbors.MinimumSize = new System.Drawing.Size(1, 1);
             this.uiSymbolLabelNeighborMaxNeighbors.Name = "uiSymbolLabelNeighborMaxNeighbors";
@@ -346,7 +346,7 @@ namespace AdaWeldSystem.UIDesign.SubDialog.DataReviewerDialog
             // NeighborMaxNeighbors
             // 
             this.NeighborMaxNeighbors.Cursor = System.Windows.Forms.Cursors.IBeam;
-            this.NeighborMaxNeighbors.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.NeighborMaxNeighbors.Font = new System.Drawing.Font("Microsoft YaHei UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.NeighborMaxNeighbors.Location = new System.Drawing.Point(0, 0);
             this.NeighborMaxNeighbors.Margin = new System.Windows.Forms.Padding(5, 3, 5, 3);
             this.NeighborMaxNeighbors.Maximum = 1000M;
@@ -361,7 +361,7 @@ namespace AdaWeldSystem.UIDesign.SubDialog.DataReviewerDialog
             // 
             // uiSymbolLabelNeighborSampleStep
             // 
-            this.uiSymbolLabelNeighborSampleStep.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.uiSymbolLabelNeighborSampleStep.Font = new System.Drawing.Font("Microsoft YaHei UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.uiSymbolLabelNeighborSampleStep.Location = new System.Drawing.Point(0, 0);
             this.uiSymbolLabelNeighborSampleStep.MinimumSize = new System.Drawing.Size(1, 1);
             this.uiSymbolLabelNeighborSampleStep.Name = "uiSymbolLabelNeighborSampleStep";
@@ -373,7 +373,7 @@ namespace AdaWeldSystem.UIDesign.SubDialog.DataReviewerDialog
             // NeighborSampleStep
             // 
             this.NeighborSampleStep.Cursor = System.Windows.Forms.Cursors.IBeam;
-            this.NeighborSampleStep.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.NeighborSampleStep.Font = new System.Drawing.Font("Microsoft YaHei UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.NeighborSampleStep.Location = new System.Drawing.Point(0, 0);
             this.NeighborSampleStep.Margin = new System.Windows.Forms.Padding(5, 3, 5, 3);
             this.NeighborSampleStep.Maximum = 100M;
@@ -388,7 +388,7 @@ namespace AdaWeldSystem.UIDesign.SubDialog.DataReviewerDialog
             // 
             // uiSymbolLabelBallRadius
             // 
-            this.uiSymbolLabelBallRadius.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.uiSymbolLabelBallRadius.Font = new System.Drawing.Font("Microsoft YaHei UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.uiSymbolLabelBallRadius.Location = new System.Drawing.Point(0, 0);
             this.uiSymbolLabelBallRadius.MinimumSize = new System.Drawing.Size(1, 1);
             this.uiSymbolLabelBallRadius.Name = "uiSymbolLabelBallRadius";
@@ -400,7 +400,7 @@ namespace AdaWeldSystem.UIDesign.SubDialog.DataReviewerDialog
             // BallPivotingRadius
             // 
             this.BallPivotingRadius.Cursor = System.Windows.Forms.Cursors.IBeam;
-            this.BallPivotingRadius.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.BallPivotingRadius.Font = new System.Drawing.Font("Microsoft YaHei UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.BallPivotingRadius.Location = new System.Drawing.Point(0, 0);
             this.BallPivotingRadius.Margin = new System.Windows.Forms.Padding(5, 3, 5, 3);
             this.BallPivotingRadius.Maximum = 100M;
@@ -416,7 +416,7 @@ namespace AdaWeldSystem.UIDesign.SubDialog.DataReviewerDialog
             // 
             // uiSymbolLabelBallSampleStep
             // 
-            this.uiSymbolLabelBallSampleStep.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.uiSymbolLabelBallSampleStep.Font = new System.Drawing.Font("Microsoft YaHei UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.uiSymbolLabelBallSampleStep.Location = new System.Drawing.Point(0, 0);
             this.uiSymbolLabelBallSampleStep.MinimumSize = new System.Drawing.Size(1, 1);
             this.uiSymbolLabelBallSampleStep.Name = "uiSymbolLabelBallSampleStep";
@@ -428,7 +428,7 @@ namespace AdaWeldSystem.UIDesign.SubDialog.DataReviewerDialog
             // BallPivotingSampleStep
             // 
             this.BallPivotingSampleStep.Cursor = System.Windows.Forms.Cursors.IBeam;
-            this.BallPivotingSampleStep.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.BallPivotingSampleStep.Font = new System.Drawing.Font("Microsoft YaHei UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.BallPivotingSampleStep.Location = new System.Drawing.Point(0, 0);
             this.BallPivotingSampleStep.Margin = new System.Windows.Forms.Padding(5, 3, 5, 3);
             this.BallPivotingSampleStep.Maximum = 100M;
@@ -443,7 +443,7 @@ namespace AdaWeldSystem.UIDesign.SubDialog.DataReviewerDialog
             // 
             // uiSymbolLabelBallMaxNeighbors
             // 
-            this.uiSymbolLabelBallMaxNeighbors.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.uiSymbolLabelBallMaxNeighbors.Font = new System.Drawing.Font("Microsoft YaHei UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.uiSymbolLabelBallMaxNeighbors.Location = new System.Drawing.Point(0, 0);
             this.uiSymbolLabelBallMaxNeighbors.MinimumSize = new System.Drawing.Size(1, 1);
             this.uiSymbolLabelBallMaxNeighbors.Name = "uiSymbolLabelBallMaxNeighbors";
@@ -455,7 +455,7 @@ namespace AdaWeldSystem.UIDesign.SubDialog.DataReviewerDialog
             // BallPivotingMaxNeighbors
             // 
             this.BallPivotingMaxNeighbors.Cursor = System.Windows.Forms.Cursors.IBeam;
-            this.BallPivotingMaxNeighbors.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.BallPivotingMaxNeighbors.Font = new System.Drawing.Font("Microsoft YaHei UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.BallPivotingMaxNeighbors.Location = new System.Drawing.Point(0, 0);
             this.BallPivotingMaxNeighbors.Margin = new System.Windows.Forms.Padding(5, 3, 5, 3);
             this.BallPivotingMaxNeighbors.Maximum = 1000M;
@@ -470,7 +470,7 @@ namespace AdaWeldSystem.UIDesign.SubDialog.DataReviewerDialog
             // 
             // uiSymbolLabelAlphaValue
             // 
-            this.uiSymbolLabelAlphaValue.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.uiSymbolLabelAlphaValue.Font = new System.Drawing.Font("Microsoft YaHei UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.uiSymbolLabelAlphaValue.Location = new System.Drawing.Point(0, 0);
             this.uiSymbolLabelAlphaValue.MinimumSize = new System.Drawing.Size(1, 1);
             this.uiSymbolLabelAlphaValue.Name = "uiSymbolLabelAlphaValue";
@@ -482,7 +482,7 @@ namespace AdaWeldSystem.UIDesign.SubDialog.DataReviewerDialog
             // AlphaShapeAlpha
             // 
             this.AlphaShapeAlpha.Cursor = System.Windows.Forms.Cursors.IBeam;
-            this.AlphaShapeAlpha.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.AlphaShapeAlpha.Font = new System.Drawing.Font("Microsoft YaHei UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.AlphaShapeAlpha.Location = new System.Drawing.Point(0, 0);
             this.AlphaShapeAlpha.Margin = new System.Windows.Forms.Padding(5, 3, 5, 3);
             this.AlphaShapeAlpha.Maximum = 100M;
@@ -498,7 +498,7 @@ namespace AdaWeldSystem.UIDesign.SubDialog.DataReviewerDialog
             // 
             // uiSymbolLabelAlphaSampleStep
             // 
-            this.uiSymbolLabelAlphaSampleStep.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.uiSymbolLabelAlphaSampleStep.Font = new System.Drawing.Font("Microsoft YaHei UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.uiSymbolLabelAlphaSampleStep.Location = new System.Drawing.Point(0, 0);
             this.uiSymbolLabelAlphaSampleStep.MinimumSize = new System.Drawing.Size(1, 1);
             this.uiSymbolLabelAlphaSampleStep.Name = "uiSymbolLabelAlphaSampleStep";
@@ -510,7 +510,7 @@ namespace AdaWeldSystem.UIDesign.SubDialog.DataReviewerDialog
             // AlphaShapeSampleStep
             // 
             this.AlphaShapeSampleStep.Cursor = System.Windows.Forms.Cursors.IBeam;
-            this.AlphaShapeSampleStep.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.AlphaShapeSampleStep.Font = new System.Drawing.Font("Microsoft YaHei UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.AlphaShapeSampleStep.Location = new System.Drawing.Point(0, 0);
             this.AlphaShapeSampleStep.Margin = new System.Windows.Forms.Padding(5, 3, 5, 3);
             this.AlphaShapeSampleStep.Maximum = 100M;
@@ -525,7 +525,7 @@ namespace AdaWeldSystem.UIDesign.SubDialog.DataReviewerDialog
             // 
             // uiSymbolLabelAlphaMaxNeighbors
             // 
-            this.uiSymbolLabelAlphaMaxNeighbors.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.uiSymbolLabelAlphaMaxNeighbors.Font = new System.Drawing.Font("Microsoft YaHei UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.uiSymbolLabelAlphaMaxNeighbors.Location = new System.Drawing.Point(0, 0);
             this.uiSymbolLabelAlphaMaxNeighbors.MinimumSize = new System.Drawing.Size(1, 1);
             this.uiSymbolLabelAlphaMaxNeighbors.Name = "uiSymbolLabelAlphaMaxNeighbors";
@@ -537,7 +537,7 @@ namespace AdaWeldSystem.UIDesign.SubDialog.DataReviewerDialog
             // AlphaShapeMaxNeighbors
             // 
             this.AlphaShapeMaxNeighbors.Cursor = System.Windows.Forms.Cursors.IBeam;
-            this.AlphaShapeMaxNeighbors.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.AlphaShapeMaxNeighbors.Font = new System.Drawing.Font("Microsoft YaHei UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.AlphaShapeMaxNeighbors.Location = new System.Drawing.Point(0, 0);
             this.AlphaShapeMaxNeighbors.Margin = new System.Windows.Forms.Padding(5, 3, 5, 3);
             this.AlphaShapeMaxNeighbors.Maximum = 1000M;
@@ -552,7 +552,7 @@ namespace AdaWeldSystem.UIDesign.SubDialog.DataReviewerDialog
             // 
             // uiSymbolLabelDelaunayQuality
             // 
-            this.uiSymbolLabelDelaunayQuality.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.uiSymbolLabelDelaunayQuality.Font = new System.Drawing.Font("Microsoft YaHei UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.uiSymbolLabelDelaunayQuality.Location = new System.Drawing.Point(0, 0);
             this.uiSymbolLabelDelaunayQuality.MinimumSize = new System.Drawing.Size(1, 1);
             this.uiSymbolLabelDelaunayQuality.Name = "uiSymbolLabelDelaunayQuality";
@@ -565,7 +565,7 @@ namespace AdaWeldSystem.UIDesign.SubDialog.DataReviewerDialog
             // 
             this.DelaunayQualityThreshold.Cursor = System.Windows.Forms.Cursors.IBeam;
             this.DelaunayQualityThreshold.DecimalPlaces = 3;
-            this.DelaunayQualityThreshold.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.DelaunayQualityThreshold.Font = new System.Drawing.Font("Microsoft YaHei UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.DelaunayQualityThreshold.Location = new System.Drawing.Point(0, 0);
             this.DelaunayQualityThreshold.Margin = new System.Windows.Forms.Padding(5, 3, 5, 3);
             this.DelaunayQualityThreshold.Maximum = 1M;
@@ -581,7 +581,7 @@ namespace AdaWeldSystem.UIDesign.SubDialog.DataReviewerDialog
             // 
             // uiSymbolLabelDelaunayRadiusMultiplier
             // 
-            this.uiSymbolLabelDelaunayRadiusMultiplier.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.uiSymbolLabelDelaunayRadiusMultiplier.Font = new System.Drawing.Font("Microsoft YaHei UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.uiSymbolLabelDelaunayRadiusMultiplier.Location = new System.Drawing.Point(0, 0);
             this.uiSymbolLabelDelaunayRadiusMultiplier.MinimumSize = new System.Drawing.Size(1, 1);
             this.uiSymbolLabelDelaunayRadiusMultiplier.Name = "uiSymbolLabelDelaunayRadiusMultiplier";
@@ -593,7 +593,7 @@ namespace AdaWeldSystem.UIDesign.SubDialog.DataReviewerDialog
             // DelaunaySearchRadiusMultiplier
             // 
             this.DelaunaySearchRadiusMultiplier.Cursor = System.Windows.Forms.Cursors.IBeam;
-            this.DelaunaySearchRadiusMultiplier.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.DelaunaySearchRadiusMultiplier.Font = new System.Drawing.Font("Microsoft YaHei UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.DelaunaySearchRadiusMultiplier.Location = new System.Drawing.Point(0, 0);
             this.DelaunaySearchRadiusMultiplier.Margin = new System.Windows.Forms.Padding(5, 3, 5, 3);
             this.DelaunaySearchRadiusMultiplier.Maximum = 10M;
@@ -609,7 +609,7 @@ namespace AdaWeldSystem.UIDesign.SubDialog.DataReviewerDialog
             // 
             // uiSymbolLabelDelaunaySampleStep
             // 
-            this.uiSymbolLabelDelaunaySampleStep.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.uiSymbolLabelDelaunaySampleStep.Font = new System.Drawing.Font("Microsoft YaHei UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.uiSymbolLabelDelaunaySampleStep.Location = new System.Drawing.Point(0, 0);
             this.uiSymbolLabelDelaunaySampleStep.MinimumSize = new System.Drawing.Size(1, 1);
             this.uiSymbolLabelDelaunaySampleStep.Name = "uiSymbolLabelDelaunaySampleStep";
@@ -621,7 +621,7 @@ namespace AdaWeldSystem.UIDesign.SubDialog.DataReviewerDialog
             // DelaunaySampleStep
             // 
             this.DelaunaySampleStep.Cursor = System.Windows.Forms.Cursors.IBeam;
-            this.DelaunaySampleStep.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.DelaunaySampleStep.Font = new System.Drawing.Font("Microsoft YaHei UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.DelaunaySampleStep.Location = new System.Drawing.Point(0, 0);
             this.DelaunaySampleStep.Margin = new System.Windows.Forms.Padding(5, 3, 5, 3);
             this.DelaunaySampleStep.Maximum = 100M;
@@ -636,7 +636,7 @@ namespace AdaWeldSystem.UIDesign.SubDialog.DataReviewerDialog
             // 
             // uiSymbolLabelDelaunayMaxNeighbors
             // 
-            this.uiSymbolLabelDelaunayMaxNeighbors.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.uiSymbolLabelDelaunayMaxNeighbors.Font = new System.Drawing.Font("Microsoft YaHei UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.uiSymbolLabelDelaunayMaxNeighbors.Location = new System.Drawing.Point(0, 0);
             this.uiSymbolLabelDelaunayMaxNeighbors.MinimumSize = new System.Drawing.Size(1, 1);
             this.uiSymbolLabelDelaunayMaxNeighbors.Name = "uiSymbolLabelDelaunayMaxNeighbors";
@@ -648,7 +648,7 @@ namespace AdaWeldSystem.UIDesign.SubDialog.DataReviewerDialog
             // DelaunayMaxNeighbors
             // 
             this.DelaunayMaxNeighbors.Cursor = System.Windows.Forms.Cursors.IBeam;
-            this.DelaunayMaxNeighbors.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.DelaunayMaxNeighbors.Font = new System.Drawing.Font("Microsoft YaHei UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.DelaunayMaxNeighbors.Location = new System.Drawing.Point(0, 0);
             this.DelaunayMaxNeighbors.Margin = new System.Windows.Forms.Padding(5, 3, 5, 3);
             this.DelaunayMaxNeighbors.Maximum = 1000M;
@@ -663,7 +663,7 @@ namespace AdaWeldSystem.UIDesign.SubDialog.DataReviewerDialog
             // 
             // uiSymbolLabelPoissonDepth
             // 
-            this.uiSymbolLabelPoissonDepth.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.uiSymbolLabelPoissonDepth.Font = new System.Drawing.Font("Microsoft YaHei UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.uiSymbolLabelPoissonDepth.Location = new System.Drawing.Point(0, 0);
             this.uiSymbolLabelPoissonDepth.MinimumSize = new System.Drawing.Size(1, 1);
             this.uiSymbolLabelPoissonDepth.Name = "uiSymbolLabelPoissonDepth";
@@ -675,7 +675,7 @@ namespace AdaWeldSystem.UIDesign.SubDialog.DataReviewerDialog
             // PoissonDepth
             // 
             this.PoissonDepth.Cursor = System.Windows.Forms.Cursors.IBeam;
-            this.PoissonDepth.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.PoissonDepth.Font = new System.Drawing.Font("Microsoft YaHei UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.PoissonDepth.Location = new System.Drawing.Point(0, 0);
             this.PoissonDepth.Margin = new System.Windows.Forms.Padding(5, 3, 5, 3);
             this.PoissonDepth.Maximum = 20M;
@@ -690,7 +690,7 @@ namespace AdaWeldSystem.UIDesign.SubDialog.DataReviewerDialog
             // 
             // uiSymbolLabelPoissonSamplesPerNode
             // 
-            this.uiSymbolLabelPoissonSamplesPerNode.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.uiSymbolLabelPoissonSamplesPerNode.Font = new System.Drawing.Font("Microsoft YaHei UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.uiSymbolLabelPoissonSamplesPerNode.Location = new System.Drawing.Point(0, 0);
             this.uiSymbolLabelPoissonSamplesPerNode.MinimumSize = new System.Drawing.Size(1, 1);
             this.uiSymbolLabelPoissonSamplesPerNode.Name = "uiSymbolLabelPoissonSamplesPerNode";
@@ -702,7 +702,7 @@ namespace AdaWeldSystem.UIDesign.SubDialog.DataReviewerDialog
             // PoissonSamplesPerNode
             // 
             this.PoissonSamplesPerNode.Cursor = System.Windows.Forms.Cursors.IBeam;
-            this.PoissonSamplesPerNode.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.PoissonSamplesPerNode.Font = new System.Drawing.Font("Microsoft YaHei UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.PoissonSamplesPerNode.Location = new System.Drawing.Point(0, 0);
             this.PoissonSamplesPerNode.Margin = new System.Windows.Forms.Padding(5, 3, 5, 3);
             this.PoissonSamplesPerNode.Maximum = 100M;
@@ -717,7 +717,7 @@ namespace AdaWeldSystem.UIDesign.SubDialog.DataReviewerDialog
             // 
             // uiSymbolLabelPoissonMaxCells
             // 
-            this.uiSymbolLabelPoissonMaxCells.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.uiSymbolLabelPoissonMaxCells.Font = new System.Drawing.Font("Microsoft YaHei UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.uiSymbolLabelPoissonMaxCells.Location = new System.Drawing.Point(0, 0);
             this.uiSymbolLabelPoissonMaxCells.MinimumSize = new System.Drawing.Size(1, 1);
             this.uiSymbolLabelPoissonMaxCells.Name = "uiSymbolLabelPoissonMaxCells";
@@ -729,7 +729,7 @@ namespace AdaWeldSystem.UIDesign.SubDialog.DataReviewerDialog
             // PoissonMaxCells
             // 
             this.PoissonMaxCells.Cursor = System.Windows.Forms.Cursors.IBeam;
-            this.PoissonMaxCells.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.PoissonMaxCells.Font = new System.Drawing.Font("Microsoft YaHei UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.PoissonMaxCells.Location = new System.Drawing.Point(0, 0);
             this.PoissonMaxCells.Margin = new System.Windows.Forms.Padding(5, 3, 5, 3);
             this.PoissonMaxCells.Maximum = 1000000M;
@@ -744,7 +744,7 @@ namespace AdaWeldSystem.UIDesign.SubDialog.DataReviewerDialog
             // 
             // uiSymbolLabelMlsRadius
             // 
-            this.uiSymbolLabelMlsRadius.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.uiSymbolLabelMlsRadius.Font = new System.Drawing.Font("Microsoft YaHei UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.uiSymbolLabelMlsRadius.Location = new System.Drawing.Point(0, 0);
             this.uiSymbolLabelMlsRadius.MinimumSize = new System.Drawing.Size(1, 1);
             this.uiSymbolLabelMlsRadius.Name = "uiSymbolLabelMlsRadius";
@@ -756,7 +756,7 @@ namespace AdaWeldSystem.UIDesign.SubDialog.DataReviewerDialog
             // MlsSearchRadius
             // 
             this.MlsSearchRadius.Cursor = System.Windows.Forms.Cursors.IBeam;
-            this.MlsSearchRadius.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.MlsSearchRadius.Font = new System.Drawing.Font("Microsoft YaHei UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.MlsSearchRadius.Location = new System.Drawing.Point(0, 0);
             this.MlsSearchRadius.Margin = new System.Windows.Forms.Padding(5, 3, 5, 3);
             this.MlsSearchRadius.Maximum = 100M;
@@ -772,7 +772,7 @@ namespace AdaWeldSystem.UIDesign.SubDialog.DataReviewerDialog
             // 
             // uiSymbolLabelMlsSampleStep
             // 
-            this.uiSymbolLabelMlsSampleStep.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.uiSymbolLabelMlsSampleStep.Font = new System.Drawing.Font("Microsoft YaHei UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.uiSymbolLabelMlsSampleStep.Location = new System.Drawing.Point(0, 0);
             this.uiSymbolLabelMlsSampleStep.MinimumSize = new System.Drawing.Size(1, 1);
             this.uiSymbolLabelMlsSampleStep.Name = "uiSymbolLabelMlsSampleStep";
@@ -784,7 +784,7 @@ namespace AdaWeldSystem.UIDesign.SubDialog.DataReviewerDialog
             // MlsSampleStep
             // 
             this.MlsSampleStep.Cursor = System.Windows.Forms.Cursors.IBeam;
-            this.MlsSampleStep.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.MlsSampleStep.Font = new System.Drawing.Font("Microsoft YaHei UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.MlsSampleStep.Location = new System.Drawing.Point(0, 0);
             this.MlsSampleStep.Margin = new System.Windows.Forms.Padding(5, 3, 5, 3);
             this.MlsSampleStep.Maximum = 100M;
@@ -799,7 +799,7 @@ namespace AdaWeldSystem.UIDesign.SubDialog.DataReviewerDialog
             // 
             // uiSymbolLabelMlsMaxNeighbors
             // 
-            this.uiSymbolLabelMlsMaxNeighbors.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.uiSymbolLabelMlsMaxNeighbors.Font = new System.Drawing.Font("Microsoft YaHei UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.uiSymbolLabelMlsMaxNeighbors.Location = new System.Drawing.Point(0, 0);
             this.uiSymbolLabelMlsMaxNeighbors.MinimumSize = new System.Drawing.Size(1, 1);
             this.uiSymbolLabelMlsMaxNeighbors.Name = "uiSymbolLabelMlsMaxNeighbors";
@@ -811,7 +811,7 @@ namespace AdaWeldSystem.UIDesign.SubDialog.DataReviewerDialog
             // MlsMaxNeighbors
             // 
             this.MlsMaxNeighbors.Cursor = System.Windows.Forms.Cursors.IBeam;
-            this.MlsMaxNeighbors.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.MlsMaxNeighbors.Font = new System.Drawing.Font("Microsoft YaHei UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.MlsMaxNeighbors.Location = new System.Drawing.Point(0, 0);
             this.MlsMaxNeighbors.Margin = new System.Windows.Forms.Padding(5, 3, 5, 3);
             this.MlsMaxNeighbors.Maximum = 1000M;

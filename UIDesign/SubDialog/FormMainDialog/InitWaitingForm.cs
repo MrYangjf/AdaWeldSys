@@ -4,7 +4,7 @@ using System.Windows.Forms;
 
 namespace AdaWeldSystem.UIDesign.SubDialog.FormMainDialog
 {
-    /// <summary>初始化等待面板：作为 Modal 内容承载，初始化结束事件到达后经 DialogResult 关闭所在 Modal。</summary>
+    /// <summary>初始化等待面板：Modal 内容，结束后自动关闭。</summary>
     public class InitWaitingForm : UserControl
     {
         #region 私有变量
@@ -35,7 +35,7 @@ namespace AdaWeldSystem.UIDesign.SubDialog.FormMainDialog
         #region 公共函数
 
         /// <summary>初始化结束后更新提示文本。</summary>
-        /// <param name="success">是否全部子设备就绪</param>
+        /// <param name="success">是否全部模组就绪</param>
         public void SetResult(bool success)
         {
             _lblText.Text = success ? "初始化完成 待复位" : "初始化失败 请查看日志";

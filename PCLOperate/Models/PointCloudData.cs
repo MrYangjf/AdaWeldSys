@@ -20,6 +20,14 @@ namespace AdaWeldSystem.PCLOperate.Models
         {
             Clear();
         }
+        public PointCloudData(PointCloudData other)
+        {
+            if (other == null) return;
+            foreach (var p in other.Points)
+                _points.Add(new Point3D(p.X, p.Y, p.Z));
+            foreach (var cp in other.ColoredPoints)
+                _coloredPoints.Add(new Point3DColor(cp.X, cp.Y, cp.Z, cp.R, cp.G, cp.B, cp.A));
+        }
 
         /// <summary>
         /// 点列表
@@ -63,18 +71,6 @@ namespace AdaWeldSystem.PCLOperate.Models
         public void AddPoint(Point3D point)
         {
             _points.Add(point);
-        }
-
-        /// <summary>
-        /// 拷贝构造：深拷贝另一个 PointCloudData 的所有点
-        /// </summary>
-        public PointCloudData(PointCloudData other)
-        {
-            if (other == null) return;
-            foreach (var p in other.Points)
-                _points.Add(new Point3D(p.X, p.Y, p.Z));
-            foreach (var cp in other.ColoredPoints)
-                _coloredPoints.Add(new Point3DColor(cp.X, cp.Y, cp.Z, cp.R, cp.G, cp.B, cp.A));
         }
 
         /// <summary>
@@ -148,6 +144,7 @@ namespace AdaWeldSystem.PCLOperate.Models
         /// <summary>
         /// 转换为彩色点列表（如果没有颜色，使用默认白色）
         /// </summary>
+        /// <returns>结果集合。</returns>
         public List<Point3DColor> ToColoredPoints(byte defaultR = 255, byte defaultG = 255, byte defaultB = 255)
         {
             if (HasColor)

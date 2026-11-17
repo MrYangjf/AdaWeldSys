@@ -4,8 +4,8 @@ using AdaWeldSystem.SQLiteDBControl.Helpers;
 namespace AdaWeldSystem.SQLiteDBControl
 {
     /// <summary>
-    /// SQLite 数据库管理器
-    /// 统一持有各功能 Helper，是对外唯一访问口径
+    /// SQLite 数据库管理器。
+    /// 统一持有各功能 Helper，是对外唯一访问口径。
     /// </summary>
     public class SQLiteDatabaseManager : IDisposable
     {
@@ -51,7 +51,7 @@ namespace AdaWeldSystem.SQLiteDBControl
         }
 
         /// <summary>
-        /// 释放资源（按 ADR-020 使用标准 IDisposable.Dispose，不重写 Dispose(bool)）
+        /// 释放资源（标准 IDisposable.Dispose，不重写 Dispose(bool)）
         /// </summary>
         public void Dispose()
         {

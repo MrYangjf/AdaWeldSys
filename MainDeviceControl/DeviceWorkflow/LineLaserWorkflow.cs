@@ -1,4 +1,4 @@
-﻿using System;
+﻿﻿using System;
 using System.Threading;
 using AdaWeldSystem.LineLaserCam;
 using AdaWeldSystem.LineLaserCam.ILineLaser;
@@ -10,13 +10,13 @@ using AdaWeldSystem.MainDeviceControl.DeviceStateApiCore;
 
 namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
 {
-    /// <summary>线激光工作流（单例）。</summary>
-    /// <remarks>两层状态：连接态 State 与焊接过程态 WeldStatus；焊缝特征由线激光 Manager 直接产出，不再经算法层中转上报。</remarks>
+    /// <summary>线激光工作流</summary>
+    /// <remarks>两层状态：State 与 WeldStatus；焊缝特征由 Manager 产出，不经算法层中转。</remarks>
     public class LineLaserWorkflow : DeviceWorkflowBase
     {
         #region 常量
 
-        // 执行步段位（0 待机 / 800 成功收尾 / 900 失败收尾 由基类提供，子类不重复定义）
+        // 执行步段位（0 待机 / 800 / 900 由基类提供）
         private const int StepPreWork = 10;
         private const int StepPreWorkOn = 20;
         private const int StepPreWorkStable = 30;
@@ -24,30 +24,46 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         private const int StepWorking = 100;
         private const int StepStopping = 700;
 
-        // 单步超时阈值（秒）
-        private const int DataStableTimeoutSeconds = 10;
-        private const int WaitWorkingTimeoutSeconds = 30;
-        private const int FirstResultTimeoutSeconds = 5;
-
+        // 单步超时阈值取自线激光配置 ROOT/TIMEOUT
         private const int DataStableFrameCount = 5;
+
+        /// <summary>PreWork 等待轮廓数据稳定的超时秒数（配置项 DATA_STABLE_SECONDS）</summary>
+        private int DataStableTimeoutSeconds { get { return LineLaserManager.Instance.Config.DataStableTimeoutSeconds; } }
+
+        /// <summary>等待主设备进入 Working 的超时秒数（配置项 WAIT_WORKING_SECONDS）</summary>
+        private int WaitWorkingTimeoutSeconds { get { return LineLaserManager.Instance.Config.WaitWorkingTimeoutSeconds; } }
+
+        /// <summary>等待首个有效结果的超时秒数（FIRST_RESULT_SECONDS）。</summary>
+        private int FirstResultTimeoutSeconds { get { return LineLaserManager.Instance.Config.FirstResultTimeoutSeconds; } }
 
         #endregion
 
         #region 私有变量
 
-        /// <summary>公共方法互斥锁（ADR-020 ④-3：禁止 lock(this)，用私有锁对象）。</summary>
+        /// <summary>公共方法互斥锁（用私有锁对象）。</summary>
         private readonly object _syncRoot = new object();
 
         private int _consecutiveFailureCount;
         private int _maxConsecutiveFailures = 5;
-        private double _startRobotX;
+        // 行程目标（MaxWeldLength）：真实模式默认目标
         private double _maxWeldLength = 1000.0;
-        private volatile bool _isWorkflowActive = false;
+
+        /// <summary>本会话测量是否已收工（主控命中后置位）。</summary>
+        /// <remarks>收工＝关外设、入图结束，但流程态仍留 Working；
+        /// 见本标志即跳过工艺调整与失效判定。进入新沿时复位。</remarks>
+        private volatile bool _measureFinished;
+        private bool _simReady = false;
 
         /// <summary>连接/断开线程是否进行中（防重入）。</summary>
         private volatile bool _isConnecting = false;
 
-        // 分步协同字段（主设备驱动子设备分步启动）
+        /// <summary>连接线程句柄（关闭时 Join）</summary>
+        private Thread _connectThread;
+
+        /// <summary>断开线程句柄（关闭时 Join）</summary>
+        private Thread _disconnectThread;
+
+        // 分步协同字段（主设备驱动模组分步启动）
         private volatile bool _preWorkDone;
         private volatile bool _dataStable;
         private int _startingValidFrameCount;
@@ -58,12 +74,17 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         private double _measuredFps;
         private int _consecutiveSuccessCount;
         private int _adjustTriggerSuccessCount = 1;
-        private bool _lastAnalysisSuccess;
         private bool _lastAdjustSuccess;
 
-        // 失败收尾记录（原基类 FailReason / FailStep 已删除，下沉为子类私有字段）
+        // 失败收尾记录（子类私有字段）
         private string _failReason = "";
         private int _failStep;
+
+        /// <summary>是否已启用模拟模式。</summary>
+        private bool IsSimulation { get { return DeviceControlWork.Instance.IsSimulationEnabled; } }
+
+        /// <summary>是否使用虚拟相机（模拟下不接真机的开关）。</summary>
+        private bool IsVirtualCamera { get { return DeviceControlWork.Instance.ShouldUseVirtualCamera; } }
 
         #endregion
 
@@ -85,11 +106,14 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         /// <summary>PreWork 是否完成（主设备轮询判断，完成后可进入 Working）。</summary>
         public bool IsPreWorkDone { get { return _preWorkDone; } }
 
-        /// <summary>数据是否稳定有效（主设备轮询判断，稳定后可进入 Working）。</summary>
+        /// <summary>数据是否稳定（主设备轮询，稳定后可进 Working）。</summary>
         public bool IsDataStable { get { return _dataStable; } }
 
-        /// <summary>子设备配置文件名（不含扩展名），落在 Config/XML/ 下。</summary>
+        /// <summary>模组配置文件名（不含扩展名），在本流程类别目录。</summary>
         protected override string ConfigFileName { get { return "LineLaserWorkflow"; } }
+
+        /// <summary>配置落 LineLaser\Workflow_XML 子目录。</summary>
+        protected override string ConfigRelativeDir { get { return @"Config\LineLaser\Workflow_XML"; } }
 
         #endregion
 
@@ -113,8 +137,8 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         {
             try
             {
-                if (DeviceControlWork.Instance.IsSimulationEnabled
-                    && !DeviceControlWork.Instance.ShouldUseVirtualCamera)
+                if (IsSimulation
+                    && !IsVirtualCamera)
                 {
                     LineLaserManager.Instance.SelectIntelligentLaser();
                 }
@@ -126,7 +150,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
                 }
 
                 // 统一初始化三步：connect → readConfiguration → verifyHardwareStatus（复位职责归 ResetProcess）
-                // 相机实例一律经 LineLaserManager 代理取用，工作流不持有厂商实现类型
+                // 相机经 Manager 代理取用，不持有厂商类型
                 return RunInitializeSteps(
                     connect: () => LineLaserManager.Instance.Connect(),
                     readConfiguration: () => true,
@@ -144,7 +168,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             }
         }
 
-        /// <summary>初始化三步模板（吸收原 DeviceInitializationStateMachineBase 的固化流转）。</summary>
+        /// <summary>初始化三步模板（连接 → 读配置 → 校验硬件状态）。</summary>
         /// <param name="connect">第 1 步：连接设备</param>
         /// <param name="readConfiguration">第 2 步：读取配置</param>
         /// <param name="verifyHardwareStatus">第 3 步：校验硬件状态</param>
@@ -152,37 +176,35 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         private bool RunInitializeSteps(
             Func<bool> connect, Func<bool> readConfiguration, Func<bool> verifyHardwareStatus)
         {
-            Log("初始化步骤 1/3 连接设备", MessageLevel.Info);
-            if (!RunStepAction(connect, "连接设备", "连接失败")) return false;
-            Log("初始化步骤 2/3 读取配置", MessageLevel.Info);
-            if (!RunStepAction(readConfiguration, "读取配置", "配置读取失败")) return false;
-            Log("初始化步骤 3/3 状态信号校验", MessageLevel.Info);
-            if (!RunStepAction(verifyHardwareStatus, "状态信号校验", "状态信号异常")) return false;
+            Log("初始化步骤 1/3 连接设备", MessageLevel.Debug);
+            if (!RunStepAction(connect, "连接设备", "连接失败", LineLaserErrorContext.Connection)) return false;
+            Log("初始化步骤 2/3 读取配置", MessageLevel.Debug);
+            if (!RunStepAction(readConfiguration, "读取配置", "配置读取失败", LineLaserErrorContext.Initialization)) return false;
+            Log("初始化步骤 3/3 状态信号校验", MessageLevel.Debug);
+            if (!RunStepAction(verifyHardwareStatus, "状态信号校验", "状态信号异常", LineLaserErrorContext.Initialization)) return false;
             return true;
         }
 
-        /// <summary>执行单个初始化步骤并统一处理异常与失败日志。</summary>
-        /// <remarks>方法名避让基类 RunStep 属性（CS0102，见 lessons/StepMemberNameCollision）。</remarks>
-        /// <param name="step">步骤执行体，null 视为跳过</param>
+        /// <summary>执行单个初始化步骤并统一处理异常。</summary>
+        /// <remarks>方法名避让基类 RunStep 属性（CS0102）。失败描述由硬件管理器产出，本方法只负责追加。</remarks>
+        /// <param name="step">步骤执行体（调用方保证非 null）</param>
         /// <param name="stepName">步骤名（日志用）</param>
         /// <param name="failureReason">失败原因（日志用）</param>
-        /// <returns>步骤成功或跳过返回 true</returns>
-        private bool RunStepAction(Func<bool> step, string stepName, string failureReason)
+        /// <param name="context">失败语境（取硬件管理器的成品描述）</param>
+        /// <returns>步骤成功返回 true</returns>
+        private bool RunStepAction(Func<bool> step, string stepName, string failureReason,
+            LineLaserErrorContext context)
         {
-            if (step == null)
-            {
-                Log(string.Format("[{0}] 跳过（未提供）", stepName), MessageLevel.Info);
-                return true;
-            }
             try
             {
                 if (step()) return true;
             }
             catch (Exception ex)
             {
-                Log(string.Format("[{0}] 异常 原因 {1}", stepName, ex.Message), MessageLevel.Error);
+                Log(string.Format("[{0}] 异常 原因 {1}", stepName, ex.Message), MessageLevel.Debug);
             }
-            Log(string.Format("[{0}] 失败 原因是 {1}", stepName, failureReason), MessageLevel.Error);
+            Log(string.Format("[{0}] 失败 原因是 {1}；{2}", stepName, failureReason,
+                LineLaserManager.Instance.DescribeLastError(context)), MessageLevel.Debug);
             return false;
         }
 
@@ -195,7 +217,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         }
 
         /// <summary>绑定相机。</summary>
-        /// <remarks>取当前激活相机并订阅轮廓数据事件，Start 时调用一次。</remarks>
+        /// <remarks>取激活相机并订阅轮廓事件，Start 时调一次。</remarks>
         private void BindCamera()
         {
             SubscribeCameraEvents();
@@ -207,7 +229,6 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         {
             UnsubscribeCameraEvents();
             SafeShutdownPeripherals();
-            _isWorkflowActive = false;
             LineLaserManager.Instance.SetWorking(false);
         }
 
@@ -219,7 +240,6 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             _consecutiveSuccessCount = 0;
             _adjustmentPending = false;
             _lastResultValid = false;
-            _lastAnalysisSuccess = false;
             _lastAdjustSuccess = false;
             _measuredFps = 0.0;
             _dataStable = false;
@@ -245,7 +265,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             }
             if (!LineLaserManager.Instance.IsCameraOn()) LineLaserManager.Instance.SetSensor(true);
             if (!LineLaserManager.Instance.IsLaserOn()) LineLaserManager.Instance.SetLaser(true);
-            // 补启动连续采集：此前工作流从未调用，相机连上也不出图，PreWork 必然等待数据稳定超时
+            // 必须开连续采集，否则不出图、等稳定必超时
             LineLaserManager.Instance.StartAcquisition();
             _startingValidFrameCount = 0;
             Log("PreWork 激光与传感器已开启并启动采集，等待数据稳定", MessageLevel.Info);
@@ -262,7 +282,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
                 return true;
             }
             if (!IsTimeout(DataStableTimeoutSeconds)) return false;
-            HandleFailure("PreWork 阶段等待数据稳定超时 10秒");
+            HandleFailure(string.Format("PreWork 阶段等待数据稳定超时 {0}秒", DataStableTimeoutSeconds));
             ResetWorkTime();
             return false;
         }
@@ -271,52 +291,69 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         /// <returns>收到通知（或模拟自驱动）返回 true</returns>
         private bool DoPreWorkWaitWork()
         {
-            if (DeviceControlWork.Instance.IsSimulationEnabled)
-            {
-                SetWeldStatus(SubDeviceWeldStatus.Working, "模拟模式自驱动进入 Working");
-                _dataStable = false;
-                return false;
-            }
             if (!IsTimeout(WaitWorkingTimeoutSeconds)) return false;
-            Fail("数据稳定后等待 Working 超时 30秒 主设备未调用 BeginWorking");
+            Fail(string.Format("数据稳定后等待 Working 超时 {0}秒 主设备未调用 BeginWorking", WaitWorkingTimeoutSeconds));
             return false;
         }
 
-        /// <summary>执行步 100：焊接工作。</summary>
-        /// <returns>行程完成转 700 返回 true，否则停留在 Working 继续</returns>
-        private bool DoWorking()
+        /// <summary>模拟相机准备（每拍幂等）：选相机 + 绑定 + 开采集。</summary>
+        /// <remarks>不连硬件、不置流程态、不切步，迁移由命令链驱动。
+        /// 模拟器下发等效指令，与真实时序对齐。</remarks>
+        private void SimPrepareCamera()
         {
-            if (IsWeldLengthReached())
-            {
-                StopByWeldLengthReached();
-                return WeldStatus != SubDeviceWeldStatus.Working;
-            }
+            if (_simReady) return;
+
+            if (IsVirtualCamera)
+                LineLaserManager.Instance.SelectVirtual();
+            else
+                LineLaserManager.Instance.SelectIntelligentLaser();
+            LineLaserManager.Instance.SetWorking(true);
+            BindCamera();
+            // 模拟态先开采集兜底，确保轮廓帧产出
+            LineLaserManager.Instance.StartAcquisition();
+            _preWorkDone = true;
+            _simReady = true;
+            Log("模拟模式 相机准备完成 等待命令链驱动步骤", MessageLevel.Info);
+        }
+
+        /// <summary>执行步 100：焊接工作（轮廓采集与自适应调整）。</summary>
+        /// <remarks>行程完成判断归设备主控，本流程不自行判停。
+        /// Stopping 只由命令链经 WeldStatusTrans 进入。</remarks>
+        private void DoWorking()
+        {
+            // 测量已收工：入图结束，不再调整与失效判定
+            // 流程态保持 Working，由主控按行程统一收口
+            if (_measureFinished) return;
 
             if (_adjustmentPending)
             {
                 _adjustmentPending = false;
                 _consecutiveSuccessCount = 0;
                 RunAutoAdjust();
-                return false;
+                return;
             }
 
             if (LineLaserManager.Instance.IsVirtual)
             {
                 _lastResultValid = true;
-                return false;
+                // 虚拟相机无结果事件，仍须驱动工艺计算下发
+                // 使 .pDat 工艺控制记录按拍填充；实际计算在 WeldParamControlWorkflow 自身流程线程消费 _pendingCompute 时执行
+                try { WeldParamControlWorkflow.Instance.ComputeAndOutput(); }
+                catch (Exception ex) { Log("模拟工艺计算触发异常 " + ex.Message, MessageLevel.Error); }
+                return;
             }
 
             if (_lastResultValid)
             {
                 _consecutiveFailureCount = 0;
-                return false;
+                return;
             }
 
-            // 有效结果缺失需持续满一个超时窗口才计一次失败，避免每拍累加瞬间打满计数
-            if (!IsTimeout(FirstResultTimeoutSeconds)) return false;
-            HandleFailure("线激光识别失败 ParseRes 非 1");
+            // 缺失满一个超时才计一次失败，避免打满计数
+            if (!IsTimeout(FirstResultTimeoutSeconds)) return;
+            HandleFailure("线激光识别失败 ParseRes 非 1；"
+                + LineLaserManager.Instance.DescribeLastError(LineLaserErrorContext.Recognition));
             ResetWorkTime();
-            return false;
         }
 
         /// <summary>执行步 700：停止清料，关闭激光与传感器。</summary>
@@ -358,7 +395,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
 
         private void SubscribeCameraEvents()
         {
-            // 业务处理已上提 LineLaserManager，工作流订阅其转发的结果事件（ADR-035）
+            // 业务处理已上提 LineLaserManager，工作流订阅其转发的结果事件
             LineLaserManager.Instance.ResultReady += ManagerResultReady;
             _adjustmentPending = false;
             _lastResultValid = false;
@@ -392,15 +429,13 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
                 _consecutiveSuccessCount++;
                 if (_consecutiveSuccessCount >= _adjustTriggerSuccessCount && !_adjustmentPending)
                 {
-                    // 焊缝特征由线激光 Manager 直接产出（ADR-035），不再经算法 Pipeline 中转上报
-                    _lastAnalysisSuccess = true;
+                    // 焊缝特征由 Manager 直接产出，不经算法中转
                     _adjustmentPending = true;
                 }
             }
             else
             {
                 _consecutiveSuccessCount = 0;
-                _lastAnalysisSuccess = false;
             }
         }
 
@@ -416,7 +451,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             try
             {
                 // 焊接工艺计算与下发收敛到 WeldParamControlWorkflow。
-                // 焊缝特征由线激光 Manager 直接产出，故此处无需传参，由工艺工作流统一执行计算与下发
+                // 特征由 Manager 产出，本处不传参，由工艺流计算下发
                 _lastAdjustSuccess = WeldParamControlWorkflow.Instance.ComputeAndOutput();
             }
             catch (Exception ex)
@@ -429,7 +464,6 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         private void ResetFailureCounters()
         {
             _consecutiveFailureCount = 0;
-            _startRobotX = GetCurrentRobotX();
         }
 
         private void OnCommunicationCommandReceived(object sender, string message)
@@ -450,7 +484,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             }
         }
 
-        /// <summary>转入失败收尾（替代已删除的基类 FailFlow）。</summary>
+        /// <summary>转入失败收尾。</summary>
         /// <param name="reason">失败原因（纯文本，无符号）</param>
         private void Fail(string reason)
         {
@@ -459,60 +493,32 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             AdvanceStep(StepFinishFail);
         }
 
-        private bool IsWeldLengthReached()
-        {
-            double traveled = Math.Abs(GetCurrentRobotX() - _startRobotX);
-            return traveled >= _maxWeldLength;
-        }
-
-        private void StopByWeldLengthReached()
-        {
-            if (WeldStatus != SubDeviceWeldStatus.Working) return;
-            double traveled = Math.Abs(GetCurrentRobotX() - _startRobotX);
-            SetWeldStatus(SubDeviceWeldStatus.Stopping, string.Format(
-                "焊缝行程完成 X行程 {0}mm 最大 {1}mm 进入 Stopping",
-                traveled.ToString("F2"), _maxWeldLength.ToString("F2")));
-        }
-
-        private double GetCurrentRobotX()
-        {
-            if (DeviceControlWork.Instance.IsSimulationEnabled)
-                return DeviceControlWork.Instance.GetEffectiveRobotX();
-            try
-            {
-                return WeldParamManager.Instance.CurrentRobotX;
-            }
-            catch (Exception ex)
-            {
-                Log("读取机器人X坐标异常 " + ex.Message, MessageLevel.Warning);
-                return 0.0;
-            }
-        }
-
         /// <summary>连接后台线程体。</summary>
-        private void ConnectWorker()
+        private void ConnectWorker(WorkflowRunMode mode)
         {
             try
             {
-                Log("连接开始", MessageLevel.Info);
+                LogAction(mode, "连接开始", MessageLevel.Debug);
                 bool ok = InitializeInternal();
                 if (ok)
                 {
                     SetState(SubDeviceState.Connected, "线激光连接完成");
-                    Log("连接完成", MessageLevel.Info);
+                    LogAction(mode, "连接完成", MessageLevel.Debug);
                 }
                 else
                 {
-                    MarkConnectFailed("线激光连接失败");
-                    SetWeldStatus(SubDeviceWeldStatus.ErrorAborted, "线激光连接失败");
-                    Log("连接失败", MessageLevel.Info);
+                    string connectDiagnosis =
+                        LineLaserManager.Instance.DescribeLastError(LineLaserErrorContext.Connection);
+                    MarkConnectFailed("线激光连接失败；" + connectDiagnosis);
+                    SetWeldStatus(SubDeviceWeldStatus.ErrorAborted, "线激光连接失败；" + connectDiagnosis);
+                    LogAction(mode, "连接失败", MessageLevel.Debug);
                 }
             }
             catch (Exception ex)
             {
                 MarkConnectFailed("线激光连接异常 " + ex.Message);
                 SetWeldStatus(SubDeviceWeldStatus.ErrorAborted, "连接异常 " + ex.Message);
-                Log("连接异常 " + ex.Message, MessageLevel.Info);
+                LogAction(mode, "连接异常 " + ex.Message, MessageLevel.Info);
             }
             finally
             {
@@ -521,25 +527,37 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         }
 
         /// <summary>断开后台线程体：断开相机外设并置 Disconnected。</summary>
-        private void DisconnectWorker()
+        private void DisconnectWorker(WorkflowRunMode mode)
         {
             try
             {
-                Log("断开开始", MessageLevel.Info);
+                LogAction(mode, "断开开始", MessageLevel.Info);
                 LineLaserManager.Instance.Disconnect();
                 SafeShutdownPeripherals();
                 ReleaseCameraBinding();
                 SetState(SubDeviceState.Disconnected, "线激光断开");
-                Log("断开完成", MessageLevel.Info);
+                LogAction(mode, "断开完成", MessageLevel.Info);
             }
             catch (Exception ex)
             {
-                Log("断开异常 " + ex.Message, MessageLevel.Info);
+                LogAction(mode, "断开异常 " + ex.Message, MessageLevel.Info);
             }
             finally
             {
                 _isConnecting = false;
             }
+        }
+
+        /// <summary>模拟结束复位：反订阅相机事件、关采集、焊接态与</summary>
+        /// <remarks>步骤归位，避免污染后续真实启动。</remarks>
+        public void SimReset()
+        {
+            if (!_simReady) return;
+            _simReady = false;
+            UnsubscribeCameraEvents();
+            LineLaserManager.Instance.SetWorking(false);
+            SetWeldStatus(SubDeviceWeldStatus.Standby, "模拟结束复位");
+            AdvanceStep(StepIdle);
         }
 
         #endregion
@@ -563,19 +581,18 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
                 SetWeldStatus(SubDeviceWeldStatus.PreWork, "工作流启动，进入 PreWork");
             }
 
-            if (DeviceControlWork.Instance.IsSimulationEnabled && DeviceControlWork.Instance.ShouldUseVirtualCamera)
+            if (IsSimulation && IsVirtualCamera)
                 LineLaserManager.Instance.SelectVirtual();
             else
                 LineLaserManager.Instance.SelectIntelligentLaser();
 
-            _isWorkflowActive = true;
             LineLaserManager.Instance.SetWorking(true);
             _measuredFps = 0.0;
 
             BindCamera();
         }
 
-        /// <summary>手动停止工作流。</summary>
+        /// <summary>停止工作流（模式由调用入口置位）。</summary>
         public void Stop()
         {
             lock (_syncRoot)
@@ -586,8 +603,26 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
                     Log(string.Format("Stop 忽略 当前状态 {0} 不在进程中", WeldStatus), MessageLevel.Warning);
                     return;
                 }
-                SetWeldStatus(SubDeviceWeldStatus.ManualStopped, "用户手动停止");
+                SetWeldStatus(SubDeviceWeldStatus.ManualStopped, ModeText + "停止");
             }
+        }
+
+        /// <summary>线激光测量行程完成收工（主控命中行程时调用）。</summary>
+        /// <remarks>前置量：入图键 = 测量X + 前置量 = 焊缝终止 X。
+        /// 扫描至此已达焊缝末端，再往前无焊缝可测。
+        /// 故收工＝关闭外设，入图不再产生。
+        /// 焊接未结束，故不改 WeldStatus（保持 Working）。
+        /// 行程判据唯一归主控，本方法幂等。</remarks>
+        public void FinishMeasureByStroke()
+        {
+            lock (_syncRoot)
+            {
+                if (_measureFinished) return;
+                if (WeldStatus != SubDeviceWeldStatus.Working && WeldStatus != SubDeviceWeldStatus.PreWork) return;
+                _measureFinished = true;
+            }
+            Log("焊缝测量行程完成 已扫过焊缝末端 关闭激光与传感器（入图结束，焊接继续走到焊缝结束位置）");
+            SafeShutdownPeripherals();
         }
 
         /// <summary>进入 Working 阶段。</summary>
@@ -617,13 +652,33 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
 
         #endregion
 
-        #region 全阻塞流程
+        #region 常驻流程
+
+        /// <summary>行程目标上限（mm，MaxWeldLength）。</summary>
+        public double MaxWeldLengthMm
+        {
+            get { return _maxWeldLength; }
+        }
+
+        /// <summary>PreWork 完成反馈：数据稳定且已进入等待 Working 指令的步骤。</summary>
+        /// <remarks>主控轮询本反馈后才下发 Working 指令。</remarks>
+        public bool IsPreWorkFeedbackDone
+        {
+            get { return WeldStatus == SubDeviceWeldStatus.PreWork && _dataStable; }
+        }
 
         /// <summary>流程处理：以 RunStep 驱动，每个 case 由 bool 判定推进。</summary>
         /// <remarks>全部 case 无 Thread.Sleep / while 轮询，等待靠「外部线程重入 + IsTimeout 判超时」。</remarks>
         public override void FlowProcess()
         {
             if (!IsEnable) return;
+
+            // 模拟只做相机准备，步迁移由命令链驱动
+            // 子流程不自切步，按指令调度范式推进
+            if (IsSimulation)
+            {
+                SimPrepareCamera();
+            }
 
             switch (RunStep)
             {
@@ -640,7 +695,8 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
                     if (DoPreWorkWaitWork()) AdvanceStep(StepWorking);
                     break;
                 case StepWorking:
-                    if (DoWorking()) AdvanceStep(StepStopping);
+                    // 行程完成判断归设备主控；Stopping 只由命令链（WeldStatusTrans）进入，本步永不自行推进
+                    DoWorking();
                     break;
                 case StepStopping:
                     if (DoStopping()) AdvanceStep(StepFinishOk);
@@ -652,7 +708,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
                     if (DoFinishFail()) AdvanceStep(StepIdle);
                     break;
                 default:
-                    // StepIdle 与未登记步号：空转等待，靠焊接过程态切换把执行步复位到阶段入口
+                    // 空转等待，靠流程态切换把执行步复位
                     break;
             }
         }
@@ -663,6 +719,18 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         {
             lock (_syncRoot)
             {
+                if (IsSimulation)
+                {
+                    // 模拟态不连接硬件，不得以未连接为由拒绝复位——
+                    // 否则 ErrorAborted 残留，清理与启动互相锁死
+                    UnsubscribeCameraEvents();
+                    LineLaserManager.Instance.SetWorking(false);
+                    _simReady = false;
+                    IsAlarm = false;
+                    AdvanceStep(StepIdle);
+                    SetWeldStatus(SubDeviceWeldStatus.Standby, "模拟复位");
+                    return true;
+                }
                 if (State == SubDeviceState.Disconnected)
                 {
                     Log("复位拒绝 当前未连接", MessageLevel.Warning);
@@ -686,13 +754,15 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             SetWeldStatus(SubDeviceWeldStatus.NoReset, "状态清除");
         }
 
-        /// <summary>清除步骤用时：防止暂停 / 停止期间的时间被计入步骤时长导致异常超时。</summary>
+        /// <summary>清除步骤用时：防止暂停 / 停止期间的时间被计入</summary>
+        /// <remarks>步骤时长导致异常超时。</remarks>
         public override void ResetWorkTime()
         {
             ResetStepTime();
         }
 
-        /// <summary>设备连接（阻塞）：同步等待至连接完成。上电初始化阶段使用。</summary>
+        /// <summary>设备连接（阻塞）：同步等待至连接完成。上电初始化</summary>
+        /// <remarks>阶段使用。</remarks>
         /// <returns>连接成功返回 true</returns>
         public override bool InitializeOn()
         {
@@ -700,7 +770,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             bool ok;
             try
             {
-                Log("初始化连接开始", MessageLevel.Info);
+                Log("初始化连接开始", MessageLevel.Debug);
                 ok = InitializeInternal();
             }
             catch (Exception ex)
@@ -710,7 +780,8 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             }
             if (!ok)
             {
-                SetWeldStatus(SubDeviceWeldStatus.ErrorAborted, "线激光初始化连接失败");
+                SetWeldStatus(SubDeviceWeldStatus.ErrorAborted, "线激光初始化连接失败；"
+                    + LineLaserManager.Instance.DescribeLastError(LineLaserErrorContext.Connection));
                 return false;
             }
             SetState(SubDeviceState.Connected, "线激光初始化连接完成");
@@ -718,7 +789,8 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             return true;
         }
 
-        /// <summary>设备断开（阻塞）：内部执行释放动作，调用方阻塞至完成。</summary>
+        /// <summary>设备断开（阻塞）：内部执行释放动作，调用方阻塞至</summary>
+        /// <remarks>完成。</remarks>
         /// <returns>断开成功返回 true</returns>
         public override bool InitializeOff()
         {
@@ -739,14 +811,15 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             }
         }
 
-        /// <summary>设备日志：输出线激光差异化日志（结果 / 帧率 / 稳定帧计数）。</summary>
+        /// <summary>设备日志：输出线激光差异化日志（结果 / 帧率 / 稳定</summary>
+        /// <remarks>帧计数）。</remarks>
         public override void SubDeviceLog()
         {
             Log(string.Format("线激光 连接态 {0} 焊接过程态 {1} 步骤 {2} 有效结果 {3} 实测帧率 {4:F1} 稳定帧 {5}",
                 State, WeldStatus, WorkStepName, _lastResultValid, _measuredFps, _startingValidFrameCount));
         }
 
-        /// <summary>加载本子设备的配置。</summary>
+        /// <summary>加载本模组的配置。</summary>
         public override void LoadConfig()
         {
             TimeOutSeconds = ReadInt("TimeOutSeconds", 30);
@@ -755,7 +828,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             _adjustTriggerSuccessCount = ReadInt("AdjustTriggerSuccessCount", 1);
         }
 
-        /// <summary>保存本子设备的配置。</summary>
+        /// <summary>保存本模组的配置。</summary>
         public override void SaveConfig()
         {
             Config.SetElementValue("TimeOutSeconds", TimeOutSeconds.ToString());
@@ -783,9 +856,10 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
 
         #endregion
 
-        #region 非阻塞流程
+        #region 非阻塞动作指令
 
-        /// <summary>开启连接（非阻塞）：自起后台线程执行连接，动作即退出释放。</summary>
+        /// <summary>开启连接（非阻塞）：自起后台线程执行连接，动作即</summary>
+        /// <remarks>退出释放。</remarks>
         /// <returns>受理返回 true，连接进行中被拒绝返回 false</returns>
         public override bool ConnectOn()
         {
@@ -793,27 +867,36 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             if (_isConnecting) return false;
             _isConnecting = true;
             BeginConnectAttempt();
-            var t = new Thread(ConnectWorker)
+            // 模式在入口线程捕获，后台线程只读快照
+            WorkflowRunMode mode = RunMode;
+            var t = new Thread(() => ConnectWorker(mode))
             {
                 Name = "LineLaserConnect",
                 IsBackground = true
             };
+            _connectThread = t;
+            DeviceControlWork.Instance.RegisterWorkThread(t, 5000);
             t.Start();
             return true;
         }
 
-        /// <summary>关闭连接（非阻塞）：自起后台线程执行断开，动作即退出释放。</summary>
+        /// <summary>关闭连接（非阻塞）：自起后台线程执行断开，动作即</summary>
+        /// <remarks>退出释放。</remarks>
         /// <returns>受理返回 true，断开进行中被拒绝返回 false</returns>
         public override bool ConnectOff()
         {
             if (State == SubDeviceState.Disconnected) return true;
             if (_isConnecting) return false;
             _isConnecting = true;
-            var t = new Thread(DisconnectWorker)
+            // 模式在入口线程捕获：后台线程不读可变字段
+            WorkflowRunMode mode = RunMode;
+            var t = new Thread(() => DisconnectWorker(mode))
             {
                 Name = "LineLaserDisconnect",
                 IsBackground = true
             };
+            _disconnectThread = t;
+            DeviceControlWork.Instance.RegisterWorkThread(t, 5000);
             t.Start();
             return true;
         }
@@ -832,13 +915,23 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             switch (newStatus)
             {
                 case SubDeviceWeldStatus.PreWork:
+                    _measureFinished = false;   // 新一沿：测量收工标志复位
                     AdvanceStep(StepPreWork);
                     break;
                 case SubDeviceWeldStatus.Working:
+                    _measureFinished = false;   // 进入焊接工作态同样复位
                     AdvanceStep(StepWorking);
                     break;
                 case SubDeviceWeldStatus.Stopping:
                     AdvanceStep(StepStopping);
+                    break;
+                case SubDeviceWeldStatus.ErrorAborted:
+                    // 异常终止也须关线激光再回待机
+                    // 否则外设仍出光采集，与恢复初始态矛盾
+                    Log("线激光异常态收尾 关闭外设(停采集 关激光 关传感器)", MessageLevel.Warning);
+                    SafeShutdownPeripherals();
+                    AdvanceStep(StepIdle);
+                    ReleaseCameraBinding();
                     break;
                 default:
                     AdvanceStep(StepIdle);
@@ -850,6 +943,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         /// <summary>释放资源：退订全局事件并释放相机。</summary>
         protected override void DisposeManaged()
         {
+            StopPendingConnectThreads();
             GlobalCommData.CommunicationCommandReceived -= OnCommunicationCommandReceived;
             try
             {
@@ -861,7 +955,29 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             {
                 Log("释放相机异常 " + ex.Message, MessageLevel.Warning);
             }
-            _isWorkflowActive = false;
+        }
+
+        /// <summary>等待连接/断开线程退出。</summary>
+        /// <remarks>超时记 Warning 并保留句柄，供现场复查。</remarks>
+        private void StopPendingConnectThreads()
+        {
+            JoinPendingThread(ref _connectThread, "LineLaserConnect");
+            JoinPendingThread(ref _disconnectThread, "LineLaserDisconnect");
+        }
+
+        /// <summary>等待单条连接类线程退出。</summary>
+        /// <param name="thread">线程句柄引用</param>
+        /// <param name="name">线程名（日志用）</param>
+        private void JoinPendingThread(ref Thread thread, string name)
+        {
+            Thread target = thread;
+            if (target == null) return;
+            if (!target.IsAlive || target.Join(5000))
+            {
+                thread = null;
+                return;
+            }
+            Log(name + " 未在 5000ms 内退出，保留句柄待复查", MessageLevel.Warning);
         }
 
         #endregion
