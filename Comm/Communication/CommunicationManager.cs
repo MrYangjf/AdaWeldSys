@@ -1,5 +1,6 @@
 using AdaWeldSystem.Comm.Communication;
 using AdaWeldSystem.FileOperate;
+using AdaWeldSystem.ConfigFileControl.Implementations;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -73,14 +74,14 @@ namespace AdaWeldSystem.Comm.Communication
     }
 
     /// <summary>通讯管理器（模块唯一对外访问口）</summary>
-    /// <remarks>持有四类通讯通道，含以太网 XML、RSI、S7 与 Modbus。
-    /// 管理配置持久化（7 个 XML 与 INI 开关）。本类是机器人 RSI 唯一通道门面。
-    /// 非 UI 类，经 Dispose 释放实例。EKI 通道整体退役，机器人通讯唯一为 RSI。</remarks>
     public class CommunicationManager : IDisposable
     {
         private const string Tag = "CommunicationManager";
 
         private const string IniFileName = "CommunicationSettings.ini";
+
+        /// <summary>通讯配置所属模块（全局配置目录下的模块层）。</summary>
+        private const string ConfigModule = "Comm";
         private const string IniSection = "Display";
         private const string IniKeyShowCommLog = "ShowCommLog";
         private const string IniKeyShowDebugLog = "ShowDebugLog";
@@ -101,10 +102,13 @@ namespace AdaWeldSystem.Comm.Communication
         private readonly List<CommunicationConfig> _configs;
         private readonly INIFile _iniFile;
 
+        /// <summary>通讯 INI 载体（审计用）。</summary>
+        private readonly IniConfigFile _iniFileFile;
+
         /// <summary>机器人位姿快照读写锁。</summary>
         private readonly object _robotPoseLock = new object();
 
-        /// <summary>机器人端 RSI XML 写入锁（防初始化链与自愈重连并发写同一文件）</summary>
+        /// <summary>机器人端 RSI XML 写入锁</summary>
         private readonly object _rsiXmlLock = new object();
 
         /// <summary>上次机器人通道自愈时间（本地时钟毫秒）</summary>
@@ -172,19 +176,18 @@ namespace AdaWeldSystem.Comm.Communication
             set
             {
                 _iniFile.WriteBool(IniSection, IniKeyShowCommLog, value);
-                _iniFile.SaveToFile();
+                ConfigFileManager.SaveIni(_iniFileFile, "通讯设置", "配置变更");
             }
         }
 
         /// <summary>是否将 Debug 级日志显示到界面（INI 持久化，默认关闭）</summary>
-        /// <remarks>只影响界面；文件端始终全量写入。</remarks>
         public bool ShowDebugLog
         {
             get { return _iniFile.ReadBool(IniSection, IniKeyShowDebugLog, false); }
             set
             {
                 _iniFile.WriteBool(IniSection, IniKeyShowDebugLog, value);
-                _iniFile.SaveToFile();
+                ConfigFileManager.SaveIni(_iniFileFile, "通讯设置", "配置变更");
                 GlobalCommData.ShowDebugToUi = value;
             }
         }
@@ -196,7 +199,7 @@ namespace AdaWeldSystem.Comm.Communication
             set
             {
                 _iniFile.WriteBool(IniSection, IniKeyShowRobotCommLog, value);
-                _iniFile.SaveToFile();
+                ConfigFileManager.SaveIni(_iniFileFile, "通讯设置", "配置变更");
             }
         }
 
@@ -207,7 +210,7 @@ namespace AdaWeldSystem.Comm.Communication
             set
             {
                 _iniFile.WriteBool(IniSection, IniKeyShowPlcCommLog, value);
-                _iniFile.SaveToFile();
+                ConfigFileManager.SaveIni(_iniFileFile, "通讯设置", "配置变更");
             }
         }
 
@@ -218,7 +221,7 @@ namespace AdaWeldSystem.Comm.Communication
             set
             {
                 _iniFile.WriteBool(IniSection, IniKeyShowModbusCommLog, value);
-                _iniFile.SaveToFile();
+                ConfigFileManager.SaveIni(_iniFileFile, "通讯设置", "配置变更");
             }
         }
 
@@ -229,7 +232,7 @@ namespace AdaWeldSystem.Comm.Communication
             set
             {
                 _iniFile.WriteBool(IniSection, IniKeyPlcEnabled, value);
-                _iniFile.SaveToFile();
+                ConfigFileManager.SaveIni(_iniFileFile, "通讯设置", "配置变更");
             }
         }
 
@@ -240,11 +243,11 @@ namespace AdaWeldSystem.Comm.Communication
             set
             {
                 _iniFile.WriteBool(IniSection, IniKeyRobotEnabled, value);
-                _iniFile.SaveToFile();
+                ConfigFileManager.SaveIni(_iniFileFile, "通讯设置", "配置变更");
             }
         }
 
-        /// <summary>是否启用分级心跳日志（默认 true；关只停日志与分级，界面在线显示不变）</summary>
+        /// <summary>是否启用分级心跳日志</summary>
         public bool NeedHeartbeat
         {
             get { return _iniFile.ReadBool(IniSection, IniKeyNeedHeartbeat, true); }
@@ -257,7 +260,7 @@ namespace AdaWeldSystem.Comm.Communication
             set
             {
                 _iniFile.WriteBool(IniSection, IniKeyGeneralEnabled, value);
-                _iniFile.SaveToFile();
+                ConfigFileManager.SaveIni(_iniFileFile, "通讯设置", "配置变更");
             }
         }
 
@@ -279,7 +282,7 @@ namespace AdaWeldSystem.Comm.Communication
             get { return RsiComm != null && RsiComm.IsConnected; }
         }
 
-        /// <summary>机器人是否真正在线（以实际收包为准；监听开启≠机器人已连接）。</summary>
+        /// <summary>机器人是否真正在线</summary>
         public bool IsRobotOnline
         {
             get { return RsiComm != null && RsiComm.IsRobotOnline; }
@@ -306,9 +309,10 @@ namespace AdaWeldSystem.Comm.Communication
         public CommunicationManager()
         {
             _configFilePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Config", "Comm", "Communication_XML", DefaultFileName);
-            _iniFilePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Config", "Comm", "Communication_INI", IniFileName);
+            _iniFilePath = ConfigFileManager.ModuleAbsolutePath(ConfigModule, IniFileName);
             _configs = new List<CommunicationConfig>();
-            _iniFile = new INIFile(_iniFilePath);
+            _iniFileFile = ConfigFileManager.Instance.GetModuleIni(ConfigModule, "CommunicationSettings.ini");
+            _iniFile = _iniFileFile.Raw;
             // 通讯 INI 缺键补写（只增不改；8 个开关均以代码默认 false 补齐）
             HealCommunicationIni();
             // 界面日志级别：Debug 默认不显示
@@ -343,8 +347,6 @@ namespace AdaWeldSystem.Comm.Communication
             GlobalCommData.ShowLog(Tag, message, level);
         }
         /// <summary>补写 CommunicationSettings.ini 的显示/启用开关缺键</summary>
-        /// <remarks>默认值同属性 getter，不另设；
-        /// 只补实际缺失的键，现场已改值逐字保留。</remarks>
         private void HealCommunicationIni()
         {
             List<ConfigSelfHeal.IniDefault> defaults = new List<ConfigSelfHeal.IniDefault>();
@@ -360,7 +362,7 @@ namespace AdaWeldSystem.Comm.Communication
 
             string fileName = Path.GetFileName(_iniFilePath);
             ConfigSelfHeal.EnsureIni(_iniFilePath,
-                @"Config\Comm\Communication_INI\" + fileName, fileName, defaults, true);
+                ConfigFileManager.ModuleRelativeDir(ConfigModule) + "\\" + fileName, fileName, defaults, true);
         }
 
         /// <summary>实例化通讯所需的全部 XML 结构（TCP / 机器人 / PLC / Modbus / 主配置）</summary>
@@ -369,13 +371,13 @@ namespace AdaWeldSystem.Comm.Communication
             // 路径迁移已前移，此处不重复执行
 
             // 通用 TCP
-            ServerXdoc = new XdocumentReaderWriter(@"Config\Comm\Tcp_XML", "Server");
-            ClientXdoc = new XdocumentReaderWriter(@"Config\Comm\Tcp_XML", "Client");
-            SendXdoc = new XdocumentReaderWriter(@"Config\Comm\Tcp_XML", "Send");
-            ReciveXdoc = new XdocumentReaderWriter(@"Config\Comm\Tcp_XML", "Recive");
+            ServerXdoc = ConfigFileManager.Instance.GetModuleXml(ConfigModule, "Server").Raw;
+            ClientXdoc = ConfigFileManager.Instance.GetModuleXml(ConfigModule, "Client").Raw;
+            SendXdoc = ConfigFileManager.Instance.GetModuleXml(ConfigModule, "Send").Raw;
+            ReciveXdoc = ConfigFileManager.Instance.GetModuleXml(ConfigModule, "Recive").Raw;
 
             // 机器人通讯：IP/HOST_PORT/PORT/CYCLE
-            RobotServerXdoc = new XdocumentReaderWriter(@"Config\Comm\KUKARobot_RSI_XML", "RobotServer");
+            RobotServerXdoc = ConfigFileManager.Instance.GetModuleXml(ConfigModule, "RobotServer").Raw;
             // 连接参数统一挂 <CONFIG>（旧根级配置自动迁移）；
             // 通道开关（RobotCommMode / RobotEnabled）不在本文件——RobotEnabled 存 Comm INI，RobotCommMode 固定 RSI
             EnsureRobotServerConfigSection();
@@ -389,14 +391,14 @@ namespace AdaWeldSystem.Comm.Communication
             EnsureRsiFormatSections(RobotServerXdoc);
 
             // PLC 通讯
-            PlcXdoc = new XdocumentReaderWriter(@"Config\Comm\PLC_XML", "PLC");
+            PlcXdoc = ConfigFileManager.Instance.GetModuleXml(ConfigModule, "PLC").Raw;
             EnsureElementExists(PlcXdoc, "IP", "192.168.0.1");
             EnsureElementExists(PlcXdoc, "PORT", "102");
             EnsureElementExists(PlcXdoc, "Rack", "0");
             EnsureElementExists(PlcXdoc, "Slot", "1");
 
             // Modbus 通讯
-            ModbusXdoc = new XdocumentReaderWriter(@"Config\Comm\Modbus_XML", "Modbus");
+            ModbusXdoc = ConfigFileManager.Instance.GetModuleXml(ConfigModule, "Modbus").Raw;
             EnsureElementExists(ModbusXdoc, "IP", "192.168.1.100");
             EnsureElementExists(ModbusXdoc, "PORT", "502");
             EnsureElementExists(ModbusXdoc, "SlaveId", "1");
@@ -461,8 +463,6 @@ namespace AdaWeldSystem.Comm.Communication
         private const string DefaultFileName = "CommunicationConfig.xml";
 
         /// <summary>机器人通讯模式（RSI 唯一通道）</summary>
-        /// <remarks>通讯通道唯一为 RSI，EKI 整体退役。EKI 枚举成员仅为旧配置可读。
-        /// 旧配置为 INI RobotCommMode=1。运行时一律按 RSI 处理。</remarks>
         public enum RobotCommModeType
         {
             /// <summary>RSI 实时传感器接口（UDP）</summary>
@@ -471,19 +471,19 @@ namespace AdaWeldSystem.Comm.Communication
             EKI = 1
         }
 
-        /// <summary>机器人通讯模式（RSI 唯一通道；INI 持久化字段保留兼容历史配置）</summary>
+        /// <summary>机器人通讯模式</summary>
         public RobotCommModeType RobotCommMode
         {
             get
             {
-                // ⛔ 通道唯一为 RSI：无论历史 INI 写的是什么，返回值恒为 RSI
+                // 通道恒为 RSI
                 return RobotCommModeType.RSI;
             }
             set
             {
                 // 写入恒为 RSI，保留 INI 键结构
                 _iniFile.WriteInt(IniSection, IniKeyRobotCommMode, (int)RobotCommModeType.RSI);
-                _iniFile.SaveToFile();
+                ConfigFileManager.SaveIni(_iniFileFile, "通讯设置", "配置变更");
             }
         }
 
@@ -588,8 +588,7 @@ namespace AdaWeldSystem.Comm.Communication
         public event EventHandler<KUKADataReceivedEventArgs> RobotDataReceived;
 
         /// <summary>刷新机器人位姿快照（RIst 笛卡尔实际位置）</summary>
-        /// <remarks>坐标包缺失时保持上一帧不覆盖；<c>KUKAPosition</c> 为值类型，
-        /// 空值判据落在引用类型 <c>RobotPacket</c> 上。</remarks>
+
         /// <param name="e">RSI 数据接收事件参数</param>
         private void UpdateRobotPose(RSIDataEventArgs e)
         {
@@ -620,9 +619,7 @@ namespace AdaWeldSystem.Comm.Communication
         }
 
         /// <summary>回复格式节（8 个具名元素 + IPOC 回传）</summary>
-        /// <remarks>契约与 robot-comm-spec/WeldControlConfig.xml RECEIVE 段一一对应：
-        /// WeldPower(1) / WireSpeed(2) / CutWire(3) / WeldSpeed(4) / WeaveAmp(5) /
-        /// TxCmd(6) / TxPayload(7) / TxSeq(8)。</remarks>
+
         /// <returns>REPLY_FORMAT 节元素</returns>
         private static XElement BuildReplyFormatElement()
         {
@@ -682,8 +679,7 @@ namespace AdaWeldSystem.Comm.Communication
         }
 
         /// <summary>确保格式节契约一致，缺失则重建</summary>
-        /// <remarks>只判契约齐备，保留现场文案自定义；
-        /// 旧契约缺具名元素会被识别升级。</remarks>
+
         /// <param name="xdoc">RobotServer 配置文档读写器</param>
         private static void EnsureRsiFormatSections(XdocumentReaderWriter xdoc)
         {
@@ -731,7 +727,7 @@ namespace AdaWeldSystem.Comm.Communication
         }
 
         /// <summary>取位姿快照，锁保护</summary>
-        /// <remarks>位姿归通讯层，消费方只读快照</remarks>
+
         /// <param name="pose">位姿快照，未收到过时为默认值</param>
         /// <returns>已收到过位姿返回 true</returns>
         public bool TryGetRobotPose(out RobotPoseSnapshot pose)
@@ -760,7 +756,7 @@ namespace AdaWeldSystem.Comm.Communication
         }
 
         /// <summary>断开机器人 RSI 通道（返回关闭结果，供调试界面记录</summary>
-        /// <remarks>状态）</remarks>
+
         /// <returns>是否成功。</returns>
         public bool DisconnectRobot()
         {
@@ -811,8 +807,7 @@ namespace AdaWeldSystem.Comm.Communication
         }
 
         /// <summary>下发机器人指令（RSI 数值码通道：TxCmd + TxPayload + TxSeq）</summary>
-        /// <remarks>RSI 为唯一通道。指令经具名元素数值码下发。不再有文本指令通道。
-        /// RSI 主动发包。本方法只写回复缓存。实际发出在下一回复周期。</remarks>
+
         /// <param name="data">机器人数据载体（取 EStr 字段作为指令常量名，如 TX_GO_HOME）</param>
         public void SendRobotData(KUKARobotData data)
         {
@@ -849,8 +844,6 @@ namespace AdaWeldSystem.Comm.Communication
         }
 
         /// <summary>清除已锁存的下行指令（报警解除后停发 TX_NG）</summary>
-        /// <remarks>下行指令锁存于回复缓存，不清除会按周期重发；
-        /// 只停报警标志 不改载荷与周期。</remarks>
         public void ClearRobotCommand()
         {
             if (RsiComm == null) return;
@@ -859,7 +852,7 @@ namespace AdaWeldSystem.Comm.Communication
         }
 
         /// <summary>写入回复机器人的焊接参数（RSI 回复线程取最新值</summary>
-        /// <remarks>组包，5 个具名元素通道）</remarks>
+
         /// <param name="laserPower">激光功率（W）→ WeldPower</param>
         /// <param name="wireSpeed">送丝速度（m/min）→ WireSpeed</param>
         /// <param name="cutWireSignal">剪丝信号（1=请求机器人执行剪丝程序）→ CutWire</param>
@@ -887,11 +880,7 @@ namespace AdaWeldSystem.Comm.Communication
         }
 
         /// <summary>生成机器人端 RSI XML 配置（WeldControlConfig.xml）</summary>
-        /// <remarks>SEND：DEF_RIst(INTERNAL) + Tool.X/Y/Z(输入端 1/2/3) + RxCmd(4) + RxPayload(5)；
-        /// RECEIVE：WeldPower(1) / WireSpeed(2) / CutWire(3) / WeldSpeed(4) / WeaveAmp(5) /
-        /// TxCmd(6) / TxPayload(7) / TxSeq(8)，全部 HOLDON=1。
-        /// 与交付目录 robot-comm-spec/WeldControlConfig.xml 逐项一致。
-        /// 生成文件拷贝到机器人控制器 SensorInterface 目录使用。</remarks>
+
         /// <returns>生成的文件完整路径，失败返回空串</returns>
         public string SaveRobotRsiXml()
         {
@@ -941,8 +930,8 @@ namespace AdaWeldSystem.Comm.Communication
                 config.ReceiveElements.Add(new RSIElement { Tag = "TxPayload", Type = RSIDataType.DOUBLE, Index = "7", HoldOn = 1 });
                 config.ReceiveElements.Add(new RSIElement { Tag = "TxSeq", Type = RSIDataType.LONG, Index = "8", HoldOn = 1 });
 
-                // 写盘加锁：初始化链与通讯层自愈可能同时到达（历史竞态导致「文件正由另一进程使用」）。
-                // 锁内写临时文件再原子替换，且对瞬态占用做退避重试。
+                // 写盘加锁避免并发占用
+                // 写临时文件后原子替换，占用退避重试
                 lock (_rsiXmlLock)
                 {
                     string filePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Config", "Comm", "KUKARobot_RSI_XML", "WeldControlConfig.xml");
@@ -969,12 +958,9 @@ namespace AdaWeldSystem.Comm.Communication
             }
         }
 
-        /// <summary>机器人端 XML 写入：临时文件 + 原子替换 + 占用短暂重试</summary>
+        /// <summary>写入机器人端 XML 配置</summary>
         /// <param name="filePath">目标文件完整路径</param>
-        /// <param name="docFactory">文档工厂（每次重试重新取，避免复用被改动的对象）</param>
-        /// <remarks>⛔ 目标文件被占用时直接写会抛「正由另一进程使用」；此处先写同目录临时文件，
-        /// 再用 File.Replace 原子替换；被占用属瞬态，做有限次退避重试。
-        /// 调用方须持有 _rsiXmlLock。</remarks>
+        /// <param name="docFactory">每次重试新建文档工厂</param>
         private static void WriteXmlWithRetry(string filePath, Func<XDocument> docFactory)
         {
             const int maxAttempts = 5;
@@ -1041,7 +1027,6 @@ namespace AdaWeldSystem.Comm.Communication
         #endregion
 
         /// <summary>初始化 PLC 通讯（备用降级通道，机器人通讯不可用时</summary>
-        /// <remarks>切换）</remarks>
         public void InitializePlcComm()
         {
             try
@@ -1304,7 +1289,6 @@ namespace AdaWeldSystem.Comm.Communication
     }
 
     /// <summary>机器人位姿快照（RSI 上行坐标，基坐标系，毫米）</summary>
-    /// <remarks>整体读写，避免 double 撕裂。</remarks>
     public struct RobotPoseSnapshot
     {
         /// <summary>机器人 X 坐标（毫米）</summary>
@@ -1348,14 +1332,14 @@ namespace AdaWeldSystem.Comm.Communication
     }
 
     /// <summary>KUKA 连接状态变更事件参数（统一管理层）</summary>
-    /// <remarks>EKI 通道已退役，IsEKIConnected 恒为 false。本类零外部消费者。
-    /// 保留仅为避免破坏既有类型引用。</remarks>
     public class KUKAConnectionEventArgs : EventArgs
     {
         public bool IsRSIConnected;
 
-        /// <summary>⛔ EKI 已退役，恒为 false</summary>
+        /// <summary>恒返回 false</summary>
         public bool IsEKIConnected;
         public DateTime Timestamp;
     }
 }
+
+

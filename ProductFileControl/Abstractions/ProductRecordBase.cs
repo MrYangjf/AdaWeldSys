@@ -7,39 +7,30 @@ using AdaWeldSystem.FileOperate;
 
 namespace AdaWeldSystem.ProductFileControl
 {
-    /// <summary>
-    /// 记录条目基类（异步落盘队列的载荷）
-    /// </summary>
+    /// <summary>记录条目基类（异步落盘队列的载荷）</summary>
     public abstract class RecordItem
     {
         /// <summary>记录时间戳</summary>
         public DateTime Timestamp { get; set; }
 
-        /// <summary>
-        /// 构造函数（默认取当前时间）
-        /// </summary>
+        /// <summary>构造函数（默认取当前时间）</summary>
         protected RecordItem()
         {
             Timestamp = DateTime.Now;
         }
     }
 
-    /// <summary>
-    /// 线激光轮廓记录条目，仅携带点云帧。
-    /// 工艺快照由 <see cref="WeldParamAdjustItem"/> 承载。
-    /// </summary>
+    /// <summary>线激光轮廓记录条目，仅携带点云帧。 工艺快照由 <see cref="WeldParamAdjustItem"/></summary>
     public class ContourFrameItem : RecordItem
     {
         /// <summary>点云帧</summary>
         public PointCloudData PointCloud { get; set; }
 
-        /// <summary>捕获该帧时的机器人 X（毫米）。落盘时偏移到点云 X，使轮廓沿行走轴对齐。</summary>
+        /// <summary>捕获该帧时的机器人 X</summary>
         public double RobotX { get; set; }
     }
 
-    /// <summary>
-    /// 工艺控制记录条目：机器人信息 + 工艺快照
-    /// </summary>
+    /// <summary>工艺控制记录条目：机器人信息 + 工艺快照</summary>
     public class WeldParamAdjustItem : RecordItem
     {
         /// <summary>机器人 X 坐标</summary>
@@ -54,16 +45,16 @@ namespace AdaWeldSystem.ProductFileControl
         /// <summary>机器人移动速度</summary>
         public double RobotSpeed { get; set; }
 
-        /// <summary>查表输出的送丝速度（调整值；与 RobotX 同帧落盘，保证按机器人 X 对齐）</summary>
+        /// <summary>查表输出的送丝速度</summary>
         public double FeedSpeed { get; set; }
 
-        /// <summary>查表输出的激光功率（调整值；与 RobotX 同帧落盘，保证按机器人 X 对齐）</summary>
+        /// <summary>查表输出的激光功率</summary>
         public double LaserPower { get; set; }
 
         /// <summary>调整时焊缝宽度</summary>
         public double WeldWidth { get; set; }
 
-        /// <summary>动作类型：过程帧/输出触发/工具切换；由入口方法设定</summary>
+        /// <summary>动作类型</summary>
         public string ActionType { get; set; }
 
         /// <summary>切换到的线激光分析 Job 编号（JobSwitch 动作时有效，其余为 0）</summary>
@@ -97,10 +88,7 @@ namespace AdaWeldSystem.ProductFileControl
         public double HeadTempC { get; set; }
     }
 
-    /// <summary>
-    /// 焊接结果记录条目（数据库落库）。
-    /// 焊毕一次写入，起焊信息在起焊时缓存。
-    /// </summary>
+    /// <summary>焊接结果记录条目</summary>
     public class WeldResultItem : RecordItem
     {
         /// <summary>产品码 SN（空缺时由调用方以 TEST + 时间后缀填充）</summary>
@@ -119,12 +107,7 @@ namespace AdaWeldSystem.ProductFileControl
         public string Info { get; set; }
     }
 
-    /// <summary>
-    /// 产品记录抽象基类，抽象层零第三方依赖。
-    /// 对外接口含记录名、会话生命周期与异步落盘。
-    /// 请求只入队，落盘在后台线程。
-    /// 后台落盘不阻塞计算路径。
-    /// </summary>
+    /// <summary>产品记录抽象基类，抽象层零第三方依赖。 对外接</summary>
     public abstract class ProductRecordBase : IDisposable
     {
         private const string Tag = "ProductRecordBase";
@@ -137,27 +120,19 @@ namespace AdaWeldSystem.ProductFileControl
         private volatile bool _isRecording;
 
         /// <summary>排空等待上限（毫秒），超时告警退出，避免阻塞。</summary>
-        /// <remarks>取自设置页「记录落盘排空(秒)」，运行期读取。改配置无需重启。</remarks>
         private static int FlushTimeoutMs { get { return (int)(DeviceWaitSettings.RecordFlushSeconds * 1000); } }
 
-        /// <summary>
-        /// 记录名称（用于日志与诊断）
-        /// </summary>
+        /// <summary>记录名称（用于日志与诊断）</summary>
         public abstract string Name { get; }
 
-        /// <summary>
-        /// 是否正在记录（会话进行中）
-        /// </summary>
-        /// <remarks>起停线程与热路径共读写，故用 volatile 保证可见性。</remarks>
+        /// <summary>是否正在记录（会话进行中）</summary>
         public bool IsRecording
         {
             get { return _isRecording; }
             protected set { _isRecording = value; }
         }
 
-        /// <summary>
-        /// 队列中待落盘的条目数（诊断用）
-        /// </summary>
+        /// <summary>队列中待落盘的条目数（诊断用）</summary>
         public int PendingCount
         {
             get { return _queue.Count; }
@@ -171,9 +146,7 @@ namespace AdaWeldSystem.ProductFileControl
             GlobalCommData.ShowLog(Tag, message, level);
         }
 
-        /// <summary>
-        /// 确保后台落盘线程已启动（懒启动）
-        /// </summary>
+        /// <summary>确保后台落盘线程已启动（懒启动）</summary>
         private void EnsureWorker()
         {
             if (_worker != null && _worker.IsAlive)
@@ -189,9 +162,7 @@ namespace AdaWeldSystem.ProductFileControl
             _worker.Start();
         }
 
-        /// <summary>
-        /// 后台落盘线程主循环
-        /// </summary>
+        /// <summary>后台落盘线程主循环</summary>
         private void WorkerLoop()
         {
             while (_workerRunning)
@@ -212,9 +183,7 @@ namespace AdaWeldSystem.ProductFileControl
             }
         }
 
-        /// <summary>
-        /// 排空队列中剩余条目（Stop/Abort 前调用，保证不丢尾）
-        /// </summary>
+        /// <summary>排空队列中剩余条目（Stop/Abort 前调用，保证不丢尾）</summary>
         private void FlushPending()
         {
             Thread worker = _worker;
@@ -239,9 +208,7 @@ namespace AdaWeldSystem.ProductFileControl
             }
         }
 
-        /// <summary>
-        /// 开始记录会话（幂等）
-        /// </summary>
+        /// <summary>开始记录会话（幂等）</summary>
         public void Start()
         {
             if (IsRecording)
@@ -254,9 +221,7 @@ namespace AdaWeldSystem.ProductFileControl
             Log(string.Format("记录 {0} 会话开始", Name));
         }
 
-        /// <summary>
-        /// 正常停止记录会话（先排空队列再收尾）
-        /// </summary>
+        /// <summary>正常停止记录会话（先排空队列再收尾）</summary>
         public void Stop()
         {
             if (!IsRecording)
@@ -269,9 +234,7 @@ namespace AdaWeldSystem.ProductFileControl
             Log(string.Format("记录 {0} 会话正常结束", Name));
         }
 
-        /// <summary>
-        /// 异常中止记录会话（保留现场，先排空队列再收尾）
-        /// </summary>
+        /// <summary>异常中止记录会话（保留现场，先排空队列再收尾）</summary>
         public void Abort()
         {
             if (!IsRecording)
@@ -284,9 +247,7 @@ namespace AdaWeldSystem.ProductFileControl
             Log(string.Format("记录 {0} 会话异常中止", Name), MessageLevel.Warning);
         }
 
-        /// <summary>
-        /// 记录请求入队（O(1)，非会话期静默丢弃）
-        /// </summary>
+        /// <summary>记录请求入队（O(1)，非会话期静默丢弃）</summary>
         /// <param name="item">记录条目</param>
         protected void Enqueue(RecordItem item)
         {
@@ -298,36 +259,26 @@ namespace AdaWeldSystem.ProductFileControl
             _signal.Set();
         }
 
-        /// <summary>
-        /// 单条落盘（后台线程调用；允许耗时，不得在计算线程上执行）
-        /// </summary>
+        /// <summary>单条落盘</summary>
         /// <param name="item">记录条目</param>
         protected abstract void Persist(RecordItem item);
 
-        /// <summary>
-        /// 会话开始的收尾钩子
-        /// </summary>
+        /// <summary>会话开始的收尾钩子</summary>
         protected virtual void OnStart()
         {
         }
 
-        /// <summary>
-        /// 会话正常结束的收尾钩子
-        /// </summary>
+        /// <summary>会话正常结束的收尾钩子</summary>
         protected virtual void OnStop()
         {
         }
 
-        /// <summary>
-        /// 会话异常中止的收尾钩子
-        /// </summary>
+        /// <summary>会话异常中止的收尾钩子</summary>
         protected virtual void OnAbort()
         {
         }
 
-        /// <summary>
-        /// 释放资源（标准 IDisposable.Dispose）
-        /// </summary>
+        /// <summary>释放资源（标准 IDisposable.Dispose）</summary>
         public void Dispose()
         {
             if (_disposed)

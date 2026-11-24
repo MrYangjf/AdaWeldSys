@@ -3,7 +3,6 @@ using System.Collections.Generic;
 namespace AdaWeldSystem.MotionControl.IMotion
 {
     /// <summary>运动控制器抽象基类</summary>
-    /// <remarks>持有轴与 IO 集合，子类实现硬件初始化、关闭与急停。</remarks>
     public abstract class MontionControl
     {
         #region 私有变量
@@ -101,7 +100,7 @@ namespace AdaWeldSystem.MotionControl.IMotion
         public abstract ManufacturerType GetManufacturerType();
 
         /// <summary>检查总线是否全部就绪（供状态监督轮询调用，须</summary>
-        /// <remarks>默认视为不支持总线检查，返回 false 并给出描述。 非阻塞）。</remarks>
+
         /// <param name="faultDesc">故障描述；总线健康时为空串</param>
         /// <returns>总线健康返回 true</returns>
         public virtual bool CheckBusOK(out string faultDesc)

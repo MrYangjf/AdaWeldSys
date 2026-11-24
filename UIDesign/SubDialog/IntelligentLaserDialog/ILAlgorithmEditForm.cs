@@ -8,7 +8,6 @@ using AdaWeldSystem.EmguALG.Core;
 namespace AdaWeldSystem.UIDesign.SubDialog.IntelligentLaserDialog
 {
     /// <summary>算法编辑窗体：按激活相机类型挂载对应页。</summary>
-    /// <remarks>子页为 UserControl，包进 AntdUI.TabPage 再 AddTabSelect；确定/取消按钮位于 Tabs 之外始终可见。</remarks>
     public partial class ILAlgorithmEditForm : UserControl
     {
         // 注入父 Window（本窗暂无内部 Message/Modal，保留字段供统一调用）

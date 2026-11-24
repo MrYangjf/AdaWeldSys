@@ -29,8 +29,6 @@ namespace AdaWeldSystem.Comm.Communication.Abstractions
     }
 
     /// <summary>对外通讯通道抽象基类（零第三方依赖）</summary>
-    /// <remarks>定义连接态、生命周期、收发与事件；
-    /// 寄存器型读写（S7 DB、Modbus）属实现类专属能力。</remarks>
     public abstract class CommChannelBase
     {
         /// <summary>日志标签（实现类经构造函数指派，全类唯一出口）</summary>

@@ -3,8 +3,6 @@ using System.Collections.Generic;
 namespace AdaWeldSystem.MotionControl.IMotion
 {
     /// <summary>PVT 多段插值能力</summary>
-    /// <remarks>焊缝跟踪流式接口：起始段后按水位续喂。
-    /// 调用前须已切 CSP 并伺服使能，本接口不切模式。</remarks>
     public interface IPVTMotion
     {
         /// <summary>下发起始段并开始运动</summary>
@@ -34,8 +32,6 @@ namespace AdaWeldSystem.MotionControl.IMotion
     }
 
     /// <summary>PVT 轨迹点</summary>
-    /// <remarks>位置与速度为工程单位（毫米、毫米每秒），时间为秒；
-    /// 脉冲换算只在台达实现层完成，本结构不感知。</remarks>
     public struct PVTPoint
     {
         #region 公共变量
@@ -68,7 +64,6 @@ namespace AdaWeldSystem.MotionControl.IMotion
     }
 
     /// <summary>PVT 执行进度与缓冲区水位</summary>
-    /// <remarks>剩余缓冲区是续喂节拍判据，低于阈值即追加。</remarks>
     public struct PVTInformation
     {
         #region 公共变量
@@ -109,7 +104,6 @@ namespace AdaWeldSystem.MotionControl.IMotion
     }
 
     /// <summary>PVT 返回码</summary>
-    /// <remarks>成功码与台达 SDK 一致；不支持码为抽象层自定义，用于未实现 PVT 的轴。</remarks>
     public static class PVTResult
     {
         #region 公共变量

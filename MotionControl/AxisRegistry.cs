@@ -7,8 +7,6 @@ using AdaWeldSystem.FileOperate;
 namespace AdaWeldSystem.MotionControl
 {
     /// <summary>轴注册表</summary>
-    /// <remarks>按键名登记全部轴并保证注册进控制器；
-    /// 轴构造时已自注册，AttachAll 校验两处集合一致。</remarks>
     public class AxisRegistry
     {
         #region 私有变量

@@ -1,27 +1,26 @@
 ﻿﻿﻿﻿using AdaWeldSystem.FileOperate;
+using AdaWeldSystem.ConfigFileControl.Implementations;
 using System;
 using System.Collections.Generic;
 using System.IO;
 
 namespace AdaWeldSystem.MonitorCam
 {
-    /// <summary>
-    /// 监控相机硬件配置（IP/曝光/尺寸/目录）。
-    /// 算法阈值归算法层配置，不在此处。
-    /// 持久化到 MonitorCamera.ini（Camera 节 + Calibration 节）。
-    /// </summary>
+    /// <summary>监控相机硬件配置</summary>
     public class MonitorCamConfig
     {
         /// <summary>录像目录默认值，仅此一处定义</summary>
         public const string DefaultRecordDir = @"D:\WeldRecord";
+
+        /// <summary>监控相机配置所属模块</summary>
+        private const string ConfigModule = "MonitorCam";
 
         /// <summary>默认配置文件路径</summary>
         public static string DefaultConfigPath
         {
             get
             {
-                return Path.Combine(
-                    System.AppDomain.CurrentDomain.BaseDirectory, "Config", "MonitorCam", "Monitor_INI", "MonitorCamera.ini");
+                return ConfigFileManager.ModuleAbsolutePath(ConfigModule, "MonitorCamera.ini");
             }
         }
 
@@ -52,9 +51,7 @@ namespace AdaWeldSystem.MonitorCam
         /// <summary>光斑点坐标 Y（像素，画面按此坐标画十字）</summary>
         public int SpotY { get; set; }
 
-        /// <summary>
-        /// 创建配置并填入默认值
-        /// </summary>
+        /// <summary>创建配置并填入默认值</summary>
         public MonitorCamConfig()
         {
             IpAddress = "192.168.1.100";
@@ -69,7 +66,7 @@ namespace AdaWeldSystem.MonitorCam
         }
 
         /// <summary>按当前值构造 INI 期望键集</summary>
-        /// <remarks>默认值单一来源：字段当前值</remarks>
+
         /// <returns>结果集合。</returns>
         private List<ConfigSelfHeal.IniDefault> BuildIniDefaults()
         {
@@ -88,7 +85,7 @@ namespace AdaWeldSystem.MonitorCam
 
         /// <summary>把完整路径换算为相对程序基目录的路径</summary>
         /// <param name="fullPath">完整路径。</param>
-        /// <remarks>备份助手使用</remarks>
+
         /// <returns>结果文本。</returns>
         private static string RelativeToBase(string fullPath)
         {
@@ -98,23 +95,25 @@ namespace AdaWeldSystem.MonitorCam
                 return full.Substring(baseDir.Length);
             return full;
         }
-        /// <summary>
-        /// 将配置写入 INI 文件
-        /// </summary>
+        /// <summary>将配置写入 INI 文件</summary>
         /// <param name="filePath">目标文件路径</param>
         public void SaveToIni(string filePath)
         {
-            var ini = new INIFile(filePath);
-            ini.WriteString("Camera", "IpAddress", IpAddress);
-            ini.WriteString("Camera", "Port", Port);
-            ini.WriteInt("Camera", "ExposureMs", ExposureMs);
-            ini.WriteInt("Camera", "ImageWidth", ImageWidth);
-            ini.WriteInt("Camera", "ImageHeight", ImageHeight);
-            ini.WriteString("Camera", "RecordDir", RecordDir);
-            ini.WriteDouble("Calibration", "MmPerPixel", MmPerPixel);
-            ini.WriteInt("Calibration", "SpotX", SpotX);
-            ini.WriteInt("Calibration", "SpotY", SpotY);
-            ini.SaveToFile();
+            IniConfigFile file = ConfigFileManager.Instance.GetModuleIni(ConfigModule, "MonitorCamera.ini");
+            INIFile ini = file.Raw;
+            ConfigFileManager.SaveIniWithAudit(file, "监控相机配置", "配置变更", () =>
+            {
+                ini.WriteString("Camera", "IpAddress", IpAddress);
+                ini.WriteString("Camera", "Port", Port);
+                ini.WriteInt("Camera", "ExposureMs", ExposureMs);
+                ini.WriteInt("Camera", "ImageWidth", ImageWidth);
+                ini.WriteInt("Camera", "ImageHeight", ImageHeight);
+                ini.WriteString("Camera", "RecordDir", RecordDir);
+                ini.WriteDouble("Calibration", "MmPerPixel", MmPerPixel);
+                ini.WriteInt("Calibration", "SpotX", SpotX);
+                ini.WriteInt("Calibration", "SpotY", SpotY);
+                ini.SaveToFile();
+            });
         }
 
         /// <summary>把当前配置落盘到默认 INI 路径（连接 IP 等修改后调用）</summary>
@@ -145,7 +144,7 @@ namespace AdaWeldSystem.MonitorCam
                     BuildIniDefaults(), true);
             }
 
-            var ini = new INIFile(filePath);
+            INIFile ini = ConfigFileManager.Instance.GetModuleIni(ConfigModule, "MonitorCamera.ini").Raw;
             IpAddress = ini.ReadString("Camera", "IpAddress", IpAddress);
             Port = ini.ReadString("Camera", "Port", Port);
             ExposureMs = ini.ReadInt("Camera", "ExposureMs", ExposureMs);

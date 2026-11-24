@@ -16,7 +16,6 @@ using AdaWeldSystem.WeldParamControl;
 namespace AdaWeldSystem.LineLaserCam
 {
     /// <summary>轮廓帧快照，池化复用，按版本号轮询</summary>
-    /// <remarks>双缓冲整体交换，读写不落同一数组；数组复用零 GC，版本号判新帧。</remarks>
     public class ProfileSnapshot
     {
         #region 私有变量
@@ -100,7 +99,7 @@ namespace AdaWeldSystem.LineLaserCam
         }
 
         /// <summary>清空为无效帧并推进版本号，用于停机与切换相</summary>
-        /// <remarks>机</remarks>
+
         /// <param name="version">新版本号</param>
         public void Clear(long version)
         {
@@ -116,8 +115,6 @@ namespace AdaWeldSystem.LineLaserCam
     }
 
     /// <summary>线激光管理器</summary>
-    /// <remarks>全系统取相机实例一律走本管理器；
-    /// 本类管注册/连接/配置与事件，PVT 归 SeamTrackingAlgorithm。</remarks>
     public class LineLaserManager : IDisposable
     {
         #region 私有变量
@@ -188,10 +185,7 @@ namespace AdaWeldSystem.LineLaserCam
             }
         }
 
-        /// <summary>
-        /// 英莱相机实例，首次访问时创建登记。
-        /// 厂商实例不暴露，界面经本属性取得。
-        /// </summary>
+        /// <summary>英莱相机实例，首次访问时创建登记。 厂商实例不</summary>
         public IntelligentLaserCam.IntelligentLaserCam IntelligentLaser
         {
             get
@@ -233,10 +227,7 @@ namespace AdaWeldSystem.LineLaserCam
         /// <summary>工作流是否正在驱动相机出图</summary>
         public bool IsWorking { get { return _working; } }
 
-        /// <summary>
-        /// 线激光相机连接状态（与工作流程状态相互独立）。
-        /// 工作时由工作流驱动，其余按连接态派生。
-        /// </summary>
+        /// <summary>线激光相机连接状态</summary>
         public LineLaserConnectionState ConnectionState
         {
             get
@@ -422,7 +413,7 @@ namespace AdaWeldSystem.LineLaserCam
         }
 
         /// <summary>结果处理：缓存结果并向外转发事件（Y 轴 PVT 由运控工</summary>
-        /// <remarks>作流经 WeldParamControl 轨迹构造器写入）</remarks>
+
         /// <param name="sender">事件源相机</param>
         /// <param name="e">结果事件参数</param>
         private void OnCameraResultReady(object sender, LineLaserResultEventArgs e)
@@ -443,7 +434,7 @@ namespace AdaWeldSystem.LineLaserCam
             if (e.Cloud == null)
             {
                 // 空帧：只重绘画面（渲染器 Render 支持 null ⇒ 清屏 + 画校准四边框）。
-                // ⛔ 不走 AddFrame / UpdateProfileSnapshot —— 两者都要访问 cloud.Points，空帧会 NRE；
+                // 空帧跳过帧添加与快照更新
                 //    也不写点缓冲，避免前台曲线闪断。
                 if (DisplayEnabled) RenderDisplayFrame(null);
                 return;
@@ -532,7 +523,7 @@ namespace AdaWeldSystem.LineLaserCam
         #region 公共函数
 
         /// <summary>登记相机并订阅其结果与轮廓回调及状态变化</summary>
-        /// <remarks>事件</remarks>
+
         /// <param name="name">相机键名</param>
         /// <param name="camera">相机对象</param>
         public void Register(string name, LineLaserCameraBase camera)
@@ -595,7 +586,7 @@ namespace AdaWeldSystem.LineLaserCam
         #region 线激光分析 Job（切换属调整的一种，唯一入口转发）
 
         /// <summary>读取当前线激光分析 Job 编号（未连接或读取失败返</summary>
-        /// <remarks>回 -1）。</remarks>
+
         /// <returns>当前 Job 编号</returns>
         public int FetchCurrentJobId()
         {
@@ -603,8 +594,7 @@ namespace AdaWeldSystem.LineLaserCam
         }
 
         /// <summary>切换到指定线激光分析 Job，唯一入口</summary>
-        /// <remarks>触发 <see cref="JobChanged"/> 供上层留痕。
-        /// 界面与流程一律经本方法。</remarks>
+
         /// <param name="jobId">目标 Job 编号</param>
         /// <returns>厂商返回码（0 表示成功）</returns>
         public int SwitchJob(int jobId)
@@ -631,7 +621,7 @@ namespace AdaWeldSystem.LineLaserCam
             return true;
         }
 
-        /// <summary>连接当前相机，已连接时直接返回 true；另一台仍在采集时拒绝连接（单活约束）</summary>
+        /// <summary>连接当前相机，已连接时直接返回 true；另一台仍在采</summary>
         /// <returns>连接成功或无需连接返回 true</returns>
         public bool Connect()
         {
@@ -657,7 +647,7 @@ namespace AdaWeldSystem.LineLaserCam
         }
 
         /// <summary>配置当前相机的默认回调周期，无需配置的相机</summary>
-        /// <remarks>返回 true</remarks>
+
         /// <returns>无需配置或配置成功返回 true</returns>
         public bool ConfigureDefaultCommPeriod()
         {
@@ -694,7 +684,6 @@ namespace AdaWeldSystem.LineLaserCam
         }
 
         /// <summary>关闭外设：停采集 → 关激光 → 关传感器。 用于停机、异常</summary>
-        /// <remarks>收尾复位，异常吞掉，不影响状态机。</remarks>
         public void ShutdownPeripherals()
         {
             try
@@ -712,7 +701,7 @@ namespace AdaWeldSystem.LineLaserCam
         }
 
         /// <summary>由工作流在采集开始/结束时调用，驱动「工作中」连</summary>
-        /// <remarks>接态与跟踪段起止</remarks>
+
         /// <param name="working">true 为正在采集</param>
         public void SetWorking(bool working)
         {
@@ -781,3 +770,4 @@ namespace AdaWeldSystem.LineLaserCam
         #endregion
     }
 }
+

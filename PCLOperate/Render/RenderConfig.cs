@@ -1,13 +1,12 @@
 ﻿using AdaWeldSystem.FileOperate;
+using AdaWeldSystem.ConfigFileControl.Implementations;
 using System;
 using System.IO;
 using AdaWeldSystem.Comm.SystemComm;
 
 namespace AdaWeldSystem.PCLOperate.Render
 {
-    /// <summary>
-    /// 表面重建算法类型枚举
-    /// </summary>
+    /// <summary>表面重建算法类型枚举</summary>
     public enum SurfaceRenderAlgorithm
     {
         /// <summary>邻域搜索重建</summary>
@@ -24,10 +23,7 @@ namespace AdaWeldSystem.PCLOperate.Render
         MLS
     }
 
-    /// <summary>
-    /// 表面渲染参数配置类。
-    /// 使用 INI 文件持久化渲染参数。
-    /// </summary>
+    /// <summary>表面渲染参数配置类。 使用 INI 文件持久化渲染参数。</summary>
     public static class RenderConfig
     {
         private const string Tag = "RenderConfig";
@@ -44,10 +40,13 @@ namespace AdaWeldSystem.PCLOperate.Render
 
         /// <summary>INI 配置文件路径</summary>
         private static readonly string IniFilePath =
-            Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Config", "PCLOperate", "Render_INI", "RenderConfig.ini");
+            ConfigFileManager.ModuleAbsolutePath(ConfigModule, "RenderConfig.ini");
 
         /// <summary>INI文件节名</summary>
         private const string IniSection = "RenderConfig";
+
+        /// <summary>渲染配置所属模块（全局配置目录下的模块层）。</summary>
+        private const string ConfigModule = "PCLOperate";
 
         /// <summary>线程同步锁</summary>
         private static readonly object _lock = new object();
@@ -60,7 +59,6 @@ namespace AdaWeldSystem.PCLOperate.Render
         #region 构造函数与初始化
 
         /// <summary>静态构造函数 - 类首次使用时自动初始化 检查配</summary>
-        /// <remarks>置文件是否存在，不存在则生成默认配置</remarks>
         static RenderConfig()
         {
             SelectedAlgorithm = SurfaceRenderAlgorithm.NeighborSearch;
@@ -91,7 +89,6 @@ namespace AdaWeldSystem.PCLOperate.Render
         }
 
         /// <summary>确保配置已初始化 如果配置文件不存在，使用当</summary>
-        /// <remarks>前属性默认值生成默认INI文件</remarks>
         public static void EnsureInitialized()
         {
             if (_isInitialized)
@@ -208,12 +205,10 @@ namespace AdaWeldSystem.PCLOperate.Render
 
         #region 持久化方法
 
-        /// <summary>
-        /// 从INI文件加载配置（内部实现）
-        /// </summary>
+        /// <summary>从INI文件加载配置（内部实现）</summary>
         private static void LoadFromIniInternal()
         {
-            var ini = new INIFile(IniFilePath);
+            INIFile ini = ConfigFileManager.Instance.GetModuleIni(ConfigModule, "RenderConfig.ini").Raw;
 
             // 加载算法选择
             SelectedAlgorithm = (SurfaceRenderAlgorithm)ini.ReadInt(IniSection, "SelectedAlgorithm", 0);
@@ -256,7 +251,6 @@ namespace AdaWeldSystem.PCLOperate.Render
         }
 
         /// <summary>从INI文件加载配置 公开方法，供外部手动触发配置</summary>
-        /// <remarks>加载</remarks>
         public static void LoadFromIni()
         {
             lock (_lock)
@@ -278,9 +272,7 @@ namespace AdaWeldSystem.PCLOperate.Render
             }
         }
 
-        /// <summary>
-        /// 保存配置到INI文件
-        /// </summary>
+        /// <summary>保存配置到INI文件</summary>
         public static void SaveToIni()
         {
             lock (_lock)
@@ -293,7 +285,8 @@ namespace AdaWeldSystem.PCLOperate.Render
                         Directory.CreateDirectory(configDir);
                     }
 
-                    var ini = new INIFile(IniFilePath);
+                    IniConfigFile file = ConfigFileManager.Instance.GetModuleIni(ConfigModule, "RenderConfig.ini");
+                    INIFile ini = file.Raw;
 
                     // 保存算法选择
                     ini.WriteInt(IniSection, "SelectedAlgorithm", (int)SelectedAlgorithm);
@@ -334,7 +327,7 @@ namespace AdaWeldSystem.PCLOperate.Render
                     ini.WriteBool(IniSection, "ZColorEnabled", ZColorEnabled);
                     ini.WriteDouble(IniSection, "DisplayRatio", DisplayRatio);
 
-                    ini.SaveToFile();
+                    ConfigFileManager.SaveIni(file, "渲染参数", "配置变更");
                 }
                 catch (Exception ex)
                 {
@@ -347,9 +340,7 @@ namespace AdaWeldSystem.PCLOperate.Render
 
         #region 辅助方法
 
-        /// <summary>
-        /// 获取算法中文名称
-        /// </summary>
+        /// <summary>获取算法中文名称</summary>
         /// <param name="algorithm">算法类型</param>
         /// <returns>中文名称</returns>
         public static string GetAlgorithmName(SurfaceRenderAlgorithm algorithm)
@@ -373,9 +364,7 @@ namespace AdaWeldSystem.PCLOperate.Render
             }
         }
 
-        /// <summary>
-        /// 重置为默认值
-        /// </summary>
+        /// <summary>重置为默认值</summary>
         public static void ResetToDefaults()
         {
             SelectedAlgorithm = SurfaceRenderAlgorithm.NeighborSearch;

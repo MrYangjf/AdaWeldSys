@@ -3,7 +3,6 @@ using System.Runtime.InteropServices;
 namespace AdaWeldSystem.MotionControl.DeltaEtherCAT.Native
 {
     /// <summary>台达运动控制原生封装</summary>
-    /// <remarks>位置与速度用脉冲。加减速时间用秒。S 曲线与回零加速度用毫秒。</remarks>
     public static class EtherCATMotionNative
     {
 #if X86
@@ -130,8 +129,7 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT.Native
             double Numerator, double Denominator, short Enable);
 
         /// <summary>配置 CSP 软目标到达判定窗口（位置窗口 + 时间窗口）</summary>
-        /// <remarks>CSP 运动族专用到位判定。位置偏差进入 <c>Position_Window</c> 并持续 <c>Window_Time</c> 即判到达。
-        /// 与 <c>Motion_Get_Mdone</c>（只表示运动结束，不区分到位/被中断）互补。</remarks>
+
         /// <param name="Window_Time">时间窗口</param>
         /// <param name="Position_Window">位置窗口</param>
         /// <param name="Enable">使能</param>

@@ -4,7 +4,6 @@ using AdaWeldSystem.MotionControl.IMotion;
 namespace AdaWeldSystem.MotionControl.DeltaEtherCAT.Native
 {
     /// <summary>台达主站与从站管理原生封装</summary>
-    /// <remarks>平台目标必须 x86 或 x64，禁止 AnyCPU。</remarks>
     public static class EtherCATMasterNative
     {
 #if X86
@@ -90,7 +89,6 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT.Native
             ushort SlotNo, ref ushort Done);
 
         /// <summary>取上一次 SDO 的邮箱错误码（SDO Abort Code，如 0x06020000 对象不存在）</summary>
-        /// <remarks>区分「读到 0」与「读失败」，两者不能都回落成 0。</remarks>
         [DllImport(DllPath, EntryPoint = "_ECAT_Slave_SDO_Get_ErrorCode")]
         public static extern ushort CS_ECAT_Slave_SDO_Get_ErrorCode(ushort CardNo, ushort NodeID,
             ushort SlotNo, ref uint ErrorCode);
@@ -116,8 +114,6 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT.Native
             ushort ODIndex, ushort ODSubIndex, ref byte Data);
 
         /// <summary>从站运行态：只有 OP 态可运动。</summary>
-        /// <remarks>返回 ALState 位掩码（0x01 Init / 0x02 PreOP / 0x04 SafeOP / 0x08 OP），OP 必须为 8。
-        /// 取成 3 会被误判拦截，使能与运动指令都下不去。</remarks>
         public const ushort OpStateOperational = 8;
 
         /// <summary>初始化完成</summary>
@@ -132,7 +128,6 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT.Native
         #region 链路健康状态
 
         /// <summary>取主站链路连接状态</summary>
-        /// <remarks>台达无心跳，链路健康靠本函数与工作计数器。</remarks>
         [DllImport(DllPath, EntryPoint = "_ECAT_Master_Get_Connect_Status")]
         public static extern ushort CS_ECAT_Master_Get_Connect_Status(ushort CardNo, ref ushort Status);
 
@@ -157,7 +152,6 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT.Native
             ref double Tx_MaxTime, ref double Rx_Time, ref double Rx_MaxTime);
 
         /// <summary>启用虚拟站点别名</summary>
-        /// <remarks>仅重映射站点号，不是虚拟轴，不可作凸轮主轴。</remarks>
         [DllImport(DllPath, EntryPoint = "_ECAT_Master_Virtual_NodeID_Alias_Enable")]
         public static extern ushort CS_ECAT_Master_Virtual_NodeID_Alias_Enable(ushort CardNo, ushort Enable);
 

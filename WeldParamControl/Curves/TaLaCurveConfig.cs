@@ -4,6 +4,7 @@ using System.Globalization;
 using System.IO;
 using System.Xml.Linq;
 using AdaWeldSystem.FileOperate;
+using AdaWeldSystem.ConfigFileControl.Implementations;
 
 namespace AdaWeldSystem.WeldParamControl.Curves
 {
@@ -54,15 +55,10 @@ namespace AdaWeldSystem.WeldParamControl.Curves
     }
 
     /// <summary>TA/LA 标定曲线（采样点表 + 分段线性插值）。</summary>
-    /// <remarks>
-    /// 曲线只以采样点表表达，不用公式。
-    /// 离焦量与光斑关系由光学标定决定，只换数据。
-    /// 曲线A：LA 位置 → 光斑大小（内置 LA=0 ↔ 0.6mm 最聚焦态为不可删锚点）；曲线B：TA 位置 → LA 偏移补偿（内置 TA=0 ↔ 0 为不可删锚点）。
-    /// </remarks>
     public class TaLaCurveConfig
     {
-        /// <summary>配置相对目录（与 WeldParamManager 工艺配置同层）</summary>
-        private const string CurveXmlRelativeDir = @"Config\WeldParamControl\Algorithm_XML";
+        /// <summary>曲线配置所属模块（全局配置目录下的模块层）。</summary>
+        private const string ConfigModule = "WeldParam";
 
         /// <summary>配置文件名</summary>
         private const string CurveFileName = "TaLaCurve.xml";
@@ -74,7 +70,6 @@ namespace AdaWeldSystem.WeldParamControl.Curves
         public const string CurveBKey = "CURVE_B_POINTS";
 
         /// <summary>内置默认锚点：最聚焦光斑最小值（毫米）。</summary>
-        /// <remarks>仅在曲线A 无 X=0 锚点采样点时作为回退值；实际生效锚点见 <see cref="AnchorSpotMm"/>。</remarks>
         public const double DefaultAnchorSpotMm = 0.6;
 
         #region 公共变量
@@ -95,8 +90,6 @@ namespace AdaWeldSystem.WeldParamControl.Curves
         public string Version { get; set; }
 
         /// <summary>曲线A 锚点光斑（毫米），随标定数据变化。</summary>
-        /// <remarks>取曲线A 采样点表中 X=0 的点（不可删锚点）；无 X=0 点时回退 <see cref="DefaultAnchorSpotMm"/>。
-        /// 外部只经 WeldParamManager 取本值（曲线实例归 Manager 独占持有）。</remarks>
         public double AnchorSpotMm
         {
             get
@@ -129,7 +122,7 @@ namespace AdaWeldSystem.WeldParamControl.Curves
         #region 公共函数
 
         /// <summary>解析一行采样点：取前三个数值的后两个。</summary>
-        /// <remarks>不足三个数值时取前两个。</remarks>
+
         /// <returns>是否成功。</returns>
         private static bool ParsePoint(string[] cells, out double x, out double y)
         {
@@ -190,11 +183,11 @@ namespace AdaWeldSystem.WeldParamControl.Curves
         }
 
         /// <summary>从配置文件加载曲线数据。</summary>
-        /// <remarks>文件缺失或格式错误时保留内置默认值。</remarks>
+
         /// <returns>成功加载返回 true</returns>
         public bool LoadFromFile()
         {
-            XdocumentReaderWriter reader = new XdocumentReaderWriter(CurveXmlRelativeDir, CurveFileName);
+            XdocumentReaderWriter reader = ConfigFileManager.Instance.GetModuleXml(ConfigModule, CurveFileName).Raw;
             if (reader.GetXDocument() == null || reader.GetXDocument().Root == null)
             {
                 return false;
@@ -224,30 +217,26 @@ namespace AdaWeldSystem.WeldParamControl.Curves
         /// <summary>保存曲线数据到配置文件。</summary>
         public void SaveToFile()
         {
-            XdocumentReaderWriter reader = new XdocumentReaderWriter(CurveXmlRelativeDir, CurveFileName);
-            if (reader.GetXDocument() == null || reader.GetXDocument().Root == null)
+            XmlConfigFile file = ConfigFileManager.Instance.GetModuleXml(ConfigModule, CurveFileName);
+            XdocumentReaderWriter reader = file.Raw;
+            ConfigFileManager.SaveXmlWithAudit(file, "TA曲线", "配置变更", () =>
             {
-                reader.NewXdocument("Root");
-            }
+                if (reader.GetXDocument() == null || reader.GetXDocument().Root == null)
+                {
+                    reader.NewXdocument("Root");
+                }
 
-            WritePoints(reader, CurveAKey, PointsA);
-            WritePoints(reader, CurveBKey, PointsB);
-            reader.AddElement("INTERPOLATION", Interpolation.ToString());
-            reader.AddElement("EXTRAPOLATION", Extrapolation.ToString());
-            reader.AddElement("VERSION", Version);
-            reader.SaveXdocument();
+                WritePoints(reader, CurveAKey, PointsA);
+                WritePoints(reader, CurveBKey, PointsB);
+                reader.AddElement("INTERPOLATION", Interpolation.ToString());
+                reader.AddElement("EXTRAPOLATION", Extrapolation.ToString());
+                reader.AddElement("VERSION", Version);
+                reader.SaveXdocument();
+            });
         }
 
         /// <summary>从输入表格导入采样点并生成曲线配置。</summary>
-        /// <remarks>
-        /// 两段式：「曲线A」段后跟 LA位置与光斑。
-        /// 「曲线B」段后跟 TA位置与 LA偏移。
-        /// 分隔符接受逗号/制表符/分号/竖线，非数值行忽略。
-        /// 任一曲线缺失、单调性不合法或缺 X=0 锚点。
-        /// 整批不采用，保留现值。
-        /// 导入成功即替换并落盘，曲线只读。
-        /// UI 只提供导入入口。
-        /// </remarks>
+
         /// <param name="path">输入表格文件路径（CSV/TSV）</param>
         /// <param name="error">失败原因（纯文本）</param>
         /// <returns>导入成功返回 true</returns>
@@ -309,7 +298,7 @@ namespace AdaWeldSystem.WeldParamControl.Curves
         }
 
         /// <summary>采样点单调性校验：X 严格递增，Y 单调不减。</summary>
-        /// <remarks>离焦量增大，光斑必增大。</remarks>
+
         /// <param name="points">待校验采样点</param>
         /// <returns>合法返回 true</returns>
         public static bool IsValid(List<CurvePoint> points)

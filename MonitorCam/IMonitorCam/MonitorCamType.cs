@@ -2,9 +2,7 @@ using System;
 
 namespace AdaWeldSystem.MonitorCam.IMonitorCam
 {
-    /// <summary>
-    /// 监控相机连接状态，与设备流程态无关
-    /// </summary>
+    /// <summary>监控相机连接状态，与设备流程态无关</summary>
     public enum MonitorCameraConnectionState
     {
         /// <summary>未连接</summary>
@@ -20,9 +18,7 @@ namespace AdaWeldSystem.MonitorCam.IMonitorCam
         Error
     }
 
-    /// <summary>
-    /// 监控相机检测阶段（决定帧回调携带的阶段语义）
-    /// </summary>
+    /// <summary>监控相机检测阶段（决定帧回调携带的阶段语义）</summary>
     public enum MonitorCameraPhase
     {
         /// <summary>未知阶段</summary>
@@ -35,9 +31,7 @@ namespace AdaWeldSystem.MonitorCam.IMonitorCam
         WeldQuality
     }
 
-    /// <summary>
-    /// 监控相机失败语境（决定 DescribeLastError 返回的描述种类）
-    /// </summary>
+    /// <summary>监控相机失败语境（决定 DescribeLastError 返回的描述种类）</summary>
     public enum MonitorCamErrorContext
     {
         /// <summary>连接失败（SDK 连接返回码 / 枚举 / 打开设备）</summary>
@@ -50,9 +44,7 @@ namespace AdaWeldSystem.MonitorCam.IMonitorCam
         Analyze
     }
 
-    /// <summary>
-    /// 监控相机健康监督状态（相机自身产出，非流程态）
-    /// </summary>
+    /// <summary>监控相机健康监督状态（相机自身产出，非流程态）</summary>
     public enum MonitorSupervisionState
     {
         /// <summary>未启动监督</summary>

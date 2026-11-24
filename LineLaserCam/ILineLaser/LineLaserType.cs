@@ -14,11 +14,6 @@
     }
 
     /// <summary>线激光相机连接状态</summary>
-    /// <remarks>
-    /// 相机自身只关心「是否已连上硬件」。
-    /// 也只关心「是否正在出图」。
-    /// 与工作流程状态相互独立。
-    /// </remarks>
     public enum LineLaserConnectionState
     {
         /// <summary>未连接（无相机或连接失败）</summary>

@@ -188,11 +188,7 @@ namespace AdaWeldSystem.LineLaserCam.IntelligentLaserCam
         /// <summary>实测帧率(Hz)</summary>
         public double MeasuredFps { get { return _measuredFps; } }
 
-        /// <summary>
-        /// 校准数据快照，由 InternalRefCornerPts 回调捕获。
-        /// 供业务层生成轮廓 Mat 时绘制校准框与毫米刻度。
-        /// 本类只存储不做显示处理。
-        /// </summary>
+        /// <summary>校准数据快照，由 InternalRefCornerPts 回调捕获。 供业务层生成轮廓 Mat 时</summary>
         public override LineLaserCalibration Calibration
         {
             get { lock (_calibLock) { return _calibration; } }
@@ -1054,7 +1050,7 @@ namespace AdaWeldSystem.LineLaserCam.IntelligentLaserCam
                 }
                 // 空帧仍发画面事件，供调试页清屏重绘，
                 // 证明传感器确实已开启 —— 渲染器 Render 支持 cloud=null（清屏 + 画角点）。
-                // ⛔ 不发 ResultReady：结果事件消费方会刷新 _lastResultValid，
+                // 不发结果就绪事件，避免刷新有效标志
                 // 空帧高频触发会干扰首个结果超时判定。
                 _lastSuccess = false;
                 HandleEmptyFrame();
@@ -1181,9 +1177,6 @@ namespace AdaWeldSystem.LineLaserCam.IntelligentLaserCam
         }
 
         /// <summary>空帧处理：只触发画面事件，点云传 null 由渲染器清屏</summary>
-        /// <remarks>与 <see cref="HandleFrameReady"/> 的差别仅为不发 RaiseResultReady。
-        /// 空帧高频会干扰首个结果超时判定。
-        /// 仍画校准四边框，不触发结果事件。</remarks>
         private void HandleEmptyFrame()
         {
             _acquisitionCompletedSignal.Set();
@@ -1452,3 +1445,4 @@ namespace AdaWeldSystem.LineLaserCam.IntelligentLaserCam
         #endregion
     }
 }
+

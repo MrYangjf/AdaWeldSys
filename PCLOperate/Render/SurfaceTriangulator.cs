@@ -6,18 +6,13 @@ using System.Numerics;
 
 namespace AdaWeldSystem.PCLOperate.Render
 {
-    /// <summary>
-    /// 表面三角剖分器，提供多种点云表面重建算法。
-    /// 采样步长由外部控制，内部不做降采样。
-    /// sampleStep 为 1 表示使用全部点。
-    /// 大于 1 表示每隔 sampleStep 个点取一个。
-    /// </summary>
+    /// <summary>表面三角剖分器，提供多种点云表面重建算法。 采</summary>
     public static class SurfaceTriangulator
     {
         #region 1. 邻域搜索三角剖分
 
         /// <summary>邻域搜索三角剖分 - 基于局部邻域的快速表面重</summary>
-        /// <remarks>建</remarks>
+
         /// <param name="data">点云数据</param>
         /// <param name="searchRadius">搜索半径</param>
         /// <param name="maxNeighbors">最大邻居数量</param>
@@ -101,9 +96,7 @@ namespace AdaWeldSystem.PCLOperate.Render
 
         #region 2. Ball Pivoting 滚球法
 
-        /// <summary>
-        /// Ball Pivoting 滚球法表面重建
-        /// </summary>
+        /// <summary>Ball Pivoting 滚球法表面重建</summary>
         /// <param name="data">点云数据</param>
         /// <param name="ballRadius">球半径</param>
         /// <param name="sampleStep">采样步长（1=全部点，默认1）</param>
@@ -200,9 +193,7 @@ namespace AdaWeldSystem.PCLOperate.Render
             return circumRadius * circumRadius <= 1.0f / alphaSquared;
         }
 
-        /// <summary>
-        /// Alpha Shape 阿尔法形状表面重建
-        /// </summary>
+        /// <summary>Alpha Shape 阿尔法形状表面重建</summary>
         /// <param name="data">点云数据</param>
         /// <param name="alpha">Alpha值</param>
         /// <param name="sampleStep">采样步长（1=全部点，默认1）</param>
@@ -320,9 +311,7 @@ namespace AdaWeldSystem.PCLOperate.Render
             return inRadius / circumRadius;
         }
 
-        /// <summary>
-        /// 3D Delaunay 三角剖分表面重建
-        /// </summary>
+        /// <summary>3D Delaunay 三角剖分表面重建</summary>
         /// <param name="data">点云数据</param>
         /// <param name="qualityThreshold">质量阈值（0-1，默认0.3）</param>
         /// <param name="searchRadiusMultiplier">搜索半径倍数（相对于平均间距，默认5）</param>
@@ -435,9 +424,7 @@ namespace AdaWeldSystem.PCLOperate.Render
             return VectorMath.Normalize(normal);
         }
 
-        /// <summary>
-        /// Poisson 泊松表面重建
-        /// </summary>
+        /// <summary>Poisson 泊松表面重建</summary>
         /// <param name="data">点云数据</param>
         /// <param name="depth">八叉树深度（默认8）</param>
         /// <param name="samplesPerNode">每节点最小采样数（默认1.0）</param>
@@ -606,9 +593,7 @@ namespace AdaWeldSystem.PCLOperate.Render
             return point - planeNormal * dist;
         }
 
-        /// <summary>
-        /// MLS (Moving Least Squares) 移动最小二乘表面重建
-        /// </summary>
+        /// <summary>MLS (Moving Least Squares) 移动最小二乘表面重建</summary>
         /// <param name="data">点云数据</param>
         /// <param name="searchRadius">搜索半径</param>
         /// <param name="sampleStep">采样步长（1=全部点，默认1）</param>

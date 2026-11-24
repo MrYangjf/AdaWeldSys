@@ -15,7 +15,6 @@ using AdaWeldSystem.MainDeviceControl.DeviceStateApiCore;
 namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
 {
     /// <summary>监控相机工作流（单例）。</summary>
-    /// <remarks>数据归 MonitorCamManager（图像与健康巡检），结果经 LastResult/LastOverlay 只读拉取；差异化职责：轴控制行为 + 送丝距离合规检查。</remarks>
     public class MonitorCameraWorkflow : DeviceWorkflowBase
     {
         #region 常量
@@ -29,7 +28,6 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         private const string DefaultPort = "5000";
 
         /// <summary>主页面焊接预览帧率上限（Hz）</summary>
-        /// <remarks>节流专用，独立于轮询节拍。</remarks>
         private const int WeldPreviewHz = 30;
 
         /// <summary>调试页录像文件名前缀</summary>
@@ -87,13 +85,10 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         /// <summary>模组配置文件名（不含扩展名），在本流程类别目录。</summary>
         protected override string ConfigFileName { get { return "MonitorCameraWorkflow"; } }
 
-        /// <summary>配置落 MonitorCam\Workflow_XML 子目录。</summary>
-        protected override string ConfigRelativeDir { get { return @"Config\MonitorCam\Workflow_XML"; } }
+        /// <summary>模组配置所属模块（全局配置目录下的模块层）。</summary>
+        protected override string ConfigModule { get { return "MonitorCam"; } }
 
         /// <summary>焊接过程预览帧（已 30Hz 节流，订阅方拥有帧）</summary>
-        /// <remarks>ADR-016 R1 受限例外：本事件交付成品帧。
-        /// 开关随焊接启停；调试页仍直连管理器事件。
-        /// 无订阅方时由本流程释放。</remarks>
         public event Action<Mat> WeldPreviewFrame;
 
         /// <summary>最近一轮检测结果（只读快照，供 UI 拉取）</summary>
@@ -284,8 +279,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             Playback.SeekBySeconds(seconds);
         }
 
-        /// <summary>停止回放并释放解码资源（幂等；页面打开时调用即复位到干净会话）</summary>
-        /// <remarks>与设备侧 Stop 语义不同（仅停巡检），故单独命名</remarks>
+        /// <summary>停止回放并释放解码资源</summary>
         public void StopPlayback()
         {
             Playback.Stop();
@@ -315,7 +309,6 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         }
 
         /// <summary>确保相机已连接。</summary>
-        /// <remarks>未连接时用配置地址或默认地址打开。</remarks>
         private void EnsureConnected()
         {
             var cam = MonitorCamManager.Instance;
@@ -368,7 +361,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         }
 
         /// <summary>执行步 20：等待采集完成信号。</summary>
-        /// <remarks>WaitOne(0) 只做非阻塞探测，等待与超时归编排线程。</remarks>
+
         /// <returns>采集到有效图像返回 true</returns>
         private bool DoAcquireWait()
         {
@@ -391,7 +384,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         }
 
         /// <summary>执行步 30：图像分析。</summary>
-        /// <remarks>调用算法分析并写入结果；同步直算，算法耗时可控。</remarks>
+
         /// <returns>分析成功返回 true</returns>
         private bool DoAnalyze()
         {
@@ -404,7 +397,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         }
 
         /// <summary>执行步 800：成功收尾。</summary>
-        /// <remarks>连续模式回到 10 起下一轮，单轮模式回 Standby。</remarks>
+
         /// <returns>收尾完成返回 true</returns>
         private bool DoFinishOk()
         {
@@ -418,7 +411,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         }
 
         /// <summary>执行步 900：失败收尾三步走 —— 置 Alarm（经 SetWeldStatus 映射，禁手工赋值 State）</summary>
-        /// <remarks>→ 记日志与故障记录 → 回待机执行步。</remarks>
+
         /// <returns>收尾完成返回 true</returns>
         private bool DoFinishFail()
         {
@@ -512,7 +505,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         }
 
         /// <summary>管理器预览帧入口：按 30Hz 节流后上交</summary>
-        /// <remarks>被节流的帧所有权在本流程，必须当场释放。</remarks>
+
         /// <param name="frame">订阅方副本</param>
         private void OnManagerPreviewFrame(Mat frame)
         {
@@ -552,7 +545,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         #region 公共函数
 
         /// <summary>启动检测（phase 指定检测类型），continuous=true 则连续循环。</summary>
-        /// <remarks>相机健康巡检由 MonitorCamManager 自身启停，流程只发指令。</remarks>
+
         /// <param name="phase">检测类型</param>
         /// <param name="continuous">true 表示连续循环检测</param>
         public void Start(MonitorCameraPhase phase, bool continuous)
@@ -611,7 +604,6 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         }
 
         /// <summary>开启焊接过程预览（幂等，焊接开始调用）</summary>
-        /// <remarks>开启态才订阅管理器预览事件，关闭态不留订阅。</remarks>
         public void StartWeldPreview()
         {
             lock (_weldPreviewLock)
@@ -641,7 +633,6 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         #region 常驻流程
 
         /// <summary>流程处理：以 RunStep 驱动，每个 case 由 bool 判定推进。</summary>
-        /// <remarks>全部 case 无 Thread.Sleep / while 轮询 / 阻塞 WaitOne。</remarks>
         public override void FlowProcess()
         {
             if (!IsEnable) return;
@@ -680,7 +671,6 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         }
 
         /// <summary>状态清理：标志位全复位 + 执行步归零 + 强制未复位</summary>
-        /// <remarks>态。</remarks>
         public override void ClearStatus()
         {
             IsAlarm = false;
@@ -690,7 +680,6 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         }
 
         /// <summary>清除步骤用时：防止暂停 / 停止期间的时间被计入</summary>
-        /// <remarks>步骤时长导致异常超时。</remarks>
         public override void ResetWorkTime()
         {
             ResetStepTime();
@@ -745,7 +734,6 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         }
 
         /// <summary>设备日志：输出监控相机差异化日志（轴控制行为</summary>
-        /// <remarks>与送丝距离合规）。</remarks>
         public override void SubDeviceLog()
         {
             // todo 轴控制与送丝距离合规检查待补
@@ -783,7 +771,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         #region 非阻塞动作指令
 
         /// <summary>开启连接（非阻塞）：自起后台线程执行连接，动作即</summary>
-        /// <remarks>退出释放。</remarks>
+
         /// <returns>受理返回 true，忙线返回 false</returns>
         public override bool ConnectOn()
         {
@@ -840,7 +828,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         #region 可观测性与释放
 
         /// <summary>执行步号转中文名。</summary>
-        /// <remarks>新增步必须登记，否则该步不可观测。</remarks>
+
         /// <param name="step">执行步号</param>
         /// <returns>步号对应中文名；未登记的步返回「步骤 N」</returns>
         protected override string GetStepName(int step)
@@ -892,7 +880,6 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         public double OffsetY { get; set; }
 
         /// <summary>送丝距离差距值（供机器人调整送丝距离）。</summary>
-        /// <remarks>相机只输出检测结果，送丝距离由机器人控制。</remarks>
         public double WireStickoutDeviation { get; set; }
 
         /// <summary>横向偏差（mm，Y 向）：只报警不自动调整，人工修正</summary>

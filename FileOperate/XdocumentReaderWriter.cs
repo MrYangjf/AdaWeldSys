@@ -34,12 +34,11 @@ namespace AdaWeldSystem.FileOperate
         /// <summary>当前操作的XML文档对象。</summary>
         public XDocument _xDocument;
 
-        /// <summary>XML 配置文件所在目录路径；由构造函数按现行配置范式（Config\&lt;功能类别&gt;\&lt;主题&gt;_XML\）注入。</summary>
-        /// <remarks>无参构造仅用于内存文档，此时禁止调用 SaveXdocument。</remarks>
+        /// <summary>XML 配置文件所在目录路径；由构造函数按现行配置</summary>
         public string _configDirectory = string.Empty;
 
         /// <summary>创建实例（指定相对程序基目录的子目录，缺失自</summary>
-        /// <remarks>动建目录与空文档）</remarks>
+
         /// <param name="relativeDirectory">相对程序基目录的配置子目录，须符合现行范式</param>
         /// <param name="xmlName">XML文件名称（不含扩展名时会自动追加.xml）。</param>
         /// <param name="createIfMissing">文件/目录缺失时是否自动创建空文档；预览读传 false 以保证零写盘。</param>
@@ -79,7 +78,7 @@ namespace AdaWeldSystem.FileOperate
         }
 
         /// <summary>检查配置文件目录及文件是否存在，目录不存在</summary>
-        /// <remarks>时自动创建。</remarks>
+
         /// <param name="configXmlPath">配置文件完整路径。</param>
         /// <param name="createDirectory">目录缺失时是否自动创建；预览读传 false 以保证零写盘。</param>
         /// <returns>文件是否存在。</returns>
@@ -197,7 +196,7 @@ namespace AdaWeldSystem.FileOperate
         }
 
         /// <summary>获取当前XML文档的无格式化字符串表示，用于网络</summary>
-        /// <remarks>发送。</remarks>
+
         /// <returns>XML字符串。</returns>
         public string GetXmlSendStr()
         {
@@ -242,8 +241,7 @@ namespace AdaWeldSystem.FileOperate
         }
 
         /// <summary>从磁盘重新加载本实例绑定的配置文件</summary>
-        /// <remarks>回读校验须调用本方法，否则读到内存快照。
-        /// 缺失或解析失败时保留原文档并返回 false。</remarks>
+
         /// <returns>重载成功返回 true；无绑定路径/文件不存在/解析失败返回 false</returns>
         public bool Reload()
         {
@@ -362,7 +360,7 @@ namespace AdaWeldSystem.FileOperate
         }
 
         /// <summary>按路径获取元素，路径用/分隔。支持从根子元素开</summary>
-        /// <remarks>始的路径。</remarks>
+
         /// <param name="path">元素路径，如"CONFIG/IP_NUMBER"或"ROOT/CONFIG/IP_NUMBER"。</param>
         /// <returns>匹配的元素，未找到返回null。</returns>
         public XElement GetElementByPath(string path)

@@ -7,15 +7,7 @@ using AdaWeldSystem.FileOperate;
 
 namespace AdaWeldSystem.LineLaserCam.VirtualCam
 {
-    /// <summary>
-    /// 虚拟调试相机，自生成平直搭接轮廓点云。
-    /// 推算中心焊缝点，复用真实取帧链路。
-    /// 继承线激光抽象基类 LineLaserCameraBase。
-    /// 基类位于 ILineLaser 命名空间。
-    /// 可与英莱真实相机互换，由 LineLaserManager 注册与选中。
-    /// 模拟只用平直搭接焊缝，不再区分模式。
-    /// 显示图片由管理器网关控制，本类不生成。
-    /// </summary>
+    /// <summary>虚拟调试相机，自生成平直搭接轮廓点云。 推算中</summary>
     public class VirtualCam : LineLaserCameraBase
     {
         #region 私有变量
@@ -38,10 +30,10 @@ namespace AdaWeldSystem.LineLaserCam.VirtualCam
         #region 公共变量
 
         /// <summary>焊缝基准宽度（mm），平直搭接轮廓全跨</summary>
-        public double BaseSeamWidth { get; set; }
+        public const double BaseSeamWidth = 8.0;
 
         /// <summary>焊缝基准深度（mm），中心搭接缝槽深度</summary>
-        public double BaseSeamDepth { get; set; }
+        public const double BaseSeamDepth = 3.0;
 
         /// <summary>线激光数据频率（Hz）：30/60/80/120，决定模拟出图节拍与 ScanRateHz</summary>
         public int FrameRateHz { get; set; }
@@ -81,8 +73,6 @@ namespace AdaWeldSystem.LineLaserCam.VirtualCam
             : base("虚拟线激光")
         {
             // 不在属性上初始化，值在此显式赋值
-            BaseSeamWidth = 8.0;
-            BaseSeamDepth = 3.0;
             FrameRateHz = 30;
         }
 
@@ -91,9 +81,6 @@ namespace AdaWeldSystem.LineLaserCam.VirtualCam
         #region 私有函数
 
         /// <summary>生成一帧平直搭接轮廓点云，X 恒为 0</summary>
-        /// <remarks>单帧 X=0，YZ 构成轮廓线：Y 沿焊缝横向、Z 为高度。
-        /// 1000 点两端为平直面（z=0），中心为缝槽最低点。
-        /// 该最低点即中心焊缝点；叠加轻微起伏避免绝对水平。</remarks>
         private PointCloudData GenerateSeamContour()
         {
             PointCloudData cloud = new PointCloudData();
@@ -122,7 +109,7 @@ namespace AdaWeldSystem.LineLaserCam.VirtualCam
         }
 
         /// <summary>由轮廓推算简易结果：最近 y=0 点为中心</summary>
-        /// <remarks>横向跨度为缝宽；不走英莱算法，仅打通 PVT 链路。</remarks>
+
         /// <param name="cloud">本帧轮廓点云</param>
         /// <returns>焊缝识别结果</returns>
         private LineLaserSeamResult BuildResult(PointCloudData cloud)

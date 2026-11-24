@@ -9,13 +9,6 @@ using AdaWeldSystem.WeldParamControl;
 namespace AdaWeldSystem.UIDesign.SubDialog.MotionControlDialog
 {
     /// <summary>轴完整参数编辑（弹窗内使用，仅 Commit 落回配置实例）</summary>
-    /// <remarks>名称只读，避免破坏按名称取轴的关键引用。字段按台达原生参数结构组织。
-    /// 两段式：通用区（落 ROOT/AXES/AXIS）为两轴共用；轴特有区仅在构造时传入
-    /// <see cref="DeltaTaHomeConfig"/> 才出现（TA 轴，落 ROOT/TA_HOME）。
-    /// ⛔ Y 轴仍走单参构造：行序与容错语义不变。
-    /// 布局按字体实测：行高下限 30，标签列宽取实测；输入列等宽拉伸，输入框垂直居中。
-    /// 内容超高时整表竖向滚动（Panel.AutoScroll），各缩放不裁切。
-    /// </remarks>
     public partial class AxisConfigForm : UserControl
     {
         private sealed class RowSpec
@@ -60,9 +53,7 @@ namespace AdaWeldSystem.UIDesign.SubDialog.MotionControlDialog
             get { return _taHome != null; }
         }
 
-        /// <summary>用户在弹窗内点「确定」且校验通过、界面值已写回配置实例</summary>
-        /// <remarks>宿主据此决定是否落盘。⛔ 不要用 <c>Modal.open</c> 的返回值判定：
-        /// 弹窗关闭后内容控件已被销毁，界面值取不到。</remarks>
+        /// <summary>用户在弹窗内点「确定」且校验通过、界面值已写回</summary>
         public bool Committed
         {
             get { return _committed; }
@@ -123,7 +114,6 @@ namespace AdaWeldSystem.UIDesign.SubDialog.MotionControlDialog
         }
 
         /// <summary>按轴类型生成行清单</summary>
-        /// <remarks>Y 轴字段顺序与本轮改动前完全一致</remarks>
         /// <returns>结果集合。</returns>
         private List<RowSpec> BuildRowSpecs()
         {
@@ -185,7 +175,6 @@ namespace AdaWeldSystem.UIDesign.SubDialog.MotionControlDialog
         }
 
         /// <summary>按内容实测布局</summary>
-        /// <remarks>行高/列宽/总高都由字体度量推导，不写死尺寸</remarks>
         private void BuildLayout(List<RowSpec> rows)
         {
             int rowHeight = Math.Max(this.Font.Height + 14, 30);
@@ -345,7 +334,7 @@ namespace AdaWeldSystem.UIDesign.SubDialog.MotionControlDialog
                 AntdUI.Message.warn(this.FindForm(), error);
                 return;
             }
-            // 必须在控件存活期内写回配置：弹窗关闭后内容控件会被 AntdUI 销毁
+            // 控件存活期内写回配置
             Commit();
             Form host = this.FindForm();
             if (host != null) host.DialogResult = DialogResult.OK;
@@ -424,7 +413,7 @@ namespace AdaWeldSystem.UIDesign.SubDialog.MotionControlDialog
         }
 
         /// <summary>校验当前输入</summary>
-        /// <remarks>仅轴特有区启用；通用轴路径恒通过，保持 Y 轴原行为</remarks>
+
         /// <param name="error">首条中文错误提示</param>
         /// <returns>true = 可保存；false = 拦截且未写入任何配置</returns>
         public bool Validate(out string error)
@@ -471,7 +460,7 @@ namespace AdaWeldSystem.UIDesign.SubDialog.MotionControlDialog
                 { error = "扭矩上限 TA_TORQUE_LIMIT_N 必须大于 0 N（缺省 = 100% 力量基准，即不降额）"; return false; }
             if (torqueLimit > force100)
                 { error = string.Format("扭矩上限 {0:F2}N 不得超过 100% 力量基准 {1:F2}N（驱动器上限 1000‰）", torqueLimit, force100); return false; }
-            WeldAlgorithmsConfig taCfg = WeldParamManager.Instance.AlgorithmsConfig;
+            WeldParamConfig taCfg = WeldParamManager.Instance.AlgorithmsConfig;
             double taForceN = taCfg == null ? 0.0 : taCfg.TaForceN;
             if (taForceN > 0.0 && torqueLimit < taForceN)
                 { error = string.Format("扭矩上限 {0:F2}N 不得低于当前下压力目标 TA_FORCE_N {1:F2}N（否则目标全程被钳制且位置保持/Break 保压会打滑）", torqueLimit, taForceN); return false; }
@@ -486,11 +475,6 @@ namespace AdaWeldSystem.UIDesign.SubDialog.MotionControlDialog
         }
 
         /// <summary>把界面数值写回配置实例，解析失败保留原值</summary>
-        /// <remarks>TA 轴通用区写 AXIS，回零四参加 P1 两参写 TA_HOME。
-        /// TA_HOME 是唯一真相源。
-        /// ⛔ 不回写 AXIS 的 HOME_*，避免字段两处各存。
-        /// 镜像由 SaveConfig 派生。
-        /// ⛔ 只能在界面控件存活期内调用（由「确定」按钮触发），重复调用幂等。</remarks>
         public void Commit()
         {
             if (_committed) return;
@@ -531,3 +515,4 @@ namespace AdaWeldSystem.UIDesign.SubDialog.MotionControlDialog
         }
     }
 }
+

@@ -4,9 +4,7 @@ using System.Collections.Generic;
 
 namespace AdaWeldSystem.PCLOperate.Models
 {
-    /// <summary>
-    /// 点云数据容器
-    /// </summary>
+    /// <summary>点云数据容器</summary>
     public class PointCloudData
     {
         private readonly List<Point3D> _points = new List<Point3D>();
@@ -29,70 +27,50 @@ namespace AdaWeldSystem.PCLOperate.Models
                 _coloredPoints.Add(new Point3DColor(cp.X, cp.Y, cp.Z, cp.R, cp.G, cp.B, cp.A));
         }
 
-        /// <summary>
-        /// 点列表
-        /// </summary>
+        /// <summary>点列表</summary>
         public IReadOnlyList<Point3D> Points => _points.AsReadOnly();
 
-        /// <summary>
-        /// 彩色点列表
-        /// </summary>
+        /// <summary>彩色点列表</summary>
         public IReadOnlyList<Point3DColor> ColoredPoints => _coloredPoints.AsReadOnly();
 
-        /// <summary>
-        /// 是否包含颜色信息
-        /// </summary>
+        /// <summary>是否包含颜色信息</summary>
         public bool HasColor => _coloredPoints.Count > 0;
 
-        /// <summary>
-        /// 点的数量
-        /// </summary>
+        /// <summary>点的数量</summary>
         public int PointCount => HasColor ? _coloredPoints.Count : _points.Count;
 
-        /// <summary>
-        /// 添加点（无颜色）
-        /// </summary>
+        /// <summary>添加点（无颜色）</summary>
         public void AddPoint(float x, float y, float z)
         {
             _points.Add(new Point3D(x, y, z));
         }
 
-        /// <summary>
-        /// 添加彩色点
-        /// </summary>
+        /// <summary>添加彩色点</summary>
         public void AddPoint(float x, float y, float z, byte r, byte g, byte b, byte a = 255)
         {
             _coloredPoints.Add(new Point3DColor(x, y, z, r, g, b, a));
         }
 
-        /// <summary>
-        /// 添加点（从Point3D）
-        /// </summary>
+        /// <summary>添加点（从Point3D）</summary>
         public void AddPoint(Point3D point)
         {
             _points.Add(point);
         }
 
-        /// <summary>
-        /// 添加彩色点（从Point3DColor）
-        /// </summary>
+        /// <summary>添加彩色点（从Point3DColor）</summary>
         public void AddPoint(Point3DColor point)
         {
             _coloredPoints.Add(point);
         }
 
-        /// <summary>
-        /// 清除所有点
-        /// </summary>
+        /// <summary>清除所有点</summary>
         public void Clear()
         {
             _points.Clear();
             _coloredPoints.Clear();
         }
 
-        /// <summary>
-        /// 计算边界框
-        /// </summary>
+        /// <summary>计算边界框</summary>
         public void GetBounds(out float minX, out float minY, out float minZ,
                               out float maxX, out float maxY, out float maxZ)
         {
@@ -131,9 +109,7 @@ namespace AdaWeldSystem.PCLOperate.Models
             }
         }
 
-        /// <summary>
-        /// 获取中心点
-        /// </summary>
+        /// <summary>获取中心点</summary>
         public (float x, float y, float z) GetCenter()
         {
             GetBounds(out float minX, out float minY, out float minZ,
@@ -141,9 +117,7 @@ namespace AdaWeldSystem.PCLOperate.Models
             return ((minX + maxX) / 2, (minY + maxY) / 2, (minZ + maxZ) / 2);
         }
 
-        /// <summary>
-        /// 转换为彩色点列表（如果没有颜色，使用默认白色）
-        /// </summary>
+        /// <summary>转换为彩色点列表（如果没有颜色，使用默认白色）</summary>
         /// <returns>结果集合。</returns>
         public List<Point3DColor> ToColoredPoints(byte defaultR = 255, byte defaultG = 255, byte defaultB = 255)
         {

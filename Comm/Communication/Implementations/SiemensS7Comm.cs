@@ -7,7 +7,6 @@ using AdaWeldSystem.Comm.Communication.Abstractions;
 namespace AdaWeldSystem.Comm.Communication.Implementations
 {
     /// <summary>西门子 S7 PLC 通讯实现</summary>
-    /// <remarks>基于 S7NetPlus（S7.Net.dll），继承 CommChannelBase。</remarks>
     public class SiemensS7Comm : CommChannelBase
     {
         private Plc _plc;

@@ -10,16 +10,7 @@ using AdaWeldSystem.Comm.SystemComm;
 
 namespace AdaWeldSystem.MonitorCam.HikCam
 {
-    /// <summary>
-    /// 海康威视（Hikvision MVS）面阵相机实现：以官方 MvCameraControl.Net（V2）封装落地 IMonitorCamApi。
-    /// 职责边界：实现层只按契约取帧并抛出。
-    /// 阶段/巡检/配置全由管理器承担，本类不判断。
-    /// 取流模型：连接只配置参数，不开流；
-    /// 采集由 StartCapture 开启，帧统一线程抛出。
-    /// 软触发单帧 TriggerSingleShot（TriggerMode On + Software）；CaptureSingleFrame 保留供业务层分析链路。
-    /// </summary>
-    /// <remarks>MVS 4.8.1 官方口径：取流走 StreamGrabber，取帧后必须 FreeImageBuffer；非 Mono8 经 ConvertPixelType 转换；
-    /// 录像走 device.VideoRecorder（StartRecord → 每帧 InputOneFrame → StopRecord），宽高与像素格式取相机当前参数。</remarks>
+    /// <summary>海康威视（Hikvision MVS）面阵相机实现：以官方 MvCameraControl.Net</summary>
     public class HikCam : IMonitorCamApi
     {
         #region 私有变量
@@ -84,9 +75,7 @@ namespace AdaWeldSystem.MonitorCam.HikCam
 
         #region 构造函数
 
-        /// <summary>
-        /// 创建海康相机实现实例（不立即连接，连接由 Connect 触发）
-        /// </summary>
+        /// <summary>创建海康相机实现实例（不立即连接，连接由 Connect 触发）</summary>
         public HikCam()
         {
             _device = null;
@@ -123,7 +112,7 @@ namespace AdaWeldSystem.MonitorCam.HikCam
         }
 
         /// <summary>连接相机：初始化、枚举、按 IP 匹配、开设备</summary>
-        /// <remarks>匹配不到即连接失败；随后预置参数，不开流。</remarks>
+
         /// <param name="ip">相机 IP；为空时取枚举首台</param>
         /// <param name="port">相机端口；海康 SDK 不使用，保留以兼容契约</param>
         /// <returns>是否成功建立连接</returns>
@@ -240,8 +229,8 @@ namespace AdaWeldSystem.MonitorCam.HikCam
             return string.Format("{0}，厂商错误码 0x{1:X}（{2}）", head, code, operation);
         }
 
-        /// <summary>扫描（枚举）当前连接的海康相机，GigE 相机解码 IP，返回含 IP </summary>
-        /// <remarks>的设备列表。 扫描只需 SDK 已初始化，无需已连接。</remarks>
+        /// <summary>扫描（枚举）当前连接的海康相机，GigE 相机解码 IP，返回含 IP</summary>
+
         /// <returns>发现的设备列表；无设备或扫描失败返回空列表</returns>
         public List<MonitorCamDeviceInfo> ScanDevices()
         {
@@ -288,7 +277,6 @@ namespace AdaWeldSystem.MonitorCam.HikCam
         }
 
         /// <summary>断开连接并释放设备资源（先停录像/采集，SDK 全局资</summary>
-        /// <remarks>源在 Dispose 时统一释放）</remarks>
         public void Disconnect()
         {
             lock (_sync)
@@ -314,7 +302,7 @@ namespace AdaWeldSystem.MonitorCam.HikCam
         }
 
         /// <summary>触发一次采集并同步返回帧（2D 面阵相机唯一取帧</summary>
-        /// <remarks>方式）：取缓冲 → 像素格式归一 → 建 Mat → 释放缓冲。</remarks>
+
         /// <returns>采集到的图像帧（独立副本）；失败返回 null</returns>
         public Mat CaptureSingleFrame()
         {
@@ -352,7 +340,7 @@ namespace AdaWeldSystem.MonitorCam.HikCam
         }
 
         /// <summary>开始连续采集（对齐官方 demo 开始采集）：连续模式 + 开启</summary>
-        /// <remarks>取流 + 启动取帧线程。 已在采集中时直接返回 true；未连接返回 false。</remarks>
+
         /// <returns>是否成功开始采集</returns>
         public bool StartCapture()
         {
@@ -399,7 +387,6 @@ namespace AdaWeldSystem.MonitorCam.HikCam
         }
 
         /// <summary>停止连续采集：录像中先停止录像，再停取帧线程</summary>
-        /// <remarks>并关闭取流</remarks>
         public void StopCapture()
         {
             lock (_sync)
@@ -432,7 +419,7 @@ namespace AdaWeldSystem.MonitorCam.HikCam
         }
 
         /// <summary>软触发单帧：切触发模式 → 开启取流 → TriggerSoftware → 取一帧 → 关闭取</summary>
-        /// <remarks>流。 结束后保持触发模式（连续点按直接复用）；开始采集时由 StartCapture 恢复连续模式。</remarks>
+
         /// <returns>触发取得的图像帧（独立副本）；失败返回 null</returns>
         public Mat TriggerSingleShot()
         {
@@ -496,7 +483,7 @@ namespace AdaWeldSystem.MonitorCam.HikCam
         }
 
         /// <summary>开始录像（须处于连续取流中）：以当前宽高/像素格</summary>
-        /// <remarks>式/帧率录制 AVI， 帧由取帧线程（GrabLoop）统一喂给 VideoRecorder。</remarks>
+
         /// <param name="filePath">录像文件完整路径（.avi）</param>
         /// <returns>是否成功开始录像</returns>
         public bool StartRecord(string filePath)
@@ -706,8 +693,7 @@ namespace AdaWeldSystem.MonitorCam.HikCam
         }
 
         /// <summary>按 IP 精确挑选设备，匹配不到即失败</summary>
-        /// <remarks>未指定 IP 时取枚举首台。
-        /// 不静默回退首台，避免连错相机。</remarks>
+
         /// <param name="devices">枚举到的设备列表</param>
         /// <param name="ip">目标相机 IP；为空表示不限定</param>
         /// <param name="selected">选中的设备信息</param>
@@ -743,7 +729,7 @@ namespace AdaWeldSystem.MonitorCam.HikCam
         }
 
         /// <summary>将取流帧转换为 Emgu Mat（独立副本）：彩色统一转 RGB8_Packed、其余统一</summary>
-        /// <remarks>转 Mono8， 像素数据经 Marshal.Copy 复制出独立缓冲，无需再 Clone。</remarks>
+
         /// <param name="frameOut">取流帧</param>
         /// <returns>独立 Mat；转换失败返回 null</returns>
         private Mat BuildMat(IFrameOut frameOut)
@@ -806,7 +792,7 @@ namespace AdaWeldSystem.MonitorCam.HikCam
         }
 
         /// <summary>判断像素格式是否为彩色（照官方 Image_ConvertPixelType 示例归类，拜耳</summary>
-        /// <remarks>系列属彩色）</remarks>
+
         /// <param name="type">像素格式</param>
         /// <returns>彩色返回 true</returns>
         private static bool IsColorPixelFormat(MvGvspPixelType type)
@@ -844,7 +830,6 @@ namespace AdaWeldSystem.MonitorCam.HikCam
         }
 
         /// <summary>启动取帧线程（须已持 _sync 且取流已开启）：置运行标志</summary>
-        /// <remarks>仅在 StartCapture（取流已开启）时调用；连接阶段不启动（demo 语义：连接不采集）。 并拉起 GrabLoop。</remarks>
         private void StartGrabThreadLocked()
         {
             _grabRunning = true;
@@ -857,8 +842,7 @@ namespace AdaWeldSystem.MonitorCam.HikCam
             _grabThread.Start();
         }
 
-        /// <summary>连续采集取帧线程体：取缓冲 → （录像中）喂 VideoRecorder → 建预览 Mat 抛 PreviewFrame → </summary>
-        /// <remarks>释放缓冲。 预览/录像共用一次 GetImageBuffer，避免多线程争抢帧队列。</remarks>
+        /// <summary>连续采集取帧线程体：取缓冲 → （录像中）喂 VideoRecorder → 建预览 Mat 抛 PreviewFrame →</summary>
         private void GrabLoop()
         {
             while (_grabRunning)
@@ -930,7 +914,7 @@ namespace AdaWeldSystem.MonitorCam.HikCam
         }
 
         /// <summary>更新连接态（状态切换本身不打日志，日志由调用</summary>
-        /// <remarks>点负责）</remarks>
+
         /// <param name="newState">新状态</param>
         private void SetState(MonitorCameraConnectionState newState)
         {

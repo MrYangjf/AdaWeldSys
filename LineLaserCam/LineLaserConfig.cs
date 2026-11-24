@@ -2,6 +2,7 @@ using System;
 using System.Globalization;
 using System.Xml.Linq;
 using AdaWeldSystem.FileOperate;
+using AdaWeldSystem.ConfigFileControl.Implementations;
 using AdaWeldSystem.LineLaserCam.ILineLaser;
 using AdaWeldSystem.Comm.SystemComm;
 using AdaWeldSystem.LineLaserCam.VirtualCam;
@@ -9,8 +10,6 @@ using AdaWeldSystem.LineLaserCam.VirtualCam;
 namespace AdaWeldSystem.LineLaserCam
 {
     /// <summary>线激光配置</summary>
-    /// <remarks>走 XdocumentReaderWriter 读写，禁止 XmlSerializer；文件 Config\LineLaser\LineLaser_XML\LineLaserConfig.xml，
-    /// 全系统仅 LineLaserManager.Instance.Config 一处入口；非线程安全，运行期禁止在流程循环内读写。模拟焊缝固定平直搭接。</remarks>
     public class LineLaserConfig
     {
         #region 私有变量
@@ -23,8 +22,8 @@ namespace AdaWeldSystem.LineLaserCam
         private const string DisplayPath = "ROOT/DISPLAY";
         private const string TimeoutPath = "ROOT/TIMEOUT";
 
-        /// <summary>线激光配置 XML 子目录（相对程序基目录）</summary>
-        private const string LineLaserXmlRelativeDir = @"Config\LineLaser\LineLaser_XML";
+        /// <summary>线激光配置所属模块（全局配置目录下的模块层）。</summary>
+        private const string ConfigModule = "LineLaser";
 
         private const string DefaultSensorIpValue = "192.168.178.210";
 
@@ -132,7 +131,7 @@ namespace AdaWeldSystem.LineLaserCam
         }
 
         /// <summary>把超时阈值收敛到 1~3600 秒的合法区间，防止配置写 0 或</summary>
-        /// <remarks>负数导致「立即超时」或永不超时。</remarks>
+
         /// <param name="seconds">配置读出的原始秒数</param>
         /// <returns>合法秒数</returns>
         private static int SanitizeSeconds(int seconds)
@@ -147,7 +146,7 @@ namespace AdaWeldSystem.LineLaserCam
         #region 公共函数
 
         /// <summary>把当前内存配置写成完整节点树</summary>
-        /// <remarks>保存与补缺模板共用</remarks>
+
         /// <param name="reader">目标读写器（已 NewXdocument）</param>
         private void WriteConfigNodes(XdocumentReaderWriter reader)
         {
@@ -182,8 +181,7 @@ namespace AdaWeldSystem.LineLaserCam
         /// <param name="allowHeal">true = 权威加载，缺键补写并可生成缺失模板；false = 预览读，零写盘</param>
         public void LoadConfig(bool allowHeal)
         {
-            string fullPath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory,
-                LineLaserXmlRelativeDir, ConfigFileName + ".xml");
+            string fullPath = ConfigFileManager.ModuleAbsolutePath(ConfigModule, ConfigFileName + ".xml");
             bool fileMissing = !System.IO.File.Exists(fullPath);
             if (fileMissing && allowHeal)
             {
@@ -191,7 +189,7 @@ namespace AdaWeldSystem.LineLaserCam
                 Log("配置缺失，已生成默认配置 " + ConfigFileName + ".xml", MessageLevel.Warning);
             }
 
-            XdocumentReaderWriter reader = new XdocumentReaderWriter(LineLaserXmlRelativeDir, ConfigFileName, false);
+            XdocumentReaderWriter reader = ConfigFileManager.Instance.GetModuleXml(ConfigModule, ConfigFileName, false).Raw;
             if (reader.GetXDocument() == null || reader.GetXDocument().Root == null)
             {
                 Log("配置为空，保留默认参数", MessageLevel.Warning);
@@ -222,7 +220,7 @@ namespace AdaWeldSystem.LineLaserCam
                 mirror.NewXdocument(RootName, "1.0", "UTF-8");
                 WriteConfigNodes(mirror);
                 XDocument template = mirror.GetXDocument();
-                ConfigSelfHeal.EnsureXml(fullPath, LineLaserXmlRelativeDir + "\\" + ConfigFileName + ".xml",
+                ConfigSelfHeal.EnsureXml(fullPath, ConfigFileManager.ModuleRelativeDir(ConfigModule) + "\\" + ConfigFileName + ".xml",
                     ConfigFileName + ".xml", template, true);
             }
 
@@ -232,12 +230,16 @@ namespace AdaWeldSystem.LineLaserCam
         /// <summary>保存配置，末尾落盘</summary>
         public void SaveConfig()
         {
-            XdocumentReaderWriter reader = new XdocumentReaderWriter(LineLaserXmlRelativeDir, ConfigFileName);
-            reader.NewXdocument(RootName, "1.0", "UTF-8");
+            XmlConfigFile file = ConfigFileManager.Instance.GetModuleXml(ConfigModule, ConfigFileName);
+            XdocumentReaderWriter reader = file.Raw;
+            ConfigFileManager.SaveXmlWithAudit(file, "线激光配置", "配置变更", () =>
+            {
+                reader.NewXdocument(RootName, "1.0", "UTF-8");
 
-            WriteConfigNodes(reader);
+                WriteConfigNodes(reader);
 
-            reader.SaveXdocument();
+                reader.SaveXdocument();
+            });
             Log(string.Format("配置已保存 默认相机 {0} 相机IP {1} 模拟数据频率 {2}Hz", DefaultKind, SensorIp, LineLaserDataFrequencyHz));
         }
 

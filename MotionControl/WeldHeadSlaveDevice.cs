@@ -6,7 +6,6 @@ using AdaWeldSystem.MotionControl.DeltaEtherCAT;
 namespace AdaWeldSystem.MotionControl
 {
     /// <summary>焊接头台达 EtherCAT 从站（对象字典读写）</summary>
-    /// <remarks>挂靠 MontionManager，配置持久化归其独占；寄存器整型定标换算在本类完成。</remarks>
     public class WeldHeadSlaveDevice : IDisposable
     {
         #region 对象字典常量
@@ -102,15 +101,13 @@ namespace AdaWeldSystem.MotionControl
         /// <summary>保护镜温度报警阈值（℃；≤0 表示未配置，不触发）</summary>
         public double TemperatureAlarmThreshold { get; set; }
 
-        /// <summary>温度越阈报警开关（false = 触发链保留但不真正报警；当前缺省关闭）</summary>
-        /// <remarks>改 true 即恢复报警，其余链路无需改动。
-        /// ⛔ 不用 const：常量条件会让编译器报 CS0162 不可达代码。</remarks>
+        /// <summary>温度越阈报警开关</summary>
         public static readonly bool TemperatureAlarmEnabled = false;
 
         /// <summary>报警触发事件（SensorStatus 位或驱动板报警）</summary>
         public event EventHandler<HeadAlarmStatus> AlarmTriggered;
 
-        /// <summary>电机脉冲当量（计数/mm），默认 10；量纲变更的唯一入口，改配置即生效</summary>
+        /// <summary>电机脉冲当量</summary>
         public double MotorPulsePerMm { get; set; }
 
         #endregion
@@ -198,7 +195,7 @@ namespace AdaWeldSystem.MotionControl
             CurrentTemperature = data;
             if (TemperatureAlarmThreshold > 0.0 && data.ProtectiveLensTemp >= TemperatureAlarmThreshold)
             {
-                // 关闭只跳过 Invoke，事件保留（⛔ 勿退化 CS0067 空壳）
+                // 关闭只跳过触发，保留事件
                 if (TemperatureAlarmEnabled)
                 {
                     TemperatureAlarm?.Invoke(this, data);
@@ -408,7 +405,7 @@ namespace AdaWeldSystem.MotionControl
         }
 
         /// <summary>设置对焦轴目标位置并使能</summary>
-        /// <remarks>LA 对焦轴走 RxPDO 0x7000 电机对象，不经台达运控轴；mm 换算统一经 <see cref="MmToMotorCount"/>。</remarks>
+
         /// <param name="positionMm">目标位置（mm）</param>
         /// <param name="enable">是否使能电机</param>
         /// <returns>写入成功返回 true</returns>
@@ -560,7 +557,6 @@ namespace AdaWeldSystem.MotionControl
     }
 
     /// <summary>对焦轴电机状态快照（0x6020 段）</summary>
-    /// <remarks>C# 7.3 无可空引用类型，故用 struct；<c>default</c> 即停止/0/false，与构造意图一致。</remarks>
     public struct MotorState
     {
         /// <summary>运行状态</summary>
@@ -574,7 +570,6 @@ namespace AdaWeldSystem.MotionControl
     }
 
     /// <summary>振镜参数（0x7010 写 / 0x6010 读）</summary>
-    /// <remarks>工程值浮点、寄存器整型，换算在通道内完成。</remarks>
     public class GalvoParams
     {
         /// <summary>振镜图形（1 圆 2 八字 3 直线 4 圆弧）</summary>
@@ -643,8 +638,7 @@ namespace AdaWeldSystem.MotionControl
         }
 
         /// <summary>创建振镜逻辑零位</summary>
-        /// <remarks>PDO 无零位对象，以「静止初态」定义零位（同轴回零完成）。
-        /// 勿改构造默认值：协议默认 ≠ 逻辑零位。</remarks>
+
         /// <returns>逻辑零位参数</returns>
         public static GalvoParams CreateLogicalHome()
         {
@@ -665,6 +659,87 @@ namespace AdaWeldSystem.MotionControl
                 ObliqueEllipseCorrection = 0,
                 GalvoEnable = false
             };
+        }
+    }
+
+    /// <summary>振镜全局参数（各图形共用，不随图形分档变化）。</summary>
+    public class GalvoGlobalParams
+    {
+        /// <summary>旋转角度（°，0~360，精度 1）</summary>
+        public int Angle { get; set; }
+
+        /// <summary>起始角度（°，0~360，精度 0.1）</summary>
+        public double StartAngle { get; set; }
+
+        /// <summary>结束角度（°，0~360，精度 0.1）</summary>
+        public double EndAngle { get; set; }
+
+        /// <summary>X 中心（mm，-10~10，精度 0.1）</summary>
+        public double XCenter { get; set; }
+
+        /// <summary>Y 中心（mm，-10~10，精度 0.1）</summary>
+        public double YCenter { get; set; }
+
+        /// <summary>X 压缩（%，-100~100，精度 1）</summary>
+        public int XCompression { get; set; }
+
+        /// <summary>Y 压缩（%，-100~100，精度 1）</summary>
+        public int YCompression { get; set; }
+
+        /// <summary>目标尺寸（mm，0~5，精度 0.1）</summary>
+        public double TargetSize { get; set; }
+
+        /// <summary>斜椭校正（-180~180，精度 1）</summary>
+        public int ObliqueEllipseCorrection { get; set; }
+
+        /// <summary>振镜使能（true 打开）</summary>
+        public bool GalvoEnable { get; set; }
+
+        /// <summary>创建并填入协议默认值</summary>
+        public GalvoGlobalParams()
+        {
+            Angle = 0;
+            StartAngle = 0.0;
+            EndAngle = 360.0;
+            XCenter = 0.0;
+            YCenter = 0.0;
+            XCompression = 0;
+            YCompression = 0;
+            TargetSize = 1.0;
+            ObliqueEllipseCorrection = 0;
+            GalvoEnable = false;
+        }
+    }
+
+    /// <summary>振镜分图形参数（一图形一档：摆宽/摆长/频率）。</summary>
+    public class GalvoShapeParams
+    {
+        /// <summary>摆宽（mm）</summary>
+        public double Width { get; set; }
+
+        /// <summary>摆长（mm）</summary>
+        public double Length { get; set; }
+
+        /// <summary>摆动频率（Hz）</summary>
+        public int Frequency { get; set; }
+
+        /// <summary>创建并填入默认值（协议默认：宽 1.0 / 长 1.0 / 频率 50）</summary>
+        public GalvoShapeParams()
+        {
+            Width = 1.0;
+            Length = 1.0;
+            Frequency = 50;
+        }
+
+        /// <summary>创建并填入指定值</summary>
+        /// <param name="width">摆宽（mm）</param>
+        /// <param name="length">摆长（mm）</param>
+        /// <param name="frequency">摆动频率（Hz）</param>
+        public GalvoShapeParams(double width, double length, int frequency)
+        {
+            Width = width;
+            Length = length;
+            Frequency = frequency;
         }
     }
 
@@ -732,7 +807,7 @@ namespace AdaWeldSystem.MotionControl
         {
             Timestamp = DateTime.Now;
         }
-        /// <summary>报警原因文本（焊接头硬件故障树的唯一产出点；纯文本，空格分隔）</summary>
+        /// <summary>报警原因文本</summary>
         /// <returns>报警原因；无报警返回空串</returns>
         public string Describe()
         {
@@ -747,8 +822,6 @@ namespace AdaWeldSystem.MotionControl
     }
 
     /// <summary>焊接头从站 PDO 映射条目</summary>
-    /// <remarks>来源：焊接头从站 IO 表（EtherCAT协议.xlsx，sheet 扫描切）；
-    /// 字段与表头逐列对应，持久化于 WeldHeadSlave.xml 的 <c>ROOT/IO_MAP</c>。</remarks>
     public class WeldHeadPdoEntry
     {
         /// <summary>序号</summary>
@@ -798,7 +871,6 @@ namespace AdaWeldSystem.MotionControl
     }
 
     /// <summary>焊接头配置（阈值 + 振镜默认参数 + PDO 映射）</summary>
-    /// <remarks>实例与持久化归 MontionManager 独占（WeldHeadSlave.xml），外部只读。</remarks>
     public class WeldHeadConfig
     {
         /// <summary>温度警告阈值（℃）</summary>
@@ -819,11 +891,13 @@ namespace AdaWeldSystem.MotionControl
         /// <summary>切割气压检测延时（ms）</summary>
         public int PressureDelayMs { get; set; }
 
-        /// <summary>振镜默认参数</summary>
-        public GalvoParams DefaultGalvo { get; private set; }
+        /// <summary>振镜全局参数（各图形共用）</summary>
+        public GalvoGlobalParams DefaultGalvo { get; private set; }
+
+        /// <summary>振镜分图形参数表：每种图形各存一份宽/长/频。</summary>
+        public System.Collections.Generic.Dictionary<WsgGalvoPattern, GalvoShapeParams> GalvoShapePresets { get; private set; }
 
         /// <summary>电机脉冲当量默认值（计数/mm）= 10 个计数 1mm</summary>
-        /// <remarks>协议表未标单位，故做成可配置项 <c>MOTOR/PULSE_PER_MM</c>。</remarks>
         public const double DefaultMotorPulsePerMm = 10.0;
 
         /// <summary>电机脉冲当量（计数/mm），默认 10；量纲可配置</summary>
@@ -852,11 +926,59 @@ namespace AdaWeldSystem.MotionControl
             RiseAlarmThreshold = 50.0;
             PressureAlarmThreshold = 5.0;
             PressureDelayMs = 500;
-            DefaultGalvo = new GalvoParams();
+            DefaultGalvo = new GalvoGlobalParams();
+            GalvoShapePresets = new System.Collections.Generic.Dictionary<WsgGalvoPattern, GalvoShapeParams>();
+            foreach (WsgGalvoPattern pattern in GalvoPatternOrder)
+            {
+                GalvoShapePresets[pattern] = new GalvoShapeParams();
+            }
             MotorPulsePerMm = DefaultMotorPulsePerMm;
             IoMapSourceFile = string.Empty;
             IoMapSourceTime = string.Empty;
             IoMapSourceRows = 0;
         }
+
+        /// <summary>振镜图形的标准顺序</summary>
+        public static readonly WsgGalvoPattern[] GalvoPatternOrder =
+        {
+            WsgGalvoPattern.Circle, WsgGalvoPattern.Eight, WsgGalvoPattern.Line, WsgGalvoPattern.Arc
+        };
+
+        /// <summary>取指定图形的分档参数；缺档时回退直线档</summary>
+        /// <param name="pattern">图形</param>
+        /// <returns>该图形的宽/长/频</returns>
+        public GalvoShapeParams GetGalvoShape(WsgGalvoPattern pattern)
+        {
+            if (GalvoShapePresets.TryGetValue(pattern, out GalvoShapeParams shape)) return shape;
+            if (GalvoShapePresets.TryGetValue(WsgGalvoPattern.Line, out shape)) return shape;
+            return new GalvoShapeParams();
+        }
+
+        /// <summary>按图形组装一份完整的振镜下发参数。</summary>
+        /// <param name="pattern">图形</param>
+        /// <returns>可直接下发的振镜参数</returns>
+        public GalvoParams BuildGalvoParamsFor(WsgGalvoPattern pattern)
+        {
+            GalvoShapeParams shape = GetGalvoShape(pattern);
+            GalvoParams galvo = new GalvoParams
+            {
+                Pattern = pattern,
+                Width = shape.Width,
+                Length = shape.Length,
+                Frequency = shape.Frequency,
+                Angle = DefaultGalvo.Angle,
+                StartAngle = DefaultGalvo.StartAngle,
+                EndAngle = DefaultGalvo.EndAngle,
+                XCenter = DefaultGalvo.XCenter,
+                YCenter = DefaultGalvo.YCenter,
+                XCompression = DefaultGalvo.XCompression,
+                YCompression = DefaultGalvo.YCompression,
+                TargetSize = DefaultGalvo.TargetSize,
+                ObliqueEllipseCorrection = DefaultGalvo.ObliqueEllipseCorrection,
+                GalvoEnable = DefaultGalvo.GalvoEnable
+            };
+            return galvo;
+        }
     }
 }
+

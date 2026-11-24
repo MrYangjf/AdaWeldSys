@@ -15,7 +15,7 @@ namespace AdaWeldSystem.UIDesign.SubDialog.CommConfigDialog
     /// <summary>服务器/客户端/收发 XML 文件的树形浏览与编辑</summary>
     public partial class FileEditorForm : UserControl
     {
-        /// <summary>AntdUI.Table 行模型：用于展示和编辑 XML 节点的属性信息。 每行对应一个可编辑项（名称/值/属性/统计）。</summary>
+        /// <summary>AntdUI.Table 行模型：用于展示和编辑 XML 节点的属性信息。 每行对</summary>
         class XmlPropertyRow
         {
             /// <summary>属性名（表头 Key = Name）。</summary>
@@ -24,7 +24,7 @@ namespace AdaWeldSystem.UIDesign.SubDialog.CommConfigDialog
             /// <summary>属性值（表头 Key = Value）。</summary>
             public string Value { get; set; }
 
-            /// <summary>该行对应的 XML 属性名；null 表示非属性行（元素名称/元素值/统计）。</summary>
+            /// <summary>该行对应的 XML 属性名；null 表示非属性行</summary>
             public XName AttributeName { get; set; }
 
             /// <summary>该行是否为元素名称行。</summary>
@@ -60,8 +60,7 @@ namespace AdaWeldSystem.UIDesign.SubDialog.CommConfigDialog
             InitPropertyGridTable();
         }
 
-        /// <summary>初始化右侧属性表格的列与编辑模式（AntdUI.Table 固定范式：Columns </summary>
-        /// <remarks>代码后置）。</remarks>
+        /// <summary>初始化右侧属性表格的列与编辑模式（AntdUI.Table 固定范式：Columns</summary>
         private void InitPropertyGridTable()
         {
             _xmlPropertyGrid.EditMode = AntdUI.TEditMode.DoubleClick;
@@ -96,7 +95,7 @@ namespace AdaWeldSystem.UIDesign.SubDialog.CommConfigDialog
         }
 
         /// <summary>构建Tree节点的显示文本，包含元素名和关键属性信</summary>
-        /// <remarks>息。</remarks>
+
         /// <param name="element">XML元素。</param>
         /// <returns>格式化后的节点显示文本。</returns>
         private string BuildNodeDisplayText(XElement element)
@@ -225,7 +224,6 @@ namespace AdaWeldSystem.UIDesign.SubDialog.CommConfigDialog
         /// <summary>Tree节点选择变更事件，加载选中 XML 节点的属性信息到</summary>
         /// <param name="sender">发送方。</param>
         /// <param name="e">事件参数。</param>
-        /// <remarks>右侧表格。</remarks>
         private void XmlTreeView_SelectChanged(object sender, TreeSelectEventArgs e)
         {
             if (e.Item == null || !_nodeToXml.TryGetValue(e.Item, out XElement element))
@@ -238,7 +236,7 @@ namespace AdaWeldSystem.UIDesign.SubDialog.CommConfigDialog
         }
 
         /// <summary>将选中 XML 节点的元素名称、元素值、各属性及统计信</summary>
-        /// <remarks>息加载为表格行。</remarks>
+
         /// <param name="element">选中的 XML 元素。</param>
         private void LoadNodeToTable(XElement element)
         {

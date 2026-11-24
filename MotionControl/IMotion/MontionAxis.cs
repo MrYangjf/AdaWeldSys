@@ -4,8 +4,6 @@ using AdaWeldSystem.Comm.SystemComm;
 namespace AdaWeldSystem.MotionControl.IMotion
 {
     /// <summary>运动轴抽象基类</summary>
-    /// <remarks>参数挂轴，一次配置多次调用；位置与速度用工程单位。
-    /// 默认实现四入口返回不支持码，由厂商轴重写。</remarks>
     public abstract class MontionAxis : IPVTMotion
     {
         #region 私有变量
@@ -90,8 +88,7 @@ namespace AdaWeldSystem.MotionControl.IMotion
         #region 公共函数
 
         /// <summary>判断是否正在运动</summary>
-        /// <remarks>厂商语义各异。台达 CSP 的 Mdone 为多值状态机，运动中为非 0。
-        /// 雷赛为 0 表示运动中。混用会判反。</remarks>
+
         /// <returns>运动中返回 true</returns>
         public abstract bool IsMoving();
 
@@ -209,12 +206,10 @@ namespace AdaWeldSystem.MotionControl.IMotion
         public abstract ushort GetStatusWord();
 
         /// <summary>驱动器状态字报警位（CiA402 Fault）</summary>
-        /// <remarks>数值单一来源见 <see cref="AxisStatusBits.Fault"/>；保留该公开常量仅为兼容既有引用。</remarks>
         public const ushort StatusWordFaultBit = AxisStatusBits.Fault;
 
         /// <summary>判断驱动器是否处于报警态（状态字 Fault 位）</summary>
-        /// <remarks>有报警才清并重使能，无报警保持使能。
-        /// 判据统一走 <see cref="AxisStatus"/>，⛔ 不要再在本类或子类里手写位运算。</remarks>
+
         /// <returns>报警中返回 true</returns>
         public virtual bool IsAlarm()
         {
@@ -271,8 +266,6 @@ namespace AdaWeldSystem.MotionControl.IMotion
     }
 
     /// <summary>CiA402 状态字（6041h）位定义：全项目唯一权威</summary>
-    /// <remarks>本层为零依赖抽象层，故用字面量承载；厂商层常量（<c>EtherCATMotionNative.StatusWord*</c>）必须与这里一致。
-    /// ⛔ 判定一律走 <see cref="AxisStatus"/>，不要再在业务代码里写 <c>(sw &amp; 0x0008)</c> 这类散落表达式。</remarks>
     public static class AxisStatusBits
     {
         /// <summary>Operation Enabled（bit2）：伺服已使能</summary>
@@ -283,9 +276,6 @@ namespace AdaWeldSystem.MotionControl.IMotion
     }
 
     /// <summary>状态字解析结果（单次读取快照）</summary>
-    /// <remarks>抽取目的：原先 <c>MontionManager</c> 与 <c>DeltaMontionAxis</c> 各自写位运算与掩码。
-    /// 掩码相同但表达式散落十余处，改一处易漏。本结构是唯一入口。
-    /// 语义与改造前逐条等价（见 ADR-094）。</remarks>
     public struct AxisStatus
     {
         private readonly ushort _raw;
@@ -326,7 +316,6 @@ namespace AdaWeldSystem.MotionControl.IMotion
     }
 
     /// <summary>CSP 返回码（缓冲流式接口沿用）</summary>
-    /// <remarks>成功码与台达 SDK 一致；NotSupported 码保留给需要「不支持」语义的调用方。</remarks>
     public static class CspResult
     {
         #region 公共变量
@@ -336,6 +325,11 @@ namespace AdaWeldSystem.MotionControl.IMotion
 
         /// <summary>当前轴未实现该能力</summary>
         public const ushort NotSupported = 0xFFFF;
+
+        /// <summary>台达 ERR_ECAT_SLAVE_TYPE（0x1202）：「此模块不支持此 API」</summary>
+        /// <remarks>缓冲写入在部分坐标系状态下会返回该码。按业主裁定仅作 Debug 提示，
+        /// 不计故障、不重试、不阻断流程。</remarks>
+        public const ushort EcatSlaveType = 4610;
 
         #endregion
     }

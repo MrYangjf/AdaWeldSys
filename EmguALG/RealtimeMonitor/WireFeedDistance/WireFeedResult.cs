@@ -17,11 +17,7 @@ namespace AdaWeldSystem.EmguALG.RealtimeMonitor.WireFeedDistance
         Fail = 2
     }
 
-    /// <summary>
-    /// 送丝距离结果：焊丝尖端偏差与三级判定。
-    /// 派生自 AlgorithmResult 以统一成功标志与耗时。
-    /// 同时满足 IAlgorithm 泛型约束。
-    /// </summary>
+    /// <summary>送丝距离结果</summary>
     public class WireFeedResult : AlgorithmResult
     {
         /// <summary>水平方向偏差（像素）</summary>

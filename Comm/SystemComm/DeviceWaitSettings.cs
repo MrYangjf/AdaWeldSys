@@ -3,8 +3,6 @@ using System;
 namespace AdaWeldSystem.Comm.SystemComm
 {
     /// <summary>设备侧等待快照，只读镜像</summary>
-    /// <remarks>真相源仍是 <c>MotionControl.DeltaEtherCAT.FlowTimeoutConfig</c>；该类只做中立发布，
-    /// 避免反向依赖运控；替换原子，读侧免锁。</remarks>
     public static class DeviceWaitSettings
     {
         private sealed class Snapshot

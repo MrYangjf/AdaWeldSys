@@ -10,18 +10,7 @@ using Emgu.CV.CvEnum;
 
 namespace AdaWeldSystem.EmguALG.RealtimeMonitor.Playback
 {
-    /// <summary>
-    /// 回放算法：目录扫描、缩略图解码与定时推进。
-    /// 时间基准、进度、暂停、倍速与跳转均在此。
-    /// 调用方只消费事件。
-    /// </summary>
-    /// <remarks>
-    /// 线程模型：扫描与缩略图各起后台 Thread（与迁移前一致）；播放帧解码在
-    /// System.Threading.Timer 回调线程执行，不占 UI 线程。事件由后台线程抛出，
-    /// 订阅方自行封送回到 UI 线程。解码/缩略图绝不阻塞 UI。
-    /// 由 AlgorithmManager 单例所有，跨页面复用。
-    /// 事件可多次 +=/-=，退订后不再触发。
-    /// </remarks>
+    /// <summary>回放算法</summary>
     public sealed class PlaybackAlgorithm : IDisposable
     {
         #region 常量
@@ -68,7 +57,7 @@ namespace AdaWeldSystem.EmguALG.RealtimeMonitor.Playback
 
         #region 事件
 
-        /// <summary>扫描开始（同步在调用方线程抛出；UI 清空列表并显示忙碌文案）</summary>
+        /// <summary>扫描开始</summary>
         public event Action<string> ScanStarted;
 
         /// <summary>扫描完成（后台线程抛出，UI 自行封送）</summary>
@@ -227,7 +216,7 @@ namespace AdaWeldSystem.EmguALG.RealtimeMonitor.Playback
             thread.Start();
         }
 
-        /// <summary>解码录像首帧并缩放到 96×54 缩略图；失败返回 null（不阻断列表显示）</summary>
+        /// <summary>解码录像首帧并缩放到 96×54 缩略图；失败返回 null</summary>
         /// <param name="path">录像文件完整路径</param>
         /// <returns>缩略图；失败返回 null</returns>
         private static Bitmap LoadThumbnail(string path)
@@ -439,7 +428,7 @@ namespace AdaWeldSystem.EmguALG.RealtimeMonitor.Playback
             RaiseProgress();
         }
 
-        /// <summary>停止回放并释放解码资源（进度回零、倍速复位；幂等，可重复调用）</summary>
+        /// <summary>停止回放并释放解码资源</summary>
         public void Stop()
         {
             lock (_sync) { StopLocked(); }
@@ -448,7 +437,6 @@ namespace AdaWeldSystem.EmguALG.RealtimeMonitor.Playback
         }
 
         /// <summary>复位到干净会话，并取消扫描与解码</summary>
-        /// <remarks>页面打开时调用，避免沿用旧回放态</remarks>
         public void Reset()
         {
             lock (_sync) { StopLocked(); }

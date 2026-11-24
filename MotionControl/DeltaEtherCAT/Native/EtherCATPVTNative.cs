@@ -3,8 +3,6 @@ using System.Runtime.InteropServices;
 namespace AdaWeldSystem.MotionControl.DeltaEtherCAT.Native
 {
     /// <summary>台达 PVT 多段插值原生封装</summary>
-    /// <remarks>A 套 int 脉冲整批下发。B 套 double 支持流式续喂，跟踪用 B。
-    /// 靠 Get_Information 剩余缓冲区做水位闭环。全部基于 CSP，调用前轴须已切模式且使能。</remarks>
     public static class EtherCATPVTNative
     {
 #if X86
@@ -59,21 +57,17 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT.Native
         #region B 套 double 工程单位
 
         /// <summary>下发 PVT 起始段并开始运动，后续可继续追加</summary>
-        /// <remarks>TimeAbsMode 取 TimeModeRelative 或 TimeModeAbsolute，语义待现场实测确认。</remarks>
         [DllImport(DllPath, EntryPoint = "_ECAT_Slave_CSP_Start_PVT_Begin_Move")]
         public static extern ushort CS_ECAT_Slave_CSP_Start_PVT_Begin_Move(ushort CardNo, ushort NodeID, ushort SlotID,
             int DataCount, ref double Pos, ref double Time, ref double Vel, ushort TimeAbsMode, ushort Finial,
             ushort Retain, double SdStopTime);
 
         /// <summary>运动中追加 PVT 点段，保持轨迹不断流</summary>
-        /// <remarks>SDK 头文件此 EntryPoint 缺下划线前缀，照抄；若抛 EntryPointNotFoundException
-        /// 改用 <c>_ECAT_Slave_CSP_Start_PVT_Continue_Move</c> 再验。</remarks>
         [DllImport(DllPath, EntryPoint = "CS_ECAT_Slave_CSP_Start_PVT_Continue_Move")]
         public static extern ushort CS_ECAT_Slave_CSP_Start_PVT_Continue_Move(ushort CardNo, ushort NodeID,
             ushort SlotID, int DataCount, ref double Pos, ref double Time, ref double Vel, ushort Finial);
 
         /// <summary>查询 PVT 执行进度与剩余缓冲区</summary>
-        /// <remarks>RemainBufSize 为续喂节拍的判据，水位低于阈值时追加下一段。</remarks>
         [DllImport(DllPath, EntryPoint = "_ECAT_Slave_CSP_Start_PVT_Get_Information")]
         public static extern ushort CS_ECAT_Slave_CSP_Start_PVT_Get_Information(ushort CardNo, ushort NodeID,
             ushort SlotID, ref int TotalMcCount, ref int MdoneMcCount, ref int RemainBufSize, ref ushort Status);

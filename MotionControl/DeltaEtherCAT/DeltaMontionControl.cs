@@ -9,7 +9,6 @@ using AdaWeldSystem.FileOperate;
 namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
 {
     /// <summary>台达 EtherCAT 控制器</summary>
-    /// <remarks>初始化为异步过程，须轮询完成后才能扫描从站。</remarks>
     public class DeltaMontionControl : MontionControl
     {
         #region 私有变量
@@ -168,7 +167,6 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
         }
 
         /// <summary>输出扫描到的从站清单</summary>
-        /// <remarks>排障用，只进文件</remarks>
         private void LogScanList()
         {
             for (int i = 0; i < _slaveScanner.SlaveInfos.Count; i++)
@@ -310,7 +308,7 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
         }
 
         /// <summary>检查总线是否全部就绪（逐从站读连接态与报警</summary>
-        /// <remarks>位）</remarks>
+
         /// <param name="faultDesc">故障描述：首个非就绪从站的站号与现象；总线健康时为空串</param>
         /// <returns>所有从站均在运行态且无报警返回 true</returns>
         public override bool CheckBusOK(out string faultDesc)

@@ -29,7 +29,6 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
     }
 
     /// <summary>从站扫描器</summary>
-    /// <remarks>按厂商号与产品码识别，须主站初始化后调用。</remarks>
     public class DeltaSlaveScanner
     {
         #region 私有变量

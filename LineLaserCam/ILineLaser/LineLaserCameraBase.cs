@@ -8,8 +8,6 @@ using AdaWeldSystem.FileOperate;
 namespace AdaWeldSystem.LineLaserCam.ILineLaser
 {
     /// <summary>线激光相机抽象基类</summary>
-    /// <remarks>真实相机与虚拟相机可互换，界面只依赖本抽象；
-    /// 派生类只触发回调，业务处理归业务层。</remarks>
     public abstract class LineLaserCameraBase : IDisposable
     {
         #region 私有变量
@@ -55,10 +53,7 @@ namespace AdaWeldSystem.LineLaserCam.ILineLaser
         /// <summary>采集完成信号（业务层等待此信号后读取结果）</summary>
         public abstract AutoResetEvent AcquisitionCompletedSignal { get; }
 
-        /// <summary>
-        /// 校准快照，业务层据此绘制校准框。
-        /// 回调捕获存储，未捕获返回空结构。
-        /// </summary>
+        /// <summary>校准快照，业务层据此绘制校准框。 回调捕获存储，</summary>
         public virtual LineLaserCalibration Calibration { get { return new LineLaserCalibration(); } }
 
         /// <summary>相机自身连接态（已连接 / 未连接，「工作中」由 LineLaserManager 派生）</summary>
@@ -126,7 +121,7 @@ namespace AdaWeldSystem.LineLaserCam.ILineLaser
         #region 公共函数
 
         /// <summary>回写最新显示帧，由业务层生成 Mat 后调用</summary>
-        /// <remarks>实现类自身不生成图像。</remarks>
+
         /// <param name="mat">显示帧，所有权归本对象，重复调用释放旧帧</param>
         public void UpdateDisplayMat(Mat mat)
         {
@@ -154,7 +149,7 @@ namespace AdaWeldSystem.LineLaserCam.ILineLaser
         #region 外设虚契约
 
         /// <summary>手动连接相机。 默认实现返回 false（不支持），派生类按需</summary>
-        /// <remarks>新增契约给默认实现，派生类可暂不实现。</remarks>
+
         /// <param name="ip">相机 IP，无硬件的派生类可忽略</param>
         /// <returns>连接成功返回 true</returns>
         public virtual bool ConnectManual(string ip)
@@ -169,7 +164,7 @@ namespace AdaWeldSystem.LineLaserCam.ILineLaser
         }
 
         /// <summary>配置默认回调周期，默认实现视为无需配置并返</summary>
-        /// <remarks>回 true</remarks>
+
         /// <returns>无需配置或配置成功返回 true</returns>
         public virtual bool ConfigureDefaultCommPeriod()
         {
@@ -207,7 +202,7 @@ namespace AdaWeldSystem.LineLaserCam.ILineLaser
         #region 诊断契约
 
         /// <summary>失败原因成品文本，日志与界面只读</summary>
-        /// <remarks>默认实现表示本相机不上报厂商返回码；派生类按各自 SDK 的返回码口径覆写，不得返回空串。</remarks>
+
         /// <param name="context">失败语境（连接 / 初始化 / 识别 / 指令返回码）</param>
         /// <returns>非空的原因描述</returns>
         public virtual string DescribeLastError(LineLaserErrorContext context)

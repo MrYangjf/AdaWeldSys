@@ -149,7 +149,6 @@ namespace AdaWeldSystem.UIDesign.ControlPage
 
         /// <summary>确保指定索引的子页已加载（仅首次选中时调用</summary>
         /// <param name="index">索引。</param>
-        /// <remarks>工厂）。</remarks>
         private void EnsureTabLoaded(int index)
         {
             // 已在 _childPages 中说明已加载

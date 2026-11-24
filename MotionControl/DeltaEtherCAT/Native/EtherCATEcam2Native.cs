@@ -3,8 +3,6 @@ using System.Runtime.InteropServices;
 namespace AdaWeldSystem.MotionControl.DeltaEtherCAT.Native
 {
     /// <summary>台达 ECAM2 电子凸轮原生封装</summary>
-    /// <remarks>SourceType 仅 0（远端从站）、1（轴卡脉冲口），无虚拟轴；
-    /// 无位置主轴用时间模式凸轮，按时间推进。本封装为 ECAM2。</remarks>
     public static class EtherCATEcam2Native
     {
 #if X86
@@ -40,7 +38,6 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT.Native
             ref double Velocity_Scale);
 
         /// <summary>设置造表模式，须在建表前调用</summary>
-        /// <remarks>Mode 0 为按用户参数造表，1 为自动衔接五次曲线。</remarks>
         [DllImport(DllPath, EntryPoint = "_ECAT_Slave_CSP_Start_ECAM2_Set_Profile_Mode")]
         public static extern ushort CS_ECAT_Slave_CSP_Start_ECAM2_Set_Profile_Mode(ushort CardNo, ushort Mode);
 
@@ -63,7 +60,6 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT.Native
             double Slave_Dec_mm, short MasterAxis_Dir, short SlaveAxis_Dir, ushort BufferMode);
 
         /// <summary>时间模式啮合凸轮，无需主轴站点</summary>
-        /// <remarks>须先调用 Master_Axis_Source_Unit_Type 把主轴单位切为时间。</remarks>
         [DllImport(DllPath, EntryPoint = "_ECAT_Slave_CSP_Start_ECAM2_Profile_CamIn_TimeMode")]
         public static extern ushort CS_ECAT_Slave_CSP_Start_ECAM2_Profile_CamIn_TimeMode(ushort CardNo, ushort NodeID,
             ushort SlotID, ushort CamNo, ushort Periodic, ushort SlaveAbsolute, double SlaveOffset,
@@ -71,7 +67,6 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT.Native
             double Slave_Acc_mm, double Slave_Dec_mm, short SlaveAxis_Dir, ushort BufferMode);
 
         /// <summary>设置主轴来源单位，须在啮合前调用</summary>
-        /// <remarks>SourceUnitType 取 SourceUnitPosition 或 SourceUnitTime，PerodicTime 单位为微秒。</remarks>
         [DllImport(DllPath, EntryPoint = "_ECAT_Slave_CSP_Start_ECAM2_Master_Axis_Source_Unit_Type")]
         public static extern ushort CS_ECAT_Slave_CSP_Start_ECAM2_Master_Axis_Source_Unit_Type(ushort CardNo,
             ushort NodeID, ushort SlotID, ushort SourceUnitType, int PerodicTime);

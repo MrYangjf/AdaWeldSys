@@ -1,10 +1,6 @@
 namespace AdaWeldSystem.EmguALG.RealtimeMonitor.WireFeedDistance
 {
-    /// <summary>
-    /// 送丝距离检测配置（焊前对中判定）。
-    /// 持久化由算法 Manager 统一负责，本类只承载强类型字段。
-    /// </summary>
-    /// <remarks>含像素→mm 标定与光斑/焊丝标定基准；判定仅用横向偏差三级阈值，无角度判据。</remarks>
+    /// <summary>送丝距离检测配置</summary>
     public class WireFeedConfig
     {
         /// <summary>水平方向容差（像素）</summary>
@@ -19,7 +15,7 @@ namespace AdaWeldSystem.EmguALG.RealtimeMonitor.WireFeedDistance
         /// <summary>Y 向（横向）三级判定报警阈值（mm）：超过即错误报警</summary>
         public double CenterFailMm { get; set; }
 
-        /// <summary>像素→mm 标定系数（光斑标定流程产出；未标定时用默认值）</summary>
+        /// <summary>像素→mm 标定系数</summary>
         public double PixelMmScale { get; set; }
 
         /// <summary>光斑标定基准 X（像素），即视野内标定位置</summary>
@@ -31,7 +27,7 @@ namespace AdaWeldSystem.EmguALG.RealtimeMonitor.WireFeedDistance
         /// <summary>焊丝标定目标伸出长度（mm，标定精度 ±0.02mm）</summary>
         public double WireStickoutTargetMm { get; set; }
 
-        /// <summary>送丝方向是否对应图像水平轴（安装方向定义；现场装反置 false 即换轴）</summary>
+        /// <summary>送丝方向是否对应图像水平轴</summary>
         public bool StickoutAxisHorizontal { get; set; }
 
         /// <summary>送丝方向符号（+1/-1），用于换算偏差</summary>
@@ -43,9 +39,7 @@ namespace AdaWeldSystem.EmguALG.RealtimeMonitor.WireFeedDistance
         /// <summary>焊丝异常是否自动下发剪丝指令（键 WIRE_ANOMALY_CUTWIRE）</summary>
         public bool WireAnomalyCutWire { get; set; }
 
-        /// <summary>
-        /// 构造时填入默认值
-        /// </summary>
+        /// <summary>构造时填入默认值</summary>
         public WireFeedConfig()
         {
             ToleranceX = 8;

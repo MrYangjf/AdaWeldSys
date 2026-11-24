@@ -11,13 +11,7 @@ using WpfSize = System.Windows.Size;
 
 namespace AdaWeldSystem.PCLOperate.Render
 {
-    /// <summary>
-    /// 3D 点云查看器，基于 HelixToolkit.Wpf.SharpDX。
-    /// 显示逻辑：导入文件后加载原始点云。
-    /// 减点显示：清除原有点云，显示减点后点云。
-    /// 表面渲染：由点云生成并显示表面。
-    /// 清除显示：清理所有点云和模型。
-    /// </summary>
+    /// <summary>3D 点云查看器，基于 HelixToolkit.Wpf.SharpDX。 显示逻辑</summary>
     public class PointCloudViewer : IDisposable
     {
         TransformManipulator3D _manipulator;
@@ -37,9 +31,7 @@ namespace AdaWeldSystem.PCLOperate.Render
         private bool _showByZColor = false; // 是否按Z轴着色
         private float _currentPointSize = 2f; // 保存当前点大小用于恢复
 
-        /// <summary>
-        /// 相机控制模式
-        /// </summary>
+        /// <summary>相机控制模式</summary>
         public enum CameraControlMode
         {
             Rotate,  // 围绕模型中心旋转
@@ -51,9 +43,7 @@ namespace AdaWeldSystem.PCLOperate.Render
         private CameraControlMode _cameraMode = CameraControlMode.Rotate;
         private System.Windows.Media.Media3D.Point3D _modelCenter = new System.Windows.Media.Media3D.Point3D(0, 0, 0);
 
-        /// <summary>
-        /// 无参构造函数 - 内部自动创建并初始化 Viewport3DX
-        /// </summary>
+        /// <summary>无参构造函数 - 内部自动创建并初始化 Viewport3DX</summary>
         public PointCloudViewer()
         {
             _viewport = new Viewport3DX();
@@ -61,18 +51,14 @@ namespace AdaWeldSystem.PCLOperate.Render
             InitializeCamera();
         }
 
-        /// <summary>
-        /// 外部传入 Viewport3DX 的构造函数（向后兼容）
-        /// </summary>
+        /// <summary>外部传入 Viewport3DX 的构造函数（向后兼容）</summary>
         public PointCloudViewer(Viewport3DX viewport)
         {
             _viewport = viewport ?? throw new ArgumentNullException(nameof(viewport));
             InitializeViewport();
         }
 
-        /// <summary>
-        /// 内部 Viewport3DX 实例
-        /// </summary>
+        /// <summary>内部 Viewport3DX 实例</summary>
         public Viewport3DX Viewport => _viewport;
 
         ~PointCloudViewer()
@@ -80,19 +66,13 @@ namespace AdaWeldSystem.PCLOperate.Render
             ClearAll();
         }
 
-        /// <summary>
-        /// 当前点云数据
-        /// </summary>
+        /// <summary>当前点云数据</summary>
         public PointCloudData CurrentData => _currentData;
 
-        /// <summary>
-        /// 当前是否显示表面模型
-        /// </summary>
+        /// <summary>当前是否显示表面模型</summary>
         public bool IsSurfaceVisible => _surfaceMesh != null;
 
-        /// <summary>
-        /// 当前是否显示点云
-        /// </summary>
+        /// <summary>当前是否显示点云</summary>
         public bool IsPointCloudVisible => _pointModel != null;
 
         private void InitializeViewport()
@@ -118,9 +98,7 @@ namespace AdaWeldSystem.PCLOperate.Render
             _manipulator = new TransformManipulator3D();
         }
 
-        /// <summary>
-        /// 自适应调整视角，使点云完整显示在视口中
-        /// </summary>
+        /// <summary>自适应调整视角，使点云完整显示在视口中</summary>
         private void FitViewToPointCloud()
         {
             if (_currentData == null || _currentData.PointCount == 0) return;
@@ -197,9 +175,7 @@ namespace AdaWeldSystem.PCLOperate.Render
             }
         }
 
-        /// <summary>
-        /// 构建并显示点云（内部方法）
-        /// </summary>
+        /// <summary>构建并显示点云（内部方法）</summary>
         private void BuildAndShowPointCloud(float pointSize = 2f)
         {
             if (_currentData == null || _currentData.PointCount == 0) return;
@@ -304,9 +280,7 @@ namespace AdaWeldSystem.PCLOperate.Render
 
         }
 
-        /// <summary>
-        /// 清除点云显示
-        /// </summary>
+        /// <summary>清除点云显示</summary>
         private void ClearPointCloud()
         {
             if (_pointModel != null)
@@ -316,9 +290,7 @@ namespace AdaWeldSystem.PCLOperate.Render
             }
         }
 
-        /// <summary>
-        /// 显示表面网格
-        /// </summary>
+        /// <summary>显示表面网格</summary>
         private void ShowSurfaceMesh(HelixToolkit.SharpDX.MeshGeometry3D meshGeometry, MediaColor color)
         {
             // 先清除现有表面
@@ -342,9 +314,7 @@ namespace AdaWeldSystem.PCLOperate.Render
             _viewport.Items.Add(_surfaceMesh);
         }
 
-        /// <summary>
-        /// 清除表面模型
-        /// </summary>
+        /// <summary>清除表面模型</summary>
         private void ClearSurface()
         {
             if (_surfaceMesh != null)
@@ -354,9 +324,7 @@ namespace AdaWeldSystem.PCLOperate.Render
             }
         }
 
-        /// <summary>
-        /// 清除 Assimp Scene 显示
-        /// </summary>
+        /// <summary>清除 Assimp Scene 显示</summary>
         private void ClearScene()
         {
             if (_sceneModel != null)
@@ -367,7 +335,6 @@ namespace AdaWeldSystem.PCLOperate.Render
         }
 
         /// <summary>根据 SceneNode 的边界框调整相机位置 递归累加所有子节</summary>
-        /// <remarks>点的 Bounds，避免依赖可能未计算的 rootNode.Bounds</remarks>
         private void FitViewToScene(SceneNode rootNode)
         {
             if (rootNode == null) return;
@@ -475,9 +442,7 @@ namespace AdaWeldSystem.PCLOperate.Render
             }
         }
 
-        /// <summary>
-        /// Jet色图：将[0,1]值映射到蓝→青→绿→黄→红
-        /// </summary>
+        /// <summary>Jet色图：将[0,1]值映射到蓝→青→绿→黄→红</summary>
         private static HelixToolkit.Maths.Color4 JetColorMap(float t)
         {
             t = Math.Max(0f, Math.Min(1f, t));
@@ -511,9 +476,7 @@ namespace AdaWeldSystem.PCLOperate.Render
             return new HelixToolkit.Maths.Color4(r, g, b, 1f);
         }
 
-        /// <summary>
-        /// 初始化相机和视口配置（无参构造时调用）
-        /// </summary>
+        /// <summary>初始化相机和视口配置（无参构造时调用）</summary>
         private void InitializeCamera()
         {
             _viewport.EffectsManager = new DefaultEffectsManager();
@@ -538,7 +501,7 @@ namespace AdaWeldSystem.PCLOperate.Render
         }
 
         /// <summary>1. 加载点云数据（显示原始全部点） 导入文件后调用，</summary>
-        /// <remarks>清空后显示原始点云并自适应视角</remarks>
+
         /// <param name="data">数据。</param>
         public void LoadPointCloud(PointCloudData data, float pointSize = 2f)
         {
@@ -561,7 +524,7 @@ namespace AdaWeldSystem.PCLOperate.Render
         }
 
         /// <summary>2. 减点显示：清除界面上原始点的显示后显示减点</summary>
-        /// <remarks>后的点云</remarks>
+
         /// <param name="ratio">显示比例（0.01-1.0），如0.5表示显示一半点数</param>
         public void ReducePointCloud(float ratio, float pointSize = 2f)
         {
@@ -579,7 +542,7 @@ namespace AdaWeldSystem.PCLOperate.Render
         }
 
         /// <summary>3. 表面渲染：按照最新的点云生成表面渲染对象，窗</summary>
-        /// <remarks>口清除点云，显示表面渲染</remarks>
+
         /// <param name="searchRadius">搜索半径</param>
         /// <param name="maxNeighbors">最大邻居数量</param>
         /// <param name="sampleStep">采样步长（1=全部点）</param>
@@ -598,9 +561,7 @@ namespace AdaWeldSystem.PCLOperate.Render
             }
         }
 
-        /// <summary>
-        /// 3. 使用Ball Pivoting算法生成表面
-        /// </summary>
+        /// <summary>3. 使用Ball Pivoting算法生成表面</summary>
         /// <param name="ballRadius">球半径</param>
         /// <param name="sampleStep">采样步长（1=全部点）</param>
         /// <param name="maxNeighbors">最大邻居数量</param>
@@ -620,7 +581,7 @@ namespace AdaWeldSystem.PCLOperate.Render
         }
 
         /// <summary>3. 使用Alpha Shape算法生成表面 适合需要保留空洞的场景，如</summary>
-        /// <remarks>建筑模型、医学图像</remarks>
+
         /// <param name="alpha">Alpha值</param>
         /// <param name="sampleStep">采样步长（1=全部点）</param>
         /// <param name="maxNeighbors">最大邻居数量</param>
@@ -640,7 +601,7 @@ namespace AdaWeldSystem.PCLOperate.Render
         }
 
         /// <summary>3. 使用Delaunay三角剖分生成表面 适合需要高质量网格的</summary>
-        /// <remarks>场景，如有限元分析</remarks>
+
         /// <param name="qualityThreshold">质量阈值</param>
         /// <param name="searchRadiusMultiplier">搜索半径倍数</param>
         /// <param name="sampleStep">采样步长（1=全部点）</param>
@@ -661,7 +622,7 @@ namespace AdaWeldSystem.PCLOperate.Render
         }
 
         /// <summary>3. 使用Poisson泊松重建生成表面 适合需要水密表面和抗</summary>
-        /// <remarks>噪的场景，如扫描数据重建</remarks>
+
         /// <param name="depth">八叉树深度</param>
         /// <param name="samplesPerNode">每节点最小采样数</param>
         /// <param name="maxCells">最大处理单元数（0=无限制）</param>
@@ -681,7 +642,7 @@ namespace AdaWeldSystem.PCLOperate.Render
         }
 
         /// <summary>3. 使用MLS移动最小二乘生成表面 适合需要平滑表面</summary>
-        /// <remarks>和去噪的场景，如地形建模</remarks>
+
         /// <param name="searchRadius">搜索半径</param>
         /// <param name="sampleStep">采样步长（1=全部点）</param>
         /// <param name="maxNeighbors">最大邻居数量</param>
@@ -700,9 +661,7 @@ namespace AdaWeldSystem.PCLOperate.Render
             }
         }
 
-        /// <summary>
-        /// 4. 清除显示：所有点云和模型数据都清理掉
-        /// </summary>
+        /// <summary>4. 清除显示：所有点云和模型数据都清理掉</summary>
         public void ClearAll()
         {
             // 清除点云
@@ -721,9 +680,7 @@ namespace AdaWeldSystem.PCLOperate.Render
             _showByZColor = false;
         }
 
-        /// <summary>
-        /// 设置点大小
-        /// </summary>
+        /// <summary>设置点大小</summary>
         public void SetPointSize(float pointSize)
         {
             _currentPointSize = pointSize;
@@ -733,9 +690,7 @@ namespace AdaWeldSystem.PCLOperate.Render
             }
         }
 
-        /// <summary>
-        /// 设置是否按Z轴着色
-        /// </summary>
+        /// <summary>设置是否按Z轴着色</summary>
         public void SetZColorEnabled(bool enabled, float pointSize = 2f)
         {
             _showByZColor = enabled;
@@ -747,7 +702,7 @@ namespace AdaWeldSystem.PCLOperate.Render
         }
 
         /// <summary>直接加载 HelixToolkitScene 到视口（通过 SceneNodeGroupModel3D 桥接） 保留原始网格拓扑、材</summary>
-        /// <remarks>质和层次结构，不经过 PointCloudData 转换</remarks>
+
         /// <param name="scene">Assimp 导入返回的 HelixToolkitScene（调用方负责生命周期管理）</param>
         public void LoadScene(HelixToolkitScene scene)
         {
@@ -772,9 +727,7 @@ namespace AdaWeldSystem.PCLOperate.Render
             FitViewToScene(scene.Root);
         }
 
-        /// <summary>
-        /// 设置点颜色（覆盖原有颜色）
-        /// </summary>
+        /// <summary>设置点颜色（覆盖原有颜色）</summary>
         public void SetPointColor(MediaColor color)
         {
             if (_pointModel != null)
@@ -792,9 +745,7 @@ namespace AdaWeldSystem.PCLOperate.Render
             }
         }
 
-        /// <summary>
-        /// 设置表面颜色
-        /// </summary>
+        /// <summary>设置表面颜色</summary>
         public void SetSurfaceColor(MediaColor color)
         {
             if (_surfaceMesh?.Material is PhongMaterial surfaceMaterial)
@@ -803,9 +754,7 @@ namespace AdaWeldSystem.PCLOperate.Render
             }
         }
 
-        /// <summary>
-        /// 设置相机控制模式
-        /// </summary>
+        /// <summary>设置相机控制模式</summary>
         /// <param name="mode">相机控制模式</param>
         public void SetCameraMode(CameraControlMode mode)
         {
@@ -843,7 +792,6 @@ namespace AdaWeldSystem.PCLOperate.Render
         }
 
         /// <summary>重置相机到模型中心 根据当前点云数据或 SceneModel 计算</summary>
-        /// <remarks>中心点，并将相机定位到合适距离</remarks>
         public void ResetCameraToCenter()
         {
             System.Numerics.Vector3 center = GetModelCenter();
@@ -987,9 +935,7 @@ namespace AdaWeldSystem.PCLOperate.Render
             }
         }
 
-        /// <summary>
-        /// 计算当前点云数据的中心点
-        /// </summary>
+        /// <summary>计算当前点云数据的中心点</summary>
         /// <returns>点云中心点坐标，无数据时返回(0,0,0)</returns>
         public System.Numerics.Vector3 GetModelCenter()
         {

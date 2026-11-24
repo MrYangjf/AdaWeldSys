@@ -4,8 +4,6 @@ using AdaWeldSystem.Comm.SystemComm;
 namespace AdaWeldSystem.MotionControl.IMotion
 {
     /// <summary>气缸</summary>
-    /// <remarks>传感器与电磁阀复合为一个动作对象。与厂商无关。
-    /// 传感器缺失时按到位处理。</remarks>
     public class Cylinder
     {
         #region 私有变量

@@ -3,23 +3,13 @@ using System;
 
 namespace AdaWeldSystem.EmguALG.LineLaserContour
 {
-    /// <summary>
-    /// 线激光轮廓 Mat 渲染算法抽象。
-    /// 输入为算法层轮廓、标定与特征点数据。
-    /// 数据类为 <see cref="LineLaserProfileData"/>、<see cref="LineLaserCalibrationData"/>
-    /// 与 <see cref="LineLaserSeamFeature"/>。
-    /// 由硬件层转换后传入。
-    /// 输出为供 UI 显示的 Emgu Mat。
-    /// 实现须保证输出 Mat 可被调用方安全 Clone 后跨线程使用。
-    /// </summary>
+    /// <summary>线激光轮廓 Mat 渲染算法抽象。 输入为算法层轮廓、标</summary>
     public interface ILineLaserContourAlgorithm : IDisposable
     {
         /// <summary>最近一次渲染结果，调用方须自行 Clone 后使用</summary>
         Mat LastMat { get; }
 
-        /// <summary>
-        /// 把一帧轮廓渲染为 Mat。
-        /// </summary>
+        /// <summary>把一帧轮廓渲染为 Mat。</summary>
         /// <param name="profile">轮廓点集，为空时只清屏</param>
         /// <param name="calib">标定数据，HasData 为 false 时按轮廓范围自动缩放</param>
         /// <param name="result">焊缝特征点，有效时绘制特征点</param>

@@ -167,7 +167,7 @@ namespace AdaWeldSystem.FileOperate
         }
 
         /// <summary>统一日志时间戳格式</summary>
-        /// <remarks>统一 24 小时制，避免丢失上下午语义。</remarks>
+
         /// <param name="value">时间</param>
         /// <returns>yyyy-MM-dd HH:mm:ss</returns>
         public static string FormatTimestamp(DateTime value)

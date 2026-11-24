@@ -7,12 +7,6 @@ using AdaWeldSystem.Comm.SystemComm;
 namespace AdaWeldSystem.ProductFileControl
 {
     /// <summary>焊缝 Y 记录的单拍采样点（入图/出图/轴反馈）</summary>
-    /// <remarks>
-    /// 一次采样带「入图」与「出图」两条 Y 序列。
-    /// 入图 = (测量时刻 RobotX + 前置量, 该处绝对目标 Yt)。
-    /// 出图 = (当前 RobotX, 本拍查图输出 Ycsp)。
-    /// 入图两列阶梯保持，出图与轴反馈逐拍更新。
-    /// </remarks>
     public class SeamTraceYPoint
     {
         /// <summary>当前机器人 X（查图中心，折线图统一横轴）</summary>
@@ -24,28 +18,19 @@ namespace AdaWeldSystem.ProductFileControl
         /// <summary>入图绝对目标 Yt（CSPinYt）</summary>
         public double CspInYt { get; set; }
 
-        /// <summary>本拍查图输出 Y（CSPoutY；查图 X 尚无地图点时 = 标定轴值原值不变）</summary>
+        /// <summary>本拍查图输出 Y</summary>
         public double CspOutY { get; set; }
 
-        /// <summary>焊缝跟踪轴实际反馈位置（AxisY，毫米；旧格式文件无此列时为 NaN，回看端自动缺省）</summary>
+        /// <summary>焊缝跟踪轴实际反馈位置</summary>
         public double AxisY { get; set; }
     }
 
     /// <summary>焊缝 Y 记录：三路 Y 逐拍留痕，由 <see cref="ProductFileRecordManager"/> 独占持有。</summary>
-    /// <remarks>
-    /// 记录内容 = 当前RobotX + 入图键 + CSPinYt + CSPoutY + 实时Y（5 列）。
-    /// 判读：入图 Yt 对入图键作图，出图 Y 对当前 X 作图。
-    /// 两线差即跟随误差。实时 Y 为轴反馈，用于判定指令是否生效。
-    /// 工艺快照由 .pDat 独占，不重复。
-    /// 热路径只入内存，结束或运动终止时落盘。写失败仅告警并保留缓存重试。
-    /// 落盘于会话文件夹，与 .ply/.pDat 同基名。缓存由内部锁保护。
-    /// </remarks>
     public sealed class SeamTraceYRecord
     {
         private const string Tag = "SeamTraceYRecord";
 
         /// <summary>CSV 表头（列序与 <see cref="RecordPoint"/> 写入顺序、<see cref="ParseFile"/> 解析顺序三方一致）</summary>
-        /// <remarks>中文表头直读；文件以 UTF-8 BOM 写出，Excel 双击直开不乱码。</remarks>
         private const string CsvHeader = "当前RobotX,入图RobotCSPX,CSPinYt,CSPoutY,实时Y";
 
         private readonly object _lock = new object();
@@ -68,8 +53,6 @@ namespace AdaWeldSystem.ProductFileControl
         }
 
         /// <summary>记录会话是否已开启（供 Manager 幂等开启）。</summary>
-        /// <remarks>记录起点由运控在 Ready 通过后开启。
-        /// 重复开启会重建文件并丢数据，调用方先判重。</remarks>
         public bool IsSessionActive
         {
             get { lock (_lock) return _sessionActive; }
@@ -86,9 +69,7 @@ namespace AdaWeldSystem.ProductFileControl
         }
 
         /// <summary>开始一次记录会话：定路径并写表头</summary>
-        /// <remarks>由 Manager 在 Ready 通过后调用；重复调用会覆盖旧会话文件。
-        /// 基名必须与 .ply/.pDat 同名，否则归档定位不到。
-        /// 基名未就绪时返回 false，由调用方按拍重试。</remarks>
+
         /// <param name="sessionBaseName">会话基名（由 Manager 生成，与 .ply/.pDat 同名）</param>
         /// <returns>开启成功返回 true；基名未就绪或创建失败返回 false（不置活跃）</returns>
         public bool BeginSession(string sessionBaseName)
@@ -129,7 +110,7 @@ namespace AdaWeldSystem.ProductFileControl
         }
 
         /// <summary>记录一拍焊缝 Y（5 列）；会话未开启时静默丢弃</summary>
-        /// <remarks>逐拍不去重，回看端需见真实命令流。</remarks>
+
         /// <param name="robotX">当前机器人 X（毫米，查图中心）</param>
         /// <param name="mapKeyX">入图键 X（毫米 = 测量时刻 RobotX + 前置量；尚无入图点时传 0）</param>
         /// <param name="cspInYt">最近一次入图的绝对目标 Yt（毫米；尚无入图点时传 0）</param>
@@ -148,7 +129,6 @@ namespace AdaWeldSystem.ProductFileControl
         }
 
         /// <summary>将缓存追加写入会话文件并清空缓存（运动终止</summary>
-        /// <remarks>写入失败仅告警，缓存保留以便下次重试；落盘为空时直接返回。 或会话结束时调用）。</remarks>
         public void FlushToFile()
         {
             lock (_lock)
@@ -172,7 +152,6 @@ namespace AdaWeldSystem.ProductFileControl
         }
 
         /// <summary>结束会话：落盘并复位（模拟关闭或焊接停止时调</summary>
-        /// <remarks>用）。</remarks>
         public void EndSession()
         {
             FlushToFile();
@@ -185,8 +164,7 @@ namespace AdaWeldSystem.ProductFileControl
         }
 
         /// <summary>读取一份焊缝 Y 记录 CSV（回溯端一次性读取）</summary>
-        /// <remarks>解析失败行静默跳过。文件不存在或表头缺失时返回空列表。
-        /// 旧 4 列格式按「出图=3 列、轴反馈=4 列、入图缺失」解析。</remarks>
+
         /// <param name="filePath">CSV 路径</param>
         /// <returns>按写入顺序排列的记录点列表</returns>
         public static List<SeamTraceYPoint> ParseFile(string filePath)

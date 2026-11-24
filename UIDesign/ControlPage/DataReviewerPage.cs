@@ -51,7 +51,7 @@ namespace AdaWeldSystem.UIDesign.ControlPage
         /// <summary>节流：不足该毫秒数直接返回，防拖慢界面</summary>
         private const int HoverThrottleMs = 60;
 
-        /// <summary>悬停命中容差（像素）。指针进入该半径才算命中，移开即清除。</summary>
+        /// <summary>悬停命中容差</summary>
         private const int HoverPixelRadius = 18;
 
         private DateTime _lastHoverCalc = DateTime.MinValue;
@@ -65,7 +65,7 @@ namespace AdaWeldSystem.UIDesign.ControlPage
         /// <summary>最近汇总文本：悬停清除后回填，避免丢失</summary>
         private string _lastSummaryText = string.Empty;
 
-        /// <summary>会话曲线集合：每会话一份独立成线。按系列名惰性创建。</summary>
+        /// <summary>会话曲线集合</summary>
         private sealed class SessionCharts
         {
             private readonly Dictionary<string, ChartVar> _charts = new Dictionary<string, ChartVar>();
@@ -146,8 +146,7 @@ namespace AdaWeldSystem.UIDesign.ControlPage
             public string Name { get; set; }
             public Color Color { get; set; }
 
-            /// <summary>取该系列在指定会话中的曲线（<see cref="RebuildChartDatasets"/> 消费）。
-            /// 默认按系列名取，模组无需提供委托。</summary>
+            /// <summary>取该系列在指定会话中的曲线</summary>
             public Func<SessionCharts, ChartVar> GetChart
             {
                 get { return s => s[Name]; }
@@ -219,7 +218,6 @@ namespace AdaWeldSystem.UIDesign.ControlPage
         }
 
         /// <summary>构建五大类曲线模组：填 Select 选项 + 逐模组创建 Checkbox。</summary>
-        /// <remarks>Checkbox 不在 Designer 预建，全部运行时创建并按 Select 直接挂载/移出 SelectFlowPanel；首次创建默认勾选。</remarks>
         private void InitSeriesGroups()
         {
             _groups.Clear();
@@ -299,7 +297,7 @@ namespace AdaWeldSystem.UIDesign.ControlPage
 
         /// <summary>按显示文本估算 Checkbox 宽度。</summary>
         /// <param name="text">文本内容。</param>
-        /// <remarks>官方未列 PreferredWidth，故按文本宽度 + 图标内边距估算。</remarks>
+
         /// <returns>结果码。</returns>
         private static int EstimateBoxWidth(string text)
         {
@@ -315,7 +313,6 @@ namespace AdaWeldSystem.UIDesign.ControlPage
         /// <summary>模组切换：只显示选中模组的 Checkbox 面板，并按该模组内</summary>
         /// <param name="sender">发送方。</param>
         /// <param name="e">事件参数。</param>
-        /// <remarks>的勾选态重建图表。</remarks>
         private void selSeriesGroup_SelectedIndexChanged(object sender, AntdUI.IntEventArgs e)
         {
             int index = selSeriesGroup.SelectedIndex;
@@ -326,7 +323,6 @@ namespace AdaWeldSystem.UIDesign.ControlPage
 
         /// <summary>切换模组：移除旧组 Checkbox、把新组 Checkbox 加入 <see cref="SelectFlowPanel"/>。</summary>
         /// <param name="index">索引。</param>
-        /// <remarks>FlowPanel 逆序入流，selSeriesGroup 每次须加回集合末位保持最左；挂卸用抑制标志包住，避免重建图表。</remarks>
         private void ShowGroupOnly(int index)
         {
             if (index < 0 || index >= _groups.Count) return;
@@ -381,7 +377,6 @@ namespace AdaWeldSystem.UIDesign.ControlPage
         /// <summary>区间选择变化：按所选区间一次性读取生产记录</summary>
         /// <param name="sender">发送方。</param>
         /// <param name="e">事件参数。</param>
-        /// <remarks>并刷新表格</remarks>
         private void uiDateRange_ValueChanged(object sender, EventArgs e)
         {
             // 不可见时不查：仅用户可见时生效
@@ -393,10 +388,6 @@ namespace AdaWeldSystem.UIDesign.ControlPage
 
         /// <summary>是否允许查询（唯一判据：已进入运行态）</summary>
         /// <returns>true = 允许查询；false = 启动/初始化链路拒绝</returns>
-        /// <remarks>⛔ 不用 Visible / Created / IsHandleCreated 等判据。
-        /// 运行期实测 AntdUI 的 Tabs 不隐藏非当前 TabPage。
-        /// 窗体 Show 时全部子页 Visible=true 并同时触发。
-        /// 双判据会被放行，故以运行态为唯一判据。</remarks>
         private bool IsReadyForQuery()
         {
             if (GlobalCommData.IsAppRunning) return true;
@@ -407,7 +398,6 @@ namespace AdaWeldSystem.UIDesign.ControlPage
         /// <summary>诊断出口：记录时间/来源/可见性/堆栈（限流 5 条）</summary>
         /// <param name="scene">场景标记（门拒绝）</param>
         /// <param name="detail">补充信息</param>
-        /// <remarks>仅异常路径调用：运行态未就绪却发起了查询。</remarks>
         private void DiagLog(string scene, string detail)
         {
             if (System.Threading.Interlocked.Increment(ref _diagCount) > 5) return;
@@ -426,9 +416,6 @@ namespace AdaWeldSystem.UIDesign.ControlPage
         /// <param name="start">起始位置。</param>
         /// <param name="end">结束位置。</param>
         /// <param name="userInitiated">true=用户主动查询；false=进入页面自动加载</param>
-        /// <remarks>表格一行 = 一条生产记录，选中行即选定一次会话；
-        /// 按起焊时间与产品码推算基名，定位三份文件。
-        /// 数据库按日期分表，一次性读取，不做轮询。</remarks>
         private void InitPCLDir(DateTime start, DateTime end, bool userInitiated)
         {
             // 硬闸：启动链路不查库，判据=运行态标志
@@ -536,9 +523,6 @@ namespace AdaWeldSystem.UIDesign.ControlPage
         }
 
         /// <summary>构建单折线图：标题 + 坐标轴标签（ScottPlot.FormsPlot 4.1.74）。</summary>
-        /// <remarks>⚠️ **不建图例**：由 <see cref="RebuildChartDatasets"/> 统一创建。
-        /// 再建会被 Clear 清掉，净效果是白建一次。
-        /// 标题/轴由重建路径负责（Clear 一并清除）。</remarks>
         private void AfterInitializeUI()
         {
             // 高 DPI：DpiStretch=true 会模糊，置 false
@@ -559,13 +543,6 @@ namespace AdaWeldSystem.UIDesign.ControlPage
         }
 
         /// <summary>按当前模组勾选状态重建图表数据集。</summary>
-        /// <remarks>只画当前模组的线，避免不同量纲压成平线。
-        /// 多会话各自成线，调整点始终显示。
-        /// 单会话时线只有一条，无后缀。
-        /// ⚠️ `Plot.Clear()` 会连同标题/轴清掉。
-        /// 实测位图变小，故重建后必须重设标题/轴。
-        /// 否则标题消失。
-        /// 图例只在本方法创建（`AfterInitializeUI` 不建）。</remarks>
         private void RebuildChartDatasets()
         {
             formsPlotData.Plot.Clear();
@@ -680,10 +657,6 @@ private void btnRenerView_Click(object sender, EventArgs e)
         /// <summary>鼠标悬停读点值，移到数据点附近才显示。</summary>
         /// <param name="sender">发送方。</param>
         /// <param name="e">事件参数。</param>
-        /// <remarks>命中后用 Tooltip + 底部标签 + 十字标记显示读数。
-        /// 按像素容差判定，容差随缩放收紧。
-        /// MouseMove 按节流参数执行。
-        /// 坐标按 X 轴显示窗口线性换算，不依赖第三方 API。</remarks>
         private void formsPlotData_MouseMove(object sender, MouseEventArgs e)
         {
             DateTime now = DateTime.Now;
@@ -764,7 +737,6 @@ private void btnRenerView_Click(object sender, EventArgs e)
         }
 
         /// <summary>取当前绘图区在数据坐标下的显示窗口（X 与 Y 两轴）。</summary>
-        /// <remarks>纵轴范围按可见系列极值反推，大致对齐即可。</remarks>
         private void GetPlotWindow(out double xMin, out double xMax, out double yMin, out double yMax)
         {
             xMin = MinValueRobotX;
@@ -820,10 +792,6 @@ private void btnRenerView_Click(object sender, EventArgs e)
         }
 
         /// <summary>回溯生产记录：一次读取三份记录文件并绘图。</summary>
-        /// <remarks>三份同名文件（.pDat 工艺 / .csv 轨迹 / .ply 轮廓）一次读取。
-        /// 勾选多行时每会话独立成一条折线，互不相连。
-        /// 无勾选回退当前选中行单条回溯。
-        /// 统一以机器人 X 轴为横轴绘图。</remarks>
         private void Datashow()
         {
             List<DataReviewRow> targets = CollectSelectedRows();
@@ -1067,13 +1035,6 @@ private void btnRenerView_Click(object sender, EventArgs e)
             FillPage();
         }
         /// <summary>进入追溯页时确保首屏已加载（唯一入口）</summary>
-        /// <remarks>仅由用户交互触发（导航/页签/刷新/区间）。
-        /// ⛔ 不挂在 VisibleChanged 上。
-        /// 实测 AntdUI 非当前 TabPage 恒为 Visible=true。
-        /// 窗体 Show 时全部子页都会收到 VisibleChanged。
-        /// 按可见性判断会在启动期误查历史。
-        /// 已加载过则不重复读盘。
-        /// 首进为零行时不弹空态，只更新底部中性文案。</remarks>
         public void EnsureLoaded()
         {
             if (!IsReadyForQuery()) return;

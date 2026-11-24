@@ -6,10 +6,7 @@ using System.Diagnostics;
 
 namespace AdaWeldSystem.EmguALG.RealtimeMonitor.WireFeedDistance
 {
-    /// <summary>
-    /// 送丝距离检测（焊前对中）：光斑与焊丝尖端偏差。
-    /// 纯算子在 ImageAlgorithm，本类封装与计时。
-    /// </summary>
+    /// <summary>送丝距离检测（焊前对中）</summary>
     public sealed class WireFeedDistanceAlgorithm : IAlgorithm<WireFeedResult>, IConfigurableAlgorithm<WireFeedConfig>
     {
         #region 私有变量
@@ -40,9 +37,7 @@ namespace AdaWeldSystem.EmguALG.RealtimeMonitor.WireFeedDistance
 
         #region 构造函数
 
-        /// <summary>
-        /// 创建送丝距离检测算法并填入默认配置
-        /// </summary>
+        /// <summary>创建送丝距离检测算法并填入默认配置</summary>
         public WireFeedDistanceAlgorithm()
         {
             _config = new WireFeedConfig();
@@ -52,18 +47,14 @@ namespace AdaWeldSystem.EmguALG.RealtimeMonitor.WireFeedDistance
 
         #region 公共函数
 
-        /// <summary>
-        /// 注入配置
-        /// </summary>
+        /// <summary>注入配置</summary>
         /// <param name="config">新配置；为 null 时回落默认配置</param>
         public void SetConfig(WireFeedConfig config)
         {
             _config = config ?? new WireFeedConfig();
         }
 
-        /// <summary>
-        /// 执行送丝距离检测
-        /// </summary>
+        /// <summary>执行送丝距离检测</summary>
         /// <param name="input">监控相机图像</param>
         /// <returns>检测结果（含成功标志与耗时）</returns>
         public WireFeedResult Execute(Mat input)

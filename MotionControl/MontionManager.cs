@@ -1,4 +1,4 @@
-﻿﻿using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading;
@@ -8,12 +8,11 @@ using AdaWeldSystem.MotionControl.IMotion;
 using AdaWeldSystem.WeldParamControl;
 using AdaWeldSystem.Comm.SystemComm;
 using AdaWeldSystem.FileOperate;
+using AdaWeldSystem.ConfigFileControl.Implementations;
 
 namespace AdaWeldSystem.MotionControl
 {
     /// <summary>运动管理器</summary>
-    /// <remarks>面向抽象层编程，厂商类型仅初始化出现一次；
-    /// 轴/IO/气缸三张注册表，初始化后登记进控制器。</remarks>
     public class MontionManager
     {
         #region 私有变量
@@ -41,11 +40,7 @@ namespace AdaWeldSystem.MotionControl
         /// <summary>停稳判据：速度绝对值上限，低于即算停稳</summary>
         private const double InstructionStableSpeedMmPerSec = 0.05;
 
-        /// <summary>扭矩类确认窗采样次数（2 次 × 16ms = 32ms，数十毫秒级）</summary>
-        private const int InstructionTorqueConfirmSamples = 2;
-
         /// <summary>单飞登记逾期自动释放，防该轴永久 BUSY</summary>
-        /// <remarks>远大于任何合法指令最长等待。不会误放正在执行的指令。</remarks>
         private const double AxisInstructionLeaseSeconds = 600.0;
 
         private static double EffectiveDetectTimeoutSeconds { get { return FlowTimeoutSettings.Current.InstructionDetectSeconds; } }
@@ -71,24 +66,20 @@ namespace AdaWeldSystem.MotionControl
         private readonly Dictionary<string, AxisInstructionEntry> _axisInstructions =
             new Dictionary<string, AxisInstructionEntry>(StringComparer.OrdinalIgnoreCase);
 
-        /// <summary>焊接头配置 XML 子目录（相对程序基目录）</summary>
-        internal const string WeldHeadXmlRelativeDir = @"Config\MotionControl\WeldHead_XML";
+        /// <summary>焊接头配置所属模块（全局配置目录下的模块层）。</summary>
+        internal const string ConfigModule = "MotionControl";
 
         /// <summary>轴角色关键字表（轴名含任一即命中）</summary>
-        /// <remarks>
-        /// 原先各模块各自维护关键字数组，词表不一致。
-        /// 此处为唯一权威表，模块只引用静态属性。
-        /// </remarks>
         public static readonly string[] SeamTrackYKeys = { "Y", "横梁", "跟踪" };
 
         /// <summary>对焦/光斑轴关键字（轴名包含任一即命中）</summary>
         public static readonly string[] FocusSpotKeys = { "对焦", "焦点", "光斑", "FOCUS", "SPOT" };
 
-        /// <summary>TA 轴关键字（轴名包含任一即命中）。送丝即 TA，⛔ 不另设送丝轴关键字。</summary>
+        /// <summary>TA 轴关键字</summary>
         public static readonly string[] TaAxisKeys = { "TA", "力矩", "TORQUE" };
 
         // 状态字位定义已收敛到 IMotion.AxisStatusBits / AxisStatus（全项目唯一解析入口）。
-        // ⛔ 本类不再自建位掩码，也不直接写位运算。
+        // 位运算交由底层封装处理
 
         /// <summary>指令状态检测统一超时（秒）：5s，集中常量便于调整</summary>
         public const double InstructionDetectTimeoutSeconds = 5.0;
@@ -140,18 +131,13 @@ namespace AdaWeldSystem.MotionControl
         /// <summary>气缸注册表</summary>
         public CylinderRegistry Cylinders { get; private set; }
 
-        /// <summary>焊接头从站设备（随初始化按配置装载；未启用时为 null）</summary>
+        /// <summary>焊接头从站设备</summary>
         public WeldHeadSlaveDevice WeldHead { get; private set; }
 
         /// <summary>焊接头配置（实例归本类独占，Config\MotionControl\WeldHead_XML\WeldHeadSlave.xml，外部只读）</summary>
         public WeldHeadConfig WeldHeadConfig { get; private set; }
 
-        /// <summary>TA 指令是否可执行（配置加载成功 + TA 轴已使能 + TA 轴已回零；只读状态位 = 单一真相源）</summary>
-        /// <remarks>降级时所有 TA 指令入口必须前置拒绝。状态由初始化、使能与回零结果合成。
-        /// 不单独落盘，避免双真相源。可动条件复用 <see cref="TaMotionReady"/>，不再复述判定。
-        /// 2026-11-17 改版：工作零位到位（<see cref="TaAtWorkZero"/>）不再作为 TA 指令门禁 ——
-        /// 位置类指令真正需要的是「位置可信（已回零）」，不是「已到工作零位」；
-        /// 手动回零与复位回零共用同一回零实现，故「已回零」不区分来源。</remarks>
+        /// <summary>TA 指令是否可执行</summary>
         public bool TaAvailable
         {
             get { return TaMotionReady && TaHomed; }
@@ -164,12 +150,9 @@ namespace AdaWeldSystem.MotionControl
         public string TaZeroPoseReason { get { return _taZeroPoseGateReason; } }
 
         /// <summary>TA 轴本次上电是否已回零</summary>
-        /// <remarks>掉电后位置寄存器一律不可信。
-        /// 由回零成功置位，初始化失败重来即清零。位置/力矩指令必须为真。</remarks>
         public bool TaHomed { get; private set; }
 
-        /// <summary>TA 轴配置已加载且已使能（<b>不含</b> ZeroPose 到位条件；仅 TA_ZeroPose 自身放行用）</summary>
-        /// <remarks>⛔ 除 TA_ZeroPose 外，TA 指令须用 <see cref="TaAvailable"/> 判定。</remarks>
+        /// <summary>TA 轴配置已加载且已使能</summary>
         public bool TaMotionReady
         {
             get
@@ -183,13 +166,11 @@ namespace AdaWeldSystem.MotionControl
         }
 
         /// <summary>TA 工作零位坐标（mm）：唯一可编辑源 = 工艺设置页 TA 区 `TA_ZERO_POSE_MM`。</summary>
-        /// <remarks>⛔ 参数弹窗不再提供该坐标；`ROOT/TA_HOME/TA_HOME_ZERO_POSE_MM` 只作一次性迁移来源、不再参与运行期读取。
-        /// 速度 / 容差仍由 TA_HOME 各自管理（本次不改）。</remarks>
         public double TaZeroPoseTargetMm
         {
             get
             {
-                WeldAlgorithmsConfig cfg = WeldParamManager.Instance.AlgorithmsConfig;
+                WeldParamConfig cfg = WeldParamManager.Instance.AlgorithmsConfig;
                 if (cfg != null) return cfg.TaZeroPoseMm;
                 DeltaTaHomeConfig taHome = MoveData == null || MoveData.MotionConfig == null ? null : MoveData.MotionConfig.TaHome;
                 return taHome == null ? 0.0 : taHome.WorkOriginMm;
@@ -214,8 +195,6 @@ namespace AdaWeldSystem.MotionControl
         }
 
         /// <summary>Y 轴就绪：链路走完 ∧ 已装载 ∧ 已使能</summary>
-        /// <remarks>按轴门禁唯一来源，Y 指令区与拦截都读它。
-        /// ⛔ 与整机汇总无关——Y 使能失败只降级 Y，不影响 TA / LA。</remarks>
         public bool YReady
         {
             get
@@ -243,7 +222,6 @@ namespace AdaWeldSystem.MotionControl
         }
 
         /// <summary>LA（焊接头从站：对焦电机 / 振镜）是否就绪</summary>
-        /// <remarks>LA 不走轴注册表，看焊接头从站握手成功。</remarks>
         public bool LaReady
         {
             get
@@ -268,7 +246,7 @@ namespace AdaWeldSystem.MotionControl
         }
 
         /// <summary>该节点是否出现在从站扫描结果中</summary>
-        /// <remarks>诊断用，非热路径</remarks>
+
         /// <param name="nodeId">站点号</param>
         /// <returns>已发现返回 true</returns>
         private bool IsNodeDetected(ushort nodeId)
@@ -300,7 +278,7 @@ namespace AdaWeldSystem.MotionControl
         }
 
         /// <summary>按轴取门禁原因（就绪返回空串）</summary>
-        /// <remarks>Y / TA / LA 各自独立，互不连带</remarks>
+
         /// <param name="axis">运动轴对象</param>
         /// <returns>不可执行原因；空串表示可执行</returns>
         public string GetAxisGateReason(MontionAxis axis)
@@ -317,9 +295,7 @@ namespace AdaWeldSystem.MotionControl
         }
 
         /// <summary>按轴取回零门禁原因（就绪返回空串）</summary>
-        /// <remarks>回零是建立原点，判据不得含 TaHomed。
-        /// ⛔ 未回零不得挡住回零，否则互为前置。
-        /// 只校验已初始化、配置已装载、伺服已使能、无报警。</remarks>
+
         /// <param name="axis">运动轴对象</param>
         /// <returns>不可执行原因；空串表示可执行</returns>
         public string GetAxisHomingGateReason(MontionAxis axis)
@@ -337,8 +313,7 @@ namespace AdaWeldSystem.MotionControl
 
         /// <summary>读取单轴状态摘要（UI 展示与上层判定的统一入口）</summary>
         /// <param name="axis">运动轴；为空时返回 0 快照</param>
-        /// <remarks>UI 只允许拿摘要，⛔ 不得自行 <c>GetStatusWord()</c> 后写位运算。
-        /// 摘要为单次快照，伺服位与报警位必然自洽。</remarks>
+
         /// <returns>状态字摘要</returns>
         public AxisStatus GetAxisStatus(MontionAxis axis)
         {
@@ -346,7 +321,7 @@ namespace AdaWeldSystem.MotionControl
         }
 
         /// <summary>按轴名读取只读运行摘要</summary>
-        /// <remarks>UI 用：不暴露轴对象，也不在 UI 解析状态字位</remarks>
+
         /// <param name="axisName">轴名（与注册表一致）</param>
         /// <param name="positionMm">当前位置（mm，未装配为 0）</param>
         /// <param name="lastCommand">最近指令描述（未装配为空串）</param>
@@ -423,7 +398,7 @@ namespace AdaWeldSystem.MotionControl
         /// <param name="axis">运动轴</param>
         /// <param name="phase">失败环节（如「伺服使能」）</param>
         /// <param name="withBus">是否叠加总线健康检查（高频刷新传 false）</param>
-        /// <remarks>⛔ 未确证的状态字写「未确证」，勿编造。 状态字/返回码/连接态/节点/结论</remarks>
+
         /// <returns>可读诊断串</returns>
         public string DescribeAxisDiagnosis(MontionAxis axis, string phase, bool withBus)
         {
@@ -506,14 +481,13 @@ namespace AdaWeldSystem.MotionControl
         /// <summary>位置「有变化」判定阈值（mm）</summary>
         private const double PositionChangeEpsilonMm = 0.001;
 
-        /// <summary>初始化链是否已走完（唯一闸门；未完成前禁止任何指令与检测线程启动）</summary>
+        /// <summary>初始化链是否已走完</summary>
         public bool IsInitCompleted { get { return _initCompleted; } }
 
         /// <summary>整机初始化是否成功；<b>仅展示</b>，不作门禁</summary>
         public bool IsInitSucceeded { get { return _initSucceeded; } }
 
         /// <summary>轴就绪变化：UI 收到即重算三区可用性</summary>
-        /// <remarks>后台线程触发，订阅方须封送到 UI 线程。</remarks>
         public event Action<string> AxisReadinessChanged;
 
         /// <summary>到位等待内核</summary>
@@ -525,7 +499,7 @@ namespace AdaWeldSystem.MotionControl
         /// <param name="requireStableSpeed">是否要求速度稳定。</param>
         /// <param name="cancelRequested">取消请求回调。</param>
         /// <param name="evidence">失败证据收集开关。</param>
-        /// <remarks>容差判定 + 可选速度稳定 + 超时 + 可选无变化早停</remarks>
+
         /// <returns>是否成功。</returns>
         private bool WaitAxisAtTargetCore(MontionAxis axis, double targetMm, double tolMm,
             double timeoutSeconds, double noChangeSeconds, bool requireStableSpeed,
@@ -631,7 +605,7 @@ namespace AdaWeldSystem.MotionControl
         }
 
         /// <summary>登记某轴指令开始执行</summary>
-        /// <remarks>单飞：同轴同时刻只一条指令，异轴可并行</remarks>
+
         /// <param name="axisName">轴名（隔离键）</param>
         /// <param name="instructionName">指令名（提示与日志用）</param>
         /// <param name="token">本次指令的取消标记</param>
@@ -724,7 +698,7 @@ namespace AdaWeldSystem.MotionControl
         }
 
         /// <summary>请求取消全部轴的指令状态检测</summary>
-        /// <remarks>切页/退出/初始化失败/急停</remarks>
+
         /// <param name="reason">取消原因（日志用）</param>
         public void CancelAllAxisInstructions(string reason)
         {
@@ -740,7 +714,7 @@ namespace AdaWeldSystem.MotionControl
         }
 
         /// <summary>等待运动轴到位</summary>
-        /// <remarks>位置进入容差带 ∧ 速度连续 3 次归零 ∧ 无报警；超时按配置判失败</remarks>
+
         /// <param name="axis">运动轴</param>
         /// <param name="targetMm">目标位置（mm）</param>
         /// <param name="tolMm">到位容差（mm）</param>
@@ -755,7 +729,7 @@ namespace AdaWeldSystem.MotionControl
         }
 
         /// <summary>等待运动轴到位</summary>
-        /// <remarks>显式超时 + 可选「位置长时间无变化」早停；不要求速度稳定</remarks>
+
         /// <param name="axis">运动轴</param>
         /// <param name="targetMm">目标位置（mm）</param>
         /// <param name="tolMm">到位容差（mm）</param>
@@ -779,7 +753,6 @@ namespace AdaWeldSystem.MotionControl
         /// <param name="alreadyInPosition">已在容差内（未发起运动）</param>
         /// <param name="rejectReason">被拒/下发失败的可读原因</param>
         /// <returns>指令已下发或已在位返回 true</returns>
-        /// <remarks>前置检查由轴类 StartMove 内建，此处不复判。 已在容差内则不发指令</remarks>
         public bool TryMoveAbsoluteNoBlock(MontionAxis axis, double targetMm, double velMmPerSec, double tolMm,
             out bool alreadyInPosition, out string rejectReason)
         {
@@ -816,7 +789,7 @@ namespace AdaWeldSystem.MotionControl
         }
 
         /// <summary>等待运动轴回零完成</summary>
-        /// <remarks>须驱动器确认完成 ∧ Home_Status==0 ∧ 位置在容差内 ∧ 无报警；超时即失败</remarks>
+
         /// <param name="axis">运动轴</param>
         /// <param name="token">取消标记</param>
         /// <param name="evidence">实测证据</param>
@@ -858,19 +831,26 @@ namespace AdaWeldSystem.MotionControl
                     return false;
                 }
 
-                // 到位按期望回零坐标判定，别一律拿 0
+                // 期望回零坐标只用于位置偏差可观测，不再作完成硬门：
+                // 台达扭矩回零模式（如 -3）下驱动器把 offset 反向应用（填 +1.0mm → 终位 -1.0mm），
+                // 拿 expectHome 作硬判据会把「已由 Home_Status 确认完成」误判为 NOT_REACHED。
                 double expectHome = 0.0;
                 if (axis is DeltaMontionAxis homeAxis) expectHome = homeAxis.HomeOffset;
 
-                // 权威信号：驱动器确认完成，位置仅二次门
-                if (homeVerified && homeStatus == 0 && Math.Abs(pos - expectHome) <= InstructionDefaultTolMm
-                    && speed <= InstructionStableSpeedMmPerSec)
+                // 权威信号：驱动器回零完成（Home_Status=0）+ 本轮已确认启动（HomeVerified）。
+                // 位置与速度仅用于稳定采样与告警，不阻断达成。
+                if (homeVerified && homeStatus == 0 && speed <= InstructionStableSpeedMmPerSec)
                 {
                     stable++;
                     if (stable >= EffectiveStableSampleCount)
                     {
-                        // 回零收尾再读一次，偏差超容差必须报出来
                         double after = axis.GetPosition();
+                        // 位置偏差只记 Warning：现场 offset 符号约定可能与配置值相反，须可见但不拦完成
+                        if (Math.Abs(after - expectHome) > InstructionDefaultTolMm)
+                        {
+                            Log(string.Format("回零位置与期望不符 期望 {0:F3}mm 实测 {1:F3}mm 偏差 {2:F3}mm（已完成，仅告警）",
+                                expectHome, after, after - expectHome), MessageLevel.Warning);
+                        }
                         if (Math.Abs(after - pos) > InstructionDefaultTolMm)
                         {
                             Log(string.Format("回零后位置漂移 偏差 {0:F3}mm 前 {1:F3}mm 后 {2:F3}mm",
@@ -958,7 +938,7 @@ namespace AdaWeldSystem.MotionControl
         }
 
         /// <summary>TA 撤力达成</summary>
-        /// <remarks>输出位 0 ∧ 模式已回 CSP ∧ 位置保持在锁存点容差内；超时 5s</remarks>
+
         /// <param name="axis">TA 轴</param>
         /// <param name="holdMm">锁存位置（mm）</param>
         /// <param name="tolMm">位置容差（mm）</param>
@@ -1019,7 +999,7 @@ namespace AdaWeldSystem.MotionControl
         }
 
         /// <summary>等待 LA 对焦轴到位</summary>
-        /// <remarks>LA 无速度反馈，判据为位置稳定。 实测位置进入容差带连续 3 次；超时 5s 判失败</remarks>
+
         /// <param name="targetMm">目标位置（mm）</param>
         /// <param name="token">取消标记</param>
         /// <param name="evidence">实测证据</param>
@@ -1123,7 +1103,6 @@ namespace AdaWeldSystem.MotionControl
         }
 
         /// <summary>按配置表创建全部轴并登记进注册表</summary>
-        /// <remarks>轴已自注册，此处只补注册表并套配置。</remarks>
         private void CreateAxesFromConfig()
         {
             DeltaMotionConfig config = MoveData.MotionConfig;
@@ -1152,10 +1131,6 @@ namespace AdaWeldSystem.MotionControl
         /// <summary>装载 TA 轴时按其特有参数组（ROOT/TA_HOME）重新套用回零六参</summary>
         /// <param name="cfg">配置对象。</param>
         /// <param name="axis">轴对象。</param>
-        /// <remarks>通用参数来自各轴自己的 AXIS 元素。
-        /// TA 轴在此额外用 <see cref="DeltaMotionConfig.TaHome"/> 覆盖回零六参。
-        /// Y 轴轴名不匹配 TA_AXIS_NAME，路径零改动。
-        /// 旧文件无 TA_HOME 时 LoadTaHome 已用 AXIS seed。覆盖值与镜像值一致，不改现场参数。</remarks>
         private void ApplyTaHomeOnLoad(DeltaAxisConfig cfg, MontionAxis axis)
         {
             DeltaMotionConfig config = MoveData?.MotionConfig;
@@ -1202,7 +1177,6 @@ namespace AdaWeldSystem.MotionControl
         }
 
         /// <summary>按配置表创建全部输入与输出并登记进注册表</summary>
-        /// <remarks>IO 已自注册，此处只补注册表与位号。</remarks>
         private void CreateIOsFromConfig()
         {
             DeltaMotionConfig config = MoveData.MotionConfig;
@@ -1237,7 +1211,6 @@ namespace AdaWeldSystem.MotionControl
         }
 
         /// <summary>按配置表装配全部气缸并登记进注册表</summary>
-        /// <remarks>按名在 IO 注册表解析后 Builder 装配；IO 名不存在则告警跳过，不阻塞初始化。</remarks>
         private void CreateCylindersFromConfig()
         {
             DeltaMotionConfig config = MoveData.MotionConfig;
@@ -1308,7 +1281,6 @@ namespace AdaWeldSystem.MotionControl
         }
 
         /// <summary>按配置装载焊接头从站设备（握手 + 下发阈值与振</summary>
-        /// <remarks>失败仅告警不阻塞轴初始化，WeldHead.IsInitialized 保持 false。 镜默认参数）</remarks>
         private void CreateWeldHeadFromConfig()
         {
             DeltaMotionConfig config = MoveData.MotionConfig;
@@ -1405,11 +1377,22 @@ namespace AdaWeldSystem.MotionControl
             return value.ToString(System.Globalization.CultureInfo.InvariantCulture);
         }
 
+        /// <summary>振镜图形 → XML 节点名（GALVO 下的分档子节点）。</summary>
+        /// <param name="pattern">图形</param>
+        /// <returns>节点名（CIRCLE / EIGHT / LINE / ARC）</returns>
+        private static string GalvoShapeNodeName(WsgGalvoPattern pattern)
+        {
+            switch (pattern)
+            {
+                case WsgGalvoPattern.Circle: return "CIRCLE";
+                case WsgGalvoPattern.Eight: return "EIGHT";
+                case WsgGalvoPattern.Arc: return "ARC";
+                default: return "LINE";
+            }
+        }
+
         /// <summary>初始化第 2 步：装载 TA 轴配置</summary>
-        /// <remarks>时序：<c>DeviceControlWork.InitStepEvaluate</c> → 本方法 → <see cref="EnableAxesAfterInit"/>。
-        /// 扭力准位与时间取驱动器默认值（详见 wiki）。
-        /// ⛔ 控制器不读写这两个 CoE 对象（4869 回读失败；台达结论：用驱动器默认即可）。
-        /// 回零六参仍由 Home_Config 每次回零下发（6098h/6099h/609Ah）。</remarks>
+
         /// <returns>TA 轴与 TA_HOME 均存在返回 true</returns>
         public bool LoadTaAxisConfig()
         {
@@ -1436,7 +1419,10 @@ namespace AdaWeldSystem.MotionControl
         /// <summary>保存焊接头配置，末尾落盘</summary>
         public void SaveWeldHeadConfig()
         {
-            XdocumentReaderWriter reader = new XdocumentReaderWriter(WeldHeadXmlRelativeDir, "WeldHeadSlave");
+            XmlConfigFile file = ConfigFileManager.Instance.GetModuleXml(ConfigModule, "WeldHeadSlave");
+            XdocumentReaderWriter reader = file.Raw;
+            ConfigFileManager.SaveXmlWithAudit(file, "焊接头配置", "配置变更", () =>
+            {
             reader.NewXdocument("ROOT", "1.0", "UTF-8");
 
             var threshold = reader.AddElement("THRESHOLD");
@@ -1448,9 +1434,8 @@ namespace AdaWeldSystem.MotionControl
             reader.AddElement(threshold, "PRESSURE_DELAY_MS", WeldHeadConfig.PressureDelayMs.ToString());
 
             var galvo = reader.AddElement("GALVO");
-            reader.AddElement(galvo, "FREQUENCY", WeldHeadConfig.DefaultGalvo.Frequency.ToString());
-            reader.AddElement(galvo, "WIDTH", WeldHeadText(WeldHeadConfig.DefaultGalvo.Width));
-            reader.AddElement(galvo, "LENGTH", WeldHeadText(WeldHeadConfig.DefaultGalvo.Length));
+            // 顶层不再写默认长宽频
+            //    宽/长/频一律落在 GALVO/<图形>/ 子节点；顶层仅留全局项。
             reader.AddElement(galvo, "ANGLE", WeldHeadConfig.DefaultGalvo.Angle.ToString());
             reader.AddElement(galvo, "START_ANGLE", WeldHeadText(WeldHeadConfig.DefaultGalvo.StartAngle));
             reader.AddElement(galvo, "END_ANGLE", WeldHeadText(WeldHeadConfig.DefaultGalvo.EndAngle));
@@ -1460,6 +1445,16 @@ namespace AdaWeldSystem.MotionControl
             reader.AddElement(galvo, "Y_COMPRESSION", WeldHeadConfig.DefaultGalvo.YCompression.ToString());
             reader.AddElement(galvo, "TARGET_SIZE", WeldHeadText(WeldHeadConfig.DefaultGalvo.TargetSize));
             reader.AddElement(galvo, "OBLIQUE_CORRECTION", WeldHeadConfig.DefaultGalvo.ObliqueEllipseCorrection.ToString());
+
+            // 按图形分别存宽长频
+            foreach (WsgGalvoPattern pattern in WeldHeadConfig.GalvoPatternOrder)
+            {
+                GalvoShapeParams shape = WeldHeadConfig.GetGalvoShape(pattern);
+                var node = reader.AddElement(galvo, GalvoShapeNodeName(pattern));
+                reader.AddElement(node, "WIDTH", WeldHeadText(shape.Width));
+                reader.AddElement(node, "LENGTH", WeldHeadText(shape.Length));
+                reader.AddElement(node, "FREQUENCY", shape.Frequency.ToString());
+            }
 
             var motor = reader.AddElement("MOTOR");
             reader.AddElement(motor, "PULSE_PER_MM", WeldHeadText(WeldHeadConfig.MotorPulsePerMm));
@@ -1486,14 +1481,14 @@ namespace AdaWeldSystem.MotionControl
             }
 
             reader.SaveXdocument();
+            });
             Log("焊接头配置保存完成");
         }
 
         /// <summary>加载焊接头配置（阈值与振镜默认参数），读取失败</summary>
-        /// <remarks>保留默认值</remarks>
         public void LoadWeldHeadConfig()
         {
-            XdocumentReaderWriter reader = new XdocumentReaderWriter(WeldHeadXmlRelativeDir, "WeldHeadSlave");
+            XdocumentReaderWriter reader = ConfigFileManager.Instance.GetModuleXml(ConfigModule, "WeldHeadSlave").Raw;
             if (reader.GetXDocument() == null || reader.GetXDocument().Root == null)
             {
                 Log("焊接头配置为空，保留默认参数", MessageLevel.Warning);
@@ -1507,9 +1502,6 @@ namespace AdaWeldSystem.MotionControl
             WeldHeadConfig.PressureAlarmThreshold = ReadWeldHeadDouble(reader, "THRESHOLD/PRESSURE_ALARM", WeldHeadConfig.PressureAlarmThreshold);
             WeldHeadConfig.PressureDelayMs = ReadWeldHeadInt(reader, "THRESHOLD/PRESSURE_DELAY_MS", WeldHeadConfig.PressureDelayMs);
 
-            WeldHeadConfig.DefaultGalvo.Frequency = ReadWeldHeadInt(reader, "GALVO/FREQUENCY", WeldHeadConfig.DefaultGalvo.Frequency);
-            WeldHeadConfig.DefaultGalvo.Width = ReadWeldHeadDouble(reader, "GALVO/WIDTH", WeldHeadConfig.DefaultGalvo.Width);
-            WeldHeadConfig.DefaultGalvo.Length = ReadWeldHeadDouble(reader, "GALVO/LENGTH", WeldHeadConfig.DefaultGalvo.Length);
             WeldHeadConfig.DefaultGalvo.Angle = ReadWeldHeadInt(reader, "GALVO/ANGLE", WeldHeadConfig.DefaultGalvo.Angle);
             WeldHeadConfig.DefaultGalvo.StartAngle = ReadWeldHeadDouble(reader, "GALVO/START_ANGLE", WeldHeadConfig.DefaultGalvo.StartAngle);
             WeldHeadConfig.DefaultGalvo.EndAngle = ReadWeldHeadDouble(reader, "GALVO/END_ANGLE", WeldHeadConfig.DefaultGalvo.EndAngle);
@@ -1520,6 +1512,20 @@ namespace AdaWeldSystem.MotionControl
             WeldHeadConfig.DefaultGalvo.TargetSize = ReadWeldHeadDouble(reader, "GALVO/TARGET_SIZE", WeldHeadConfig.DefaultGalvo.TargetSize);
             WeldHeadConfig.DefaultGalvo.ObliqueEllipseCorrection =
                 ReadWeldHeadInt(reader, "GALVO/OBLIQUE_CORRECTION", WeldHeadConfig.DefaultGalvo.ObliqueEllipseCorrection);
+
+            // 按图形分档读取，旧单档作缺省
+            GalvoShapeParams shapeFallback = new GalvoShapeParams();
+            double legacyWidth = ReadWeldHeadDouble(reader, "GALVO/WIDTH", shapeFallback.Width);
+            double legacyLength = ReadWeldHeadDouble(reader, "GALVO/LENGTH", shapeFallback.Length);
+            int legacyFrequency = ReadWeldHeadInt(reader, "GALVO/FREQUENCY", shapeFallback.Frequency);
+            foreach (WsgGalvoPattern pattern in WeldHeadConfig.GalvoPatternOrder)
+            {
+                GalvoShapeParams shape = WeldHeadConfig.GetGalvoShape(pattern);
+                string node = GalvoShapeNodeName(pattern);
+                shape.Width = ReadWeldHeadDouble(reader, "GALVO/" + node + "/WIDTH", legacyWidth);
+                shape.Length = ReadWeldHeadDouble(reader, "GALVO/" + node + "/LENGTH", legacyLength);
+                shape.Frequency = ReadWeldHeadInt(reader, "GALVO/" + node + "/FREQUENCY", legacyFrequency);
+            }
 
             WeldHeadConfig.MotorPulsePerMm = ReadWeldHeadDouble(reader, "MOTOR/PULSE_PER_MM", WeldHeadConfig.MotorPulsePerMm);
 
@@ -1597,7 +1603,7 @@ namespace AdaWeldSystem.MotionControl
         }
 
         /// <summary>TA 轴手动操作统一退出力矩输出</summary>
-        /// <remarks>任何手动轴动作均先撤 CST 再走位置</remarks>
+
         /// <param name="axis">目标轴</param>
         /// <param name="action">动作名（日志用）</param>
         private void ExitTaTorqueMode(MontionAxis axis, string action)
@@ -1645,7 +1651,7 @@ namespace AdaWeldSystem.MotionControl
         }
 
         /// <summary>不重启总线，按当前内存配置重建运行期轴/IO/气缸/</summary>
-        /// <remarks>用于 CSV/XML 重新导入后让运行态套用新配置；未初始化或控制器为空时返回 false。 焊接头并重新挂载</remarks>
+
         /// <returns>是否成功。</returns>
         public bool ReloadRuntimeFromConfig()
         {
@@ -1733,11 +1739,6 @@ namespace AdaWeldSystem.MotionControl
         /// <summary>按轴名关键字在运控配置中定位轴并取注册实</summary>
         /// <param name="keys">轴名关键字（不区分大小写，任一命中即返回）</param>
         /// <returns>轴对象；未在配置中找到或未注册返回 null</returns>
-        /// <remarks>
-        /// 原先各模块各维护关键字数组并做 Contains 匹配。
-        /// 属重复实现且关键字表不一致。
-        /// 此唯一入口：模块只传关键字，不自建匹配。
-        ///  例（角色定位唯一入口）。</remarks>
         public MontionAxis GetAxisByKeys(params string[] keys)
         {
             string name = FindAxisNameByKeys(keys);
@@ -1745,15 +1746,13 @@ namespace AdaWeldSystem.MotionControl
         }
 
         /// <summary>TA 回零参数组（只读；修改必须走 <see cref="SaveTaHomeConfig"/>）</summary>
-        /// <remarks>单一真相源：ROOT/TA_HOME；表格弹窗与保存都经此读写，避免两份。</remarks>
         public DeltaTaHomeConfig TaHomeConfig => MoveData?.MotionConfig?.TaHome;
 
         /// <summary>流程等待超时配置（ROOT/FLOW_TIMEOUT 的唯一持有者的读写入口）</summary>
-        /// <remarks>界面「修改参数」直接改其字段；「保存参数」调 <see cref="ApplyFlowTimeouts"/> 校验并发布。</remarks>
         public FlowTimeoutConfig FlowTimeouts => MoveData?.MotionConfig?.FlowTimeouts;
 
         /// <summary>按轴名关键字取轴名</summary>
-        /// <remarks>只读；供 UI 展示与日志，不暴露轴对象</remarks>
+
         /// <param name="keys">轴名关键字（不区分大小写，任一命中即返回）</param>
         /// <param name="axisName">命中轴名；未命中为空串</param>
         /// <returns>命中返回 true</returns>
@@ -1767,7 +1766,7 @@ namespace AdaWeldSystem.MotionControl
         }
 
         /// <summary>按轴名关键字取台达具体轴（角色定位 + 台达专属</summary>
-        /// <remarks>能力）。</remarks>
+
         /// <param name="keys">轴名关键字（不区分大小写，任一命中即返回）</param>
         /// <returns>台达轴；未找到或非台达实现返回 null</returns>
         public DeltaMontionAxis GetDeltaAxisByKeys(params string[] keys)
@@ -1777,19 +1776,27 @@ namespace AdaWeldSystem.MotionControl
         }
 
         /// <summary>TA 轴的通用 AXIS 配置（只读入口；弹窗预填用，保存仍走 <see cref="SaveTaHomeConfig"/>）</summary>
-        /// <remarks>与 Y 轴同模板，但只指向 TA 自己的 AXIS 元素。</remarks>
         public DeltaAxisConfig TaAxisConfig => GetAxisConfigByKeys(TaAxisKeys);
 
         /// <summary>按关键字取轴的运行期配置（不下发运动，只读配</summary>
         /// <param name="keys">轴名关键字（不区分大小写，任一命中即返回）</param>
         /// <returns>轴配置；未找到返回 null</returns>
-        /// <remarks>供读轴专属配置（如力矩）用，免调用方遍历。 置）。</remarks>
         public DeltaAxisConfig GetAxisConfigByKeys(params string[] keys)
         {
             string name = FindAxisNameByKeys(keys);
             if (name == null) return null;
             DeltaMotionConfig cfg = MoveData?.MotionConfig;
             return cfg?.GetAxis(name);
+        }
+
+        /// <summary>按轴名**精确**取轴的运行期配置（只读，不下发运动）</summary>
+        /// <param name="axisName">轴名（如 <c>SeamTrackAxisName</c> 的取值）</param>
+        /// <returns>轴配置；轴名未配置或未找到返回 null</returns>
+        public DeltaAxisConfig GetAxisConfigByName(string axisName)
+        {
+            if (string.IsNullOrEmpty(axisName)) return null;
+            DeltaMotionConfig cfg = MoveData?.MotionConfig;
+            return cfg?.GetAxis(axisName);
         }
 
         /// <summary>创建与运行期隔离的运控配置预览副本</summary>
@@ -1802,7 +1809,6 @@ namespace AdaWeldSystem.MotionControl
         }
 
         /// <summary>应用界面改动的流程超时</summary>
-        /// <remarks>发布后各等待点立即按新值生效，无需重启；非法值回退缺省并逐项告警。 值域校验 → 发布运行期快照 → 落盘</remarks>
         public void ApplyFlowTimeouts()
         {
             DeltaMotionConfig config = MoveData?.MotionConfig;
@@ -1832,8 +1838,6 @@ namespace AdaWeldSystem.MotionControl
         /// <summary>补写 DeltaMotionConfig.xml 缺失键（含 TA_TORQUE_DIRECTION）</summary>
         /// <param name="allowWrite">是否写盘；预览/审计读传 false</param>
         /// <param name="torqueDirection">方向键的最终取值（由旧负值迁移判定，缺省 +1）</param>
-        /// <remarks>⛔ 必须在 <see cref="WeldParamManager"/> 方向迁移后调用。方向键缺省不自愈。
-        /// 本方法是合并写盘唯一出口。</remarks>
         public void EnsureMotionConfigKeys(bool allowWrite, int torqueDirection)
         {
             DeltaMotionConfig config = MoveData?.MotionConfig;
@@ -1843,10 +1847,7 @@ namespace AdaWeldSystem.MotionControl
         }
 
         /// <summary>把 TA 轴配置重新套用到运行期轴对象</summary>
-        /// <remarks>TA 回零六参以 <see cref="DeltaMotionConfig.TaHome"/>（ROOT/TA_HOME）为唯一真相源。
-        /// 此处先套用通用轴参数再覆盖回零六参。
-        /// 回零参数由 <c>StartHome</c> 每次 <c>Home_Config</c> 时下发。故下次回零即生效，无需重连。
-        /// 保存轴级参数后调用。</remarks>
+
         /// <returns>false 表示运控未就绪或未找到 TA 轴（本次未应用）</returns>
         public bool ApplyTaAxisRuntimeConfig()
         {
@@ -1876,8 +1877,6 @@ namespace AdaWeldSystem.MotionControl
         /// <summary>保存 TA 扭矩回零参数组并推回运行期</summary>
         /// <param name="value">新的回零参数组（模式 -4~35、两档速度 rpm、加速 ms）</param>
         /// <returns>false 表示运控配置不可用或未找到 TA 轴</returns>
-        /// <remarks>⛔ UI 不得直接改轴配置对象；写入 ROOT/TA_HOME 后立即回写 XML 并推回轴对象。
-        /// P1.087/P1.088 已废弃，⛔ 不再写驱动器。生效时机：下次回零（无需重新使能）。</remarks>
         public bool SaveTaHomeConfig(DeltaTaHomeConfig value)
         {
             DeltaMotionConfig config = MoveData?.MotionConfig;
@@ -1934,12 +1933,10 @@ namespace AdaWeldSystem.MotionControl
             return axis.AbsMove(delta, 0);
         }
 
-        /// <summary>绝对定位非阻塞版（仅下发不等待到位；UI 手动操作专用）。</summary>
+        /// <summary>绝对定位非阻塞版</summary>
         /// <param name="axis">目标轴（null 时返回 false，不下发）</param>
         /// <param name="target">目标坐标</param>
         /// <returns>指令是否下发成功</returns>
-        /// <remarks>2026-11-17 新增：<see cref="MoveTo"/> 内部等到位（阻塞），UI 线程调用会冻结界面；
-        /// 手动轴操作改走本方法，下发即返回，到位判定交由后台等待与执行消息。</remarks>
         public bool MoveToNoBlock(MontionAxis axis, double target)
         {
             if (axis == null) return false;
@@ -1948,11 +1945,10 @@ namespace AdaWeldSystem.MotionControl
             return axis.AbsMoveNoBlock(target, 1);
         }
 
-        /// <summary>相对步进非阻塞版（仅下发不等待到位；UI 手动操作专用）。</summary>
+        /// <summary>相对步进非阻塞版</summary>
         /// <param name="axis">目标轴（null 时返回 false，不下发）</param>
         /// <param name="delta">相对位移（可为负）</param>
         /// <returns>指令是否下发成功</returns>
-        /// <remarks>2026-11-17 新增：与 <see cref="StepMove"/> 同语义但不等到位，避免 UI 线程阻塞。</remarks>
         public bool StepMoveNoBlock(MontionAxis axis, double delta)
         {
             if (axis == null) return false;
@@ -1983,7 +1979,7 @@ namespace AdaWeldSystem.MotionControl
         }
 
         /// <summary>减速停止（点动与停止按钮共用）。</summary>
-        /// <remarks>停止同时终止在途检测，等待指令立即退出；外部终止只有急停与停止两类。</remarks>
+
         /// <param name="axis">目标轴（null 时不下发）</param>
         public void StopAxis(MontionAxis axis)
         {
@@ -1996,8 +1992,6 @@ namespace AdaWeldSystem.MotionControl
         /// <summary>回零并等待驱动器确认完成</summary>
         /// <param name="axis">目标轴（null 直接失败）</param>
         /// <returns>完成且经状态字确认返回 true</returns>
-        /// <remarks>超时、未启动、异常一律返回 false。
-        /// 调用方必须中止后续动作，不得继续定位。</remarks>
         public bool HomeAxisAndWait(MontionAxis axis)
         {
             if (axis == null) return false;
@@ -2083,9 +2077,7 @@ namespace AdaWeldSystem.MotionControl
         }
 
         /// <summary>初始化完成后按配置统一使能已装载轴</summary>
-        /// <remarks>轴注册表只含 ENABLED=true 的轴（<see cref="CreateAxesFromConfig"/> 已筛除禁用轴）；
-        /// 逐轴记录结果，原因取自 LastCommand（急停/未 OP/报警/超时）。
-        /// ⛔ 失败不改写轴状态、不重试，交上层判定。 只调一次，非轮询</remarks>
+
         /// <returns>全部轴使能成功返回 true；未初始化或存在失败轴返回 false</returns>
         public bool EnableAxesAfterInit()
         {
@@ -2164,8 +2156,6 @@ namespace AdaWeldSystem.MotionControl
         }
 
         /// <summary>全部轴复位驱动器报警</summary>
-        /// <remarks>停止后须清报警，残留会导致下次启动失败；
-        /// 无报警时 Ralm 无害，未连接轴失败仅记日志。</remarks>
         public void ResetAlarmAll()
         {
             foreach (MontionAxis axis in Axes.GetAll())
@@ -2200,8 +2190,6 @@ namespace AdaWeldSystem.MotionControl
     }
 
     /// <summary>UI 手动轴操作种类（硬件控制归 <c>MontionManager</c>，UI 只表达意图）</summary>
-    /// <remarks>⛔ UI 不得取 <c>DeltaMontionAxis</c> 后调用 <c>ServoOn/HomeNoBlock/AbsMove/JogMove</c>；
-    /// 一律经 <c>MotionControlWorkflow.TryManualAxisOperation</c>（应用动作层），门禁只在一处维护。</remarks>
     public enum AxisManualOperation
     {
         /// <summary>伺服使能/下电翻转</summary>
@@ -2218,3 +2206,5 @@ namespace AdaWeldSystem.MotionControl
         JogStop
     }
 }
+
+

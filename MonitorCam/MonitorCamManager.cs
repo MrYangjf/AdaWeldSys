@@ -12,20 +12,12 @@ using AdaWeldSystem.Comm.SystemComm;
 
 namespace AdaWeldSystem.MonitorCam
 {
-    /// <summary>
-    /// 监控相机业务中枢（单例，对外唯一入口）。
-    /// 实现层只按契约取帧。
-    /// 本类负责编排与帧分发。
-    /// 含单次触发采集与健康巡检。
-    /// 抽象层契约见 IMonitorCamApi。
-    /// 2D 面阵相机，无模式，采集均单次触发。
-    /// 健康巡检归本类，不属工作流职责。
-    /// </summary>
+    /// <summary>监控相机业务中枢</summary>
     public class MonitorCamManager
     {
         #region 常量
 
-        /// <summary>巡检线程退出等待上限（毫秒，巡检节拍 1000ms 留 500ms 余量；超时只记警告）。</summary>
+        /// <summary>巡检线程退出等待上限</summary>
         private const int SupervisionJoinTimeoutMs = 1500;
 
         #endregion
@@ -160,11 +152,7 @@ namespace AdaWeldSystem.MonitorCam
         /// <summary>健康监督状态变更事件（相机自身状态，供 UI 订阅）</summary>
         public event EventHandler<MonitorSupervisionStatusChangedEventArgs> StatusChanged;
 
-        /// <summary>
-        /// 预览帧事件，连续采集中每帧抛出。
-        /// 供调试页显示，预览帧不触发分析。
-        /// 与工作流分析链路相互独立。
-        /// </summary>
+        /// <summary>预览帧事件，连续采集中每帧抛出。 供调试页显示，</summary>
         public event Action<Mat> PreviewFrameEvent;
 
         #endregion
@@ -181,8 +169,6 @@ namespace AdaWeldSystem.MonitorCam
         }
 
         /// <summary>确保录像目录可用</summary>
-        /// <remarks>启动期调用，失败只留痕不抛出。
-        /// 不存在则创建；失败回退 exe 目录 Record。</remarks>
         private void EnsureRecordDirectory()
         {
             string desired = _config != null && !string.IsNullOrWhiteSpace(_config.RecordDir)
@@ -217,8 +203,7 @@ namespace AdaWeldSystem.MonitorCam
         }
 
         /// <summary>把预览帧透传给各订阅方，每人独立副本</summary>
-        /// <remarks>订阅方拥有并释放副本，分发后释放原始帧；
-        /// 禁止多方共享同一 Mat，跨线程释放会踩内存。</remarks>
+
         /// <param name="frame">预览帧（实现层建出的独立 Mat，本方法分发后即释放）</param>
         private void RelayPreviewFrame(Mat frame)
         {
@@ -259,7 +244,7 @@ namespace AdaWeldSystem.MonitorCam
 
         #region 公共函数
 
-        /// <summary>录像保存目录（取配置 RecordDir；创建失败时返回内存回退目录；配置缺失回退 D:\WeldRecord）</summary>
+        /// <summary>录像保存目录</summary>
         public string RecordDirectory
         {
             get
@@ -284,9 +269,7 @@ namespace AdaWeldSystem.MonitorCam
             get { return _api.IsRecording; }
         }
 
-        /// <summary>
-        /// 打开相机连接
-        /// </summary>
+        /// <summary>打开相机连接</summary>
         /// <param name="ip">相机 IP</param>
         /// <param name="port">相机端口</param>
         /// <returns>已连接或本次连接成功返回 true</returns>
@@ -308,7 +291,7 @@ namespace AdaWeldSystem.MonitorCam
         }
 
         /// <summary>扫描（枚举）当前可用相机设备，返回含 IP 的设备列表</summary>
-        /// <remarks>供 UI 选择。</remarks>
+
         /// <returns>发现的设备列表；无设备或扫描失败返回空列表</returns>
         public List<MonitorCamDeviceInfo> ScanDevices()
         {
@@ -322,8 +305,8 @@ namespace AdaWeldSystem.MonitorCam
             _config.SaveConfig();
         }
 
-        /// <summary>开始连续采集（对齐官方 demo 开始采集，连续模式；帧经 PreviewFrameEvent </summary>
-        /// <remarks>逐帧抛出）</remarks>
+        /// <summary>开始连续采集（对齐官方 demo 开始采集，连续模式；帧经 PreviewFrameEvent</summary>
+
         /// <returns>是否成功开始采集</returns>
         public bool StartCapture()
         {
@@ -338,7 +321,7 @@ namespace AdaWeldSystem.MonitorCam
         }
 
         /// <summary>开始录像：文件落入配置的录像目录下按日期</summary>
-        /// <remarks>用方给定（建议时间戳命名）。 须处于连续采集中，否则失败。 yyyyMMdd）分的子目录，文件名由调</remarks>
+
         /// <param name="fileName">录像文件名（如 MonitorCam_20260929_160000.avi）</param>
         /// <returns>是否成功开始录像</returns>
         public bool StartRecord(string fileName)
@@ -365,8 +348,7 @@ namespace AdaWeldSystem.MonitorCam
         }
 
         /// <summary>软触发单帧，供送丝距离测试等标定入口</summary>
-        /// <remarks>先停采集，再切触发模式软触发取帧；
-        /// 图像由调用方显示。</remarks>
+
         /// <returns>触发取得的图像帧（独立副本）；失败返回 null</returns>
         public Mat TriggerSingleShot()
         {
@@ -451,9 +433,7 @@ namespace AdaWeldSystem.MonitorCam
             return _api.GetGain();
         }
 
-        /// <summary>
-        /// 设置当前检测阶段（影响帧事件携带的阶段语义）
-        /// </summary>
+        /// <summary>设置当前检测阶段（影响帧事件携带的阶段语义）</summary>
         /// <param name="phase">目标阶段</param>
         public void SetPhase(MonitorCameraPhase phase)
         {
@@ -461,18 +441,11 @@ namespace AdaWeldSystem.MonitorCam
         }
 
         /// <summary>触发一次采集（2D 面阵相机唯一采集方式）。 监控相机</summary>
-        /// <remarks>无 LIVE/PIL 模式，本方法仅启动单次异步取帧任务。</remarks>
         public void SensorRunContinue()
         {
             if (ConnectionState != MonitorCameraConnectionState.Connected)
                 return;
             new Task(AcquireOnce).Start();
-        }
-
-        /// <summary>停止采集</summary>
-        public void SensorStop()
-        {
-            // 任务自行结束，此处仅占位兼容调用方
         }
 
         /// <summary>启动健康巡检</summary>
@@ -491,7 +464,6 @@ namespace AdaWeldSystem.MonitorCam
         }
 
         /// <summary>停止健康巡检，并等待旧巡检线程退出。</summary>
-        /// <remarks>先存旧句柄再 Join。超时记警告并留句柄。</remarks>
         public void StopSupervision()
         {
             _supervisionRunning = false;
@@ -600,7 +572,6 @@ namespace AdaWeldSystem.MonitorCam
         }
 
         /// <summary>评估相机健康度：连接态 + 近期有效采集。 状态或工</summary>
-        /// <remarks>作标志变化时经 StatusChanged 通知订阅方。</remarks>
         private void EvaluateHealth()
         {
             MonitorSupervisionState newState;
@@ -632,8 +603,6 @@ namespace AdaWeldSystem.MonitorCam
         }
 
         /// <summary>推进健康监督状态并通知订阅方</summary>
-        /// <remarks>状态与原因没变化时不重复打日志。
-        /// 退出时 ConnectOff 与 Dispose 各停一次。</remarks>
         private void SupervisionTransitionTo(MonitorSupervisionState newState, string reason)
         {
             bool sameAsLastLog = newState == SupervisionState && reason == _supervisionLogReason;

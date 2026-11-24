@@ -11,7 +11,6 @@ using AdaWeldSystem.MainDeviceControl.DeviceStateApiCore;
 namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
 {
     /// <summary>线激光工作流</summary>
-    /// <remarks>两层状态：State 与 WeldStatus；焊缝特征由 Manager 产出，不经算法层中转。</remarks>
     public class LineLaserWorkflow : DeviceWorkflowBase
     {
         #region 常量
@@ -49,8 +48,6 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         private double _maxWeldLength = 1000.0;
 
         /// <summary>本会话测量是否已收工（主控命中后置位）。</summary>
-        /// <remarks>收工＝关外设、入图结束，但流程态仍留 Working；
-        /// 见本标志即跳过工艺调整与失效判定。进入新沿时复位。</remarks>
         private volatile bool _measureFinished;
         private bool _simReady = false;
 
@@ -112,8 +109,8 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         /// <summary>模组配置文件名（不含扩展名），在本流程类别目录。</summary>
         protected override string ConfigFileName { get { return "LineLaserWorkflow"; } }
 
-        /// <summary>配置落 LineLaser\Workflow_XML 子目录。</summary>
-        protected override string ConfigRelativeDir { get { return @"Config\LineLaser\Workflow_XML"; } }
+        /// <summary>模组配置所属模块（全局配置目录下的模块层）。</summary>
+        protected override string ConfigModule { get { return "LineLaser"; } }
 
         #endregion
 
@@ -131,7 +128,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         #region 私有函数
 
         /// <summary>连接初始化三步（connect→readConfiguration→verifyHardwareStatus），连接后台线程体内执行。</summary>
-        /// <remarks>阻塞同步执行；只做连接与校验，成功后由调用方置 Connected。复位职责归 ResetProcess。</remarks>
+
         /// <returns>初始化成功返回 true</returns>
         private bool InitializeInternal()
         {
@@ -186,7 +183,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         }
 
         /// <summary>执行单个初始化步骤并统一处理异常。</summary>
-        /// <remarks>方法名避让基类 RunStep 属性（CS0102）。失败描述由硬件管理器产出，本方法只负责追加。</remarks>
+
         /// <param name="step">步骤执行体（调用方保证非 null）</param>
         /// <param name="stepName">步骤名（日志用）</param>
         /// <param name="failureReason">失败原因（日志用）</param>
@@ -217,14 +214,12 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         }
 
         /// <summary>绑定相机。</summary>
-        /// <remarks>取激活相机并订阅轮廓事件，Start 时调一次。</remarks>
         private void BindCamera()
         {
             SubscribeCameraEvents();
         }
 
         /// <summary>解绑相机。</summary>
-        /// <remarks>退订事件、安全关外设、复位运行标志；离开运行态时调用。</remarks>
         private void ReleaseCameraBinding()
         {
             UnsubscribeCameraEvents();
@@ -297,8 +292,6 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         }
 
         /// <summary>模拟相机准备（每拍幂等）：选相机 + 绑定 + 开采集。</summary>
-        /// <remarks>不连硬件、不置流程态、不切步，迁移由命令链驱动。
-        /// 模拟器下发等效指令，与真实时序对齐。</remarks>
         private void SimPrepareCamera()
         {
             if (_simReady) return;
@@ -317,8 +310,6 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         }
 
         /// <summary>执行步 100：焊接工作（轮廓采集与自适应调整）。</summary>
-        /// <remarks>行程完成判断归设备主控，本流程不自行判停。
-        /// Stopping 只由命令链经 WeldStatusTrans 进入。</remarks>
         private void DoWorking()
         {
             // 测量已收工：入图结束，不再调整与失效判定
@@ -472,7 +463,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         }
 
         /// <summary>记录一次失败。</summary>
-        /// <remarks>连续失败达到上限才转失败收尾；未达上限留在原步重试。</remarks>
+
         /// <param name="failureSource">失败来源描述（供日志与故障快照定位）</param>
         private void HandleFailure(string failureSource)
         {
@@ -549,7 +540,6 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         }
 
         /// <summary>模拟结束复位：反订阅相机事件、关采集、焊接态与</summary>
-        /// <remarks>步骤归位，避免污染后续真实启动。</remarks>
         public void SimReset()
         {
             if (!_simReady) return;
@@ -565,7 +555,6 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         #region 公共函数
 
         /// <summary>启动工作流：Standby → PreWork。PreWork 完成后置 _preWorkDone=true，</summary>
-        /// <remarks>主设备轮询到后调用 BeginWorking() 进入 Working。</remarks>
         public void Start()
         {
             lock (_syncRoot)
@@ -608,11 +597,6 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         }
 
         /// <summary>线激光测量行程完成收工（主控命中行程时调用）。</summary>
-        /// <remarks>前置量：入图键 = 测量X + 前置量 = 焊缝终止 X。
-        /// 扫描至此已达焊缝末端，再往前无焊缝可测。
-        /// 故收工＝关闭外设，入图不再产生。
-        /// 焊接未结束，故不改 WeldStatus（保持 Working）。
-        /// 行程判据唯一归主控，本方法幂等。</remarks>
         public void FinishMeasureByStroke()
         {
             lock (_syncRoot)
@@ -626,7 +610,6 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         }
 
         /// <summary>进入 Working 阶段。</summary>
-        /// <remarks>主设备调用；数据稳定后开始焊接工作。</remarks>
         public void BeginWorking()
         {
             lock (_syncRoot)
@@ -661,14 +644,12 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         }
 
         /// <summary>PreWork 完成反馈：数据稳定且已进入等待 Working 指令的步骤。</summary>
-        /// <remarks>主控轮询本反馈后才下发 Working 指令。</remarks>
         public bool IsPreWorkFeedbackDone
         {
             get { return WeldStatus == SubDeviceWeldStatus.PreWork && _dataStable; }
         }
 
         /// <summary>流程处理：以 RunStep 驱动，每个 case 由 bool 判定推进。</summary>
-        /// <remarks>全部 case 无 Thread.Sleep / while 轮询，等待靠「外部线程重入 + IsTimeout 判超时」。</remarks>
         public override void FlowProcess()
         {
             if (!IsEnable) return;
@@ -755,14 +736,13 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         }
 
         /// <summary>清除步骤用时：防止暂停 / 停止期间的时间被计入</summary>
-        /// <remarks>步骤时长导致异常超时。</remarks>
         public override void ResetWorkTime()
         {
             ResetStepTime();
         }
 
         /// <summary>设备连接（阻塞）：同步等待至连接完成。上电初始化</summary>
-        /// <remarks>阶段使用。</remarks>
+
         /// <returns>连接成功返回 true</returns>
         public override bool InitializeOn()
         {
@@ -790,7 +770,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         }
 
         /// <summary>设备断开（阻塞）：内部执行释放动作，调用方阻塞至</summary>
-        /// <remarks>完成。</remarks>
+
         /// <returns>断开成功返回 true</returns>
         public override bool InitializeOff()
         {
@@ -812,7 +792,6 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         }
 
         /// <summary>设备日志：输出线激光差异化日志（结果 / 帧率 / 稳定</summary>
-        /// <remarks>帧计数）。</remarks>
         public override void SubDeviceLog()
         {
             Log(string.Format("线激光 连接态 {0} 焊接过程态 {1} 步骤 {2} 有效结果 {3} 实测帧率 {4:F1} 稳定帧 {5}",
@@ -859,7 +838,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         #region 非阻塞动作指令
 
         /// <summary>开启连接（非阻塞）：自起后台线程执行连接，动作即</summary>
-        /// <remarks>退出释放。</remarks>
+
         /// <returns>受理返回 true，连接进行中被拒绝返回 false</returns>
         public override bool ConnectOn()
         {
@@ -881,7 +860,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         }
 
         /// <summary>关闭连接（非阻塞）：自起后台线程执行断开，动作即</summary>
-        /// <remarks>退出释放。</remarks>
+
         /// <returns>受理返回 true，断开进行中被拒绝返回 false</returns>
         public override bool ConnectOff()
         {
@@ -906,7 +885,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         #region 焊接过程态变更钩子（状态切换时把执行步复位到该阶段入口）
 
         /// <summary>焊接过程态切换钩子。</summary>
-        /// <remarks>把执行步（内部游标）复位到该阶段入口步；离开运行态时解绑相机。</remarks>
+
         /// <param name="oldStatus">切换前焊接过程态</param>
         /// <param name="newStatus">切换后焊接过程态</param>
         protected override void OnWeldStatusChanged(SubDeviceWeldStatus oldStatus, SubDeviceWeldStatus newStatus)
@@ -958,7 +937,6 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         }
 
         /// <summary>等待连接/断开线程退出。</summary>
-        /// <remarks>超时记 Warning 并保留句柄，供现场复查。</remarks>
         private void StopPendingConnectThreads()
         {
             JoinPendingThread(ref _connectThread, "LineLaserConnect");
@@ -985,7 +963,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         #region 可观测性
 
         /// <summary>执行步号转中文名。</summary>
-        /// <remarks>新增步必须登记，否则该步不可观测。</remarks>
+
         /// <param name="step">执行步号</param>
         /// <returns>步号对应中文名；未登记的步返回「未登记步(N)」</returns>
         protected override string GetStepName(int step)

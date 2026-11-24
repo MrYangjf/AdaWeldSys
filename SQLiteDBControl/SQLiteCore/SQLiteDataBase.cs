@@ -5,10 +5,7 @@ using System.Text;
 
 namespace AdaWeldSystem.SQLiteDBControl.SQLiteCore
 {
-    /// <summary>
-    /// SQLite 数据库基础操作类。
-    /// 提供连接管理、SQL 执行与数据查询等底层操作。
-    /// </summary>
+    /// <summary>SQLite 数据库基础操作类。 提供连接管理、SQL 执行与数据查</summary>
     public class SQLiteDataBase
     {
         private SQLiteConnection _connection;
@@ -18,16 +15,12 @@ namespace AdaWeldSystem.SQLiteDBControl.SQLiteCore
         /// <summary>连接锁：界面与落库线程共用单连接，须串行。</summary>
         private readonly object _sync = new object();
 
-        /// <summary>
-        /// 默认构造函数
-        /// </summary>
+        /// <summary>默认构造函数</summary>
         public SQLiteDataBase()
         {
         }
 
-        /// <summary>
-        /// 构造函数，指定数据库文件路径
-        /// </summary>
+        /// <summary>构造函数，指定数据库文件路径</summary>
         /// <param name="dataBasePath">SQLite数据库文件完整路径</param>
         public SQLiteDataBase(string dataBasePath)
         {
@@ -35,9 +28,7 @@ namespace AdaWeldSystem.SQLiteDBControl.SQLiteCore
             _connection = new SQLiteConnection(_connectionString);
         }
 
-        /// <summary>
-        /// 释放资源（标准 IDisposable.Dispose，不重写 Dispose(bool)）
-        /// </summary>
+        /// <summary>释放资源（标准 IDisposable.Dispose，不重写 Dispose(bool)）</summary>
         public void Dispose()
         {
             if (_disposed)
@@ -65,9 +56,7 @@ namespace AdaWeldSystem.SQLiteDBControl.SQLiteCore
             _disposed = true;
         }
 
-        /// <summary>
-        /// 打开数据库连接
-        /// </summary>
+        /// <summary>打开数据库连接</summary>
         public void OnInitConnect()
         {
             lock (_sync)
@@ -83,9 +72,7 @@ namespace AdaWeldSystem.SQLiteDBControl.SQLiteCore
             }
         }
 
-        /// <summary>
-        /// 关闭数据库连接
-        /// </summary>
+        /// <summary>关闭数据库连接</summary>
         public void ExitConnect()
         {
             lock (_sync)
@@ -97,9 +84,7 @@ namespace AdaWeldSystem.SQLiteDBControl.SQLiteCore
             }
         }
 
-        /// <summary>
-        /// 连接到指定数据库文件
-        /// </summary>
+        /// <summary>连接到指定数据库文件</summary>
         /// <param name="dataBasePath">数据库文件路径</param>
         public void ConnectDBFile(string dataBasePath)
         {
@@ -107,9 +92,7 @@ namespace AdaWeldSystem.SQLiteDBControl.SQLiteCore
             _connection = new SQLiteConnection(_connectionString);
         }
 
-        /// <summary>
-        /// 执行SQL语句（Insert/Update/Delete）
-        /// </summary>
+        /// <summary>执行SQL语句（Insert/Update/Delete）</summary>
         /// <param name="strSQL">要执行的SQL语句</param>
         /// <returns>执行成功返回true，失败返回false</returns>
         public bool ExecuteSQL(string strSQL)
@@ -117,9 +100,7 @@ namespace AdaWeldSystem.SQLiteDBControl.SQLiteCore
             return ExecuteSQL(strSQL, null);
         }
 
-        /// <summary>
-        /// 执行参数化SQL语句
-        /// </summary>
+        /// <summary>执行参数化SQL语句</summary>
         /// <param name="strSQL">SQL语句（含参数占位符）</param>
         /// <param name="parameters">参数数组</param>
         /// <returns>执行成功返回true，失败返回false</returns>
@@ -151,9 +132,7 @@ namespace AdaWeldSystem.SQLiteDBControl.SQLiteCore
             }
         }
 
-        /// <summary>
-        /// 执行查询，返回DataSet
-        /// </summary>
+        /// <summary>执行查询，返回DataSet</summary>
         /// <param name="strSQL">SQL查询语句</param>
         /// <returns>查询结果DataSet</returns>
         public DataSet GetDataSet(string strSQL)
@@ -161,9 +140,7 @@ namespace AdaWeldSystem.SQLiteDBControl.SQLiteCore
             return GetDataSet(strSQL, null);
         }
 
-        /// <summary>
-        /// 执行参数化查询，返回DataSet
-        /// </summary>
+        /// <summary>执行参数化查询，返回DataSet</summary>
         /// <param name="strSQL">SQL查询语句（含参数占位符）</param>
         /// <param name="parameters">参数数组</param>
         /// <returns>查询结果DataSet</returns>
@@ -196,9 +173,7 @@ namespace AdaWeldSystem.SQLiteDBControl.SQLiteCore
             }
         }
 
-        /// <summary>
-        /// 检查指定表是否存在
-        /// </summary>
+        /// <summary>检查指定表是否存在</summary>
         /// <param name="tableName">表名</param>
         /// <returns>存在返回true，不存在返回false</returns>
         public bool IsExistTable(string tableName)
@@ -229,9 +204,7 @@ namespace AdaWeldSystem.SQLiteDBControl.SQLiteCore
             }
         }
 
-        /// <summary>
-        /// 删除N天前的表
-        /// </summary>
+        /// <summary>删除N天前的表</summary>
         /// <param name="n">保留天数，之前的表全部删除</param>
         public void DropDateTable(double n)
         {
@@ -277,9 +250,7 @@ namespace AdaWeldSystem.SQLiteDBControl.SQLiteCore
             }
         }
 
-        /// <summary>
-        /// 判断文件是否存在
-        /// </summary>
+        /// <summary>判断文件是否存在</summary>
         /// <param name="strPathName">文件路径</param>
         /// <returns>存在返回true，不存在返回false</returns>
         public bool IsExistFile(string strPathName)
@@ -287,9 +258,7 @@ namespace AdaWeldSystem.SQLiteDBControl.SQLiteCore
             return System.IO.File.Exists(strPathName);
         }
 
-        /// <summary>
-        /// 创建表（默认列类型为char(10)）
-        /// </summary>
+        /// <summary>创建表（默认列类型为char(10)）</summary>
         /// <param name="strTableName">表名</param>
         /// <param name="tableColumn">列名数组</param>
         /// <returns>创建成功返回true，失败返回false</returns>
@@ -331,9 +300,7 @@ namespace AdaWeldSystem.SQLiteDBControl.SQLiteCore
             }
         }
 
-        /// <summary>
-        /// 创建表（指定列长度）
-        /// </summary>
+        /// <summary>创建表（指定列长度）</summary>
         /// <param name="strTableName">表名</param>
         /// <param name="tableColumn">列名数组</param>
         /// <param name="columnLength">对应列的数据长度数组</param>
@@ -373,9 +340,7 @@ namespace AdaWeldSystem.SQLiteDBControl.SQLiteCore
             }
         }
 
-        /// <summary>
-        /// 插入数据（参数化查询）
-        /// </summary>
+        /// <summary>插入数据（参数化查询）</summary>
         /// <param name="tableName">表名</param>
         /// <param name="tableColumn">列名数组</param>
         /// <param name="values">值数组</param>
@@ -407,9 +372,7 @@ namespace AdaWeldSystem.SQLiteDBControl.SQLiteCore
             return ExecuteSQL(sqlString, parameters);
         }
 
-        /// <summary>
-        /// 更新数据（参数化查询，带WHERE条件）
-        /// </summary>
+        /// <summary>更新数据（参数化查询，带WHERE条件）</summary>
         /// <param name="tableName">表名</param>
         /// <param name="tableColumn">列名数组</param>
         /// <param name="values">值数组</param>
@@ -443,9 +406,7 @@ namespace AdaWeldSystem.SQLiteDBControl.SQLiteCore
             return ExecuteSQL(sqlString, parameters.ToArray());
         }
 
-        /// <summary>
-        /// 更新数据（参数化查询，全表更新）
-        /// </summary>
+        /// <summary>更新数据（参数化查询，全表更新）</summary>
         /// <param name="tableName">表名</param>
         /// <param name="tableColumn">列名数组</param>
         /// <param name="values">值数组</param>
@@ -474,9 +435,7 @@ namespace AdaWeldSystem.SQLiteDBControl.SQLiteCore
             return ExecuteSQL(sqlString, parameters);
         }
 
-        /// <summary>
-        /// 删除表
-        /// </summary>
+        /// <summary>删除表</summary>
         /// <param name="tableName">表名</param>
         public void DropTable(string tableName)
         {
@@ -484,9 +443,7 @@ namespace AdaWeldSystem.SQLiteDBControl.SQLiteCore
             ExecuteSQL(sqlStr);
         }
 
-        /// <summary>
-        /// 执行查询，返回DataTable
-        /// </summary>
+        /// <summary>执行查询，返回DataTable</summary>
         /// <param name="sqlString">SQL语句</param>
         /// <returns>查询结果DataTable</returns>
         public DataTable GetDataTable(string sqlString)
@@ -500,9 +457,7 @@ namespace AdaWeldSystem.SQLiteDBControl.SQLiteCore
             return null;
         }
 
-        /// <summary>
-        /// 执行查询，返回DataRow
-        /// </summary>
+        /// <summary>执行查询，返回DataRow</summary>
         /// <param name="sqlString">SQL语句</param>
         /// <returns>查询结果DataRow</returns>
         public DataRow GetDataRow(string sqlString)
@@ -516,9 +471,7 @@ namespace AdaWeldSystem.SQLiteDBControl.SQLiteCore
             return null;
         }
 
-        /// <summary>
-        /// 执行查询，返回单个字符串值
-        /// </summary>
+        /// <summary>执行查询，返回单个字符串值</summary>
         /// <param name="sqlString">SQL语句</param>
         /// <returns>查询结果字符串</returns>
         public string GetDataString(string sqlString)
@@ -526,9 +479,7 @@ namespace AdaWeldSystem.SQLiteDBControl.SQLiteCore
             return GetDataString(sqlString, null);
         }
 
-        /// <summary>
-        /// 获取指定表中满足条件的单元格值
-        /// </summary>
+        /// <summary>获取指定表中满足条件的单元格值</summary>
         /// <param name="tableName">表名</param>
         /// <param name="columnName">目标列名</param>
         /// <param name="conditionColumn">条件列名</param>
@@ -544,9 +495,7 @@ namespace AdaWeldSystem.SQLiteDBControl.SQLiteCore
             return GetDataString(sqlStr, parameters);
         }
 
-        /// <summary>
-        /// 获取指定表中指定列的值
-        /// </summary>
+        /// <summary>获取指定表中指定列的值</summary>
         /// <param name="tableName">表名</param>
         /// <param name="columnName">列名</param>
         /// <returns>查询结果字符串</returns>
@@ -556,9 +505,7 @@ namespace AdaWeldSystem.SQLiteDBControl.SQLiteCore
             return GetDataString(sqlStr);
         }
 
-        /// <summary>
-        /// 检查表中是否存在满足条件的记录
-        /// </summary>
+        /// <summary>检查表中是否存在满足条件的记录</summary>
         /// <param name="tableName">表名</param>
         /// <param name="conditionColumn">条件列名</param>
         /// <param name="conditionValue">条件值</param>
@@ -575,9 +522,7 @@ namespace AdaWeldSystem.SQLiteDBControl.SQLiteCore
             return dataset.Tables.Count > 0 && dataset.Tables[0].Rows.Count > 0;
         }
 
-        /// <summary>
-        /// 删除表中满足条件的记录
-        /// </summary>
+        /// <summary>删除表中满足条件的记录</summary>
         /// <param name="tableName">表名</param>
         /// <param name="conditionColumn">条件列名</param>
         /// <param name="conditionValue">条件值</param>
@@ -592,9 +537,7 @@ namespace AdaWeldSystem.SQLiteDBControl.SQLiteCore
             return ExecuteSQL(sqlStr, parameters);
         }
 
-        /// <summary>
-        /// 查询整张表
-        /// </summary>
+        /// <summary>查询整张表</summary>
         /// <param name="tableName">表名</param>
         /// <returns>查询结果DataTable</returns>
         public DataTable Select(string tableName)
@@ -603,9 +546,7 @@ namespace AdaWeldSystem.SQLiteDBControl.SQLiteCore
             return GetDataTable(sqlStr);
         }
 
-        /// <summary>
-        /// 执行查询，返回单个字符串值（参数化）
-        /// </summary>
+        /// <summary>执行查询，返回单个字符串值（参数化）</summary>
         /// <param name="sqlString">SQL语句</param>
         /// <param name="parameters">参数数组</param>
         /// <returns>查询结果字符串</returns>

@@ -1,6 +1,6 @@
 ﻿namespace AdaWeldSystem.UIDesign.TabPage
 {
-    partial class ILCamPage
+    partial class LineLaserCamPage
     {
         /// <summary>
         /// 必需的设计器变量。

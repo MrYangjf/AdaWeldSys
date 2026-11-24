@@ -7,27 +7,20 @@ using AdaWeldSystem.SQLiteDBControl.ISQLiteHelper;
 
 namespace AdaWeldSystem.SQLiteDBControl.Helpers
 {
-    /// <summary>
-    /// 权限 Helper
-    /// 负责用户认证、权限级别查询和账户管理
-    /// </summary>
+    /// <summary>权限 Helper 负责用户认证、权限级别查询和账户管理</summary>
     public class AuthHelper : DatabaseHelperBase
     {
         private readonly string[] _userColumns = { "UserName", "PassWord", "UserLevel" };
         private readonly string _tableName = "UserTable";
         private Dictionary<string, OperateLevel> Userlevel = new Dictionary<string, OperateLevel>();
 
-        /// <summary>
-        /// 构造函数，初始化权限管理数据库
-        /// </summary>
+        /// <summary>构造函数，初始化权限管理数据库</summary>
         public AuthHelper() : base("Auth.db")
         {
             InitializeUserTable();
         }
 
-        /// <summary>
-        /// 初始化用户表（如果不存在）
-        /// </summary>
+        /// <summary>初始化用户表（如果不存在）</summary>
         private void InitializeUserTable()
         {
             if (!Database.IsExistTable(_tableName))
@@ -42,9 +35,7 @@ namespace AdaWeldSystem.SQLiteDBControl.Helpers
             Userlevel.Add("2", OperateLevel.Operator);
         }
 
-        /// <summary>
-        /// 添加新用户
-        /// </summary>
+        /// <summary>添加新用户</summary>
         /// <param name="userName">用户名</param>
         /// <param name="password">密码</param>
         /// <param name="userLevel">用户级别</param>
@@ -60,9 +51,7 @@ namespace AdaWeldSystem.SQLiteDBControl.Helpers
             return Database.Insert(_tableName, _userColumns, values);
         }
 
-        /// <summary>
-        /// 验证用户登录
-        /// </summary>
+        /// <summary>验证用户登录</summary>
         /// <param name="userName">用户名</param>
         /// <param name="password">密码</param>
         /// <returns>验证成功返回true，失败返回false</returns>
@@ -84,9 +73,7 @@ namespace AdaWeldSystem.SQLiteDBControl.Helpers
             return dataset.Tables.Count > 0 && dataset.Tables[0].Rows.Count > 0;
         }
 
-        /// <summary>
-        /// 获取用户权限级别
-        /// </summary>
+        /// <summary>获取用户权限级别</summary>
         /// <param name="userName">用户名</param>
         /// <returns>用户级别字符串，用户不存在返回空字符串</returns>
         public string GetUserLevel(string userName)
@@ -99,9 +86,7 @@ namespace AdaWeldSystem.SQLiteDBControl.Helpers
             return Database.GetTableCellValue(_tableName, "UserLevel", "UserName", userName);
         }
 
-        /// <summary>
-        /// 获取用户操作级别
-        /// </summary>
+        /// <summary>获取用户操作级别</summary>
         /// <param name="userName">用户名</param>
         /// <returns>操作级别</returns>
         public OperateLevel GetUserOperate(string userName)
@@ -120,9 +105,7 @@ namespace AdaWeldSystem.SQLiteDBControl.Helpers
             return OperateLevel.Operator;
         }
 
-        /// <summary>
-        /// 检查用户是否存在
-        /// </summary>
+        /// <summary>检查用户是否存在</summary>
         /// <param name="userName">用户名</param>
         /// <returns>存在返回true，不存在返回false</returns>
         public bool IsUserExist(string userName)
@@ -135,9 +118,7 @@ namespace AdaWeldSystem.SQLiteDBControl.Helpers
             return Database.HasTableValue(_tableName, "UserName", userName);
         }
 
-        /// <summary>
-        /// 更新用户密码
-        /// </summary>
+        /// <summary>更新用户密码</summary>
         /// <param name="userName">用户名</param>
         /// <param name="newPassword">新密码</param>
         /// <returns>更新成功返回true，失败返回false</returns>
@@ -153,9 +134,7 @@ namespace AdaWeldSystem.SQLiteDBControl.Helpers
             return Database.Update(_tableName, columns, values, "UserName", userName);
         }
 
-        /// <summary>
-        /// 获取所有用户信息（不含密码）
-        /// </summary>
+        /// <summary>获取所有用户信息（不含密码）</summary>
         public DataTable GetAllUsers()
         {
             try
@@ -168,9 +147,7 @@ namespace AdaWeldSystem.SQLiteDBControl.Helpers
             }
         }
 
-        /// <summary>
-        /// 获取指定用户的等级（从数据库直接查询）
-        /// </summary>
+        /// <summary>获取指定用户的等级（从数据库直接查询）</summary>
         /// <param name="name">用户名</param>
         /// <returns>用户等级</returns>
         public string GetUserLevelFromDb(string name)
@@ -189,9 +166,7 @@ namespace AdaWeldSystem.SQLiteDBControl.Helpers
             }
         }
 
-        /// <summary>
-        /// 更新用户等级
-        /// </summary>
+        /// <summary>更新用户等级</summary>
         /// <param name="name">用户名</param>
         /// <param name="level">等级</param>
         /// <returns>更新成功返回true</returns>

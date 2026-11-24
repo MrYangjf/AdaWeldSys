@@ -1,8 +1,6 @@
 namespace AdaWeldSystem.EmguALG.LineLaserContour
 {
     /// <summary>一帧线激光轮廓点集（算法层 DTO，单位毫米）。</summary>
-    /// <remarks>数组由硬件层传入并共用，算法只读。
-    /// 所有权在算法层，不反向引用硬件或 PCL 类型。</remarks>
     public sealed class LineLaserProfileData
     {
         #region 常量
@@ -80,7 +78,6 @@ namespace AdaWeldSystem.EmguALG.LineLaserContour
     }
 
     /// <summary>线激光标定四角与中心（算法层 DTO，单位毫米）。</summary>
-    /// <remarks>索引 0 为横向、1 为高度；由硬件层从相机标定快照转换后传入。不可用时 <see cref="HasData"/> 为 false。</remarks>
     public sealed class LineLaserCalibrationData
     {
         #region 公共变量

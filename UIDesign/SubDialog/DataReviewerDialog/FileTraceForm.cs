@@ -110,7 +110,6 @@ namespace AdaWeldSystem.UIDesign.SubDialog.DataReviewerDialog
         /// <summary>正常记录表格：点击任意单元格选中该行（单选互</summary>
         /// <param name="sender">发送方。</param>
         /// <param name="e">事件参数。</param>
-        /// <remarks>斥）</remarks>
         private void uiTableRecord_CellClick(object sender, AntdUI.TableClickEventArgs e)
         {
             if (!(e.Record is FileTraceRow row)) return;
@@ -124,7 +123,6 @@ namespace AdaWeldSystem.UIDesign.SubDialog.DataReviewerDialog
         /// <summary>临时文件表格：点击任意单元格选中该行（单选互</summary>
         /// <param name="sender">发送方。</param>
         /// <param name="e">事件参数。</param>
-        /// <remarks>斥）</remarks>
         private void uiTableTemp_CellClick(object sender, AntdUI.TableClickEventArgs e)
         {
             if (!(e.Record is FileTraceRow row)) return;

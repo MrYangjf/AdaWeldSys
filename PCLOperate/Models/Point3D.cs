@@ -1,9 +1,7 @@
 namespace AdaWeldSystem.PCLOperate.Models
 {
 
-    /// <summary>
-    /// 3D点数据结构
-    /// </summary>
+    /// <summary>3D点数据结构</summary>
     public struct Point3D
     {
         public float X { get; set; }
@@ -23,9 +21,7 @@ namespace AdaWeldSystem.PCLOperate.Models
         }
     }
 
-    /// <summary>
-    /// 带颜色的3D点数据结构
-    /// </summary>
+    /// <summary>带颜色的3D点数据结构</summary>
     public struct Point3DColor
     {
         public float X { get; set; }

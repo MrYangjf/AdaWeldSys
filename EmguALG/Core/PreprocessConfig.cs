@@ -4,8 +4,7 @@ using AdaWeldSystem.FileOperate;
 
 namespace AdaWeldSystem.EmguALG.Core
 {
-    /// <summary>滤波阶段配置（强类型，供 AlgorithmBase.Preprocess 直接使用）。
-    /// 算子枚举统一引用 EmguALG 命名空间下的定义。</summary>
+    /// <summary>滤波阶段配置</summary>
     public class FilterConfig
     {
         public bool Enabled;
@@ -154,10 +153,7 @@ namespace AdaWeldSystem.EmguALG.Core
         }
     }
 
-    /// <summary>
-    /// 预处理配置（算法架构设计 §4.2 / §6.3）。
-    /// 在旧 PipelineConfig 上扩展线激光预处理。仍复用 ImageAlgorithm。
-    /// </summary>
+    /// <summary>预处理配置</summary>
     [System.ComponentModel.TypeConverter(typeof(System.ComponentModel.ExpandableObjectConverter))]
     public class PreprocessConfig
     {

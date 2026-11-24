@@ -19,13 +19,13 @@ using AdaWeldSystem.UIDesign.SubDialog.IntelligentLaserDialog;
 namespace AdaWeldSystem.UIDesign.TabPage
 {
     /// <summary>英莱线激光相机页面</summary>
-    public partial class ILCamPage : UserControl
+    public partial class LineLaserCamPage : UserControl
     {
         private IntelligentLaserCam _ilCamera;
 
         private Mat _displayedClone;
 
-        public ILCamPage()
+        public LineLaserCamPage()
         {
             InitializeComponent();
             InitResultTable();

@@ -20,14 +20,14 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
 {
 
     /// <summary>运动控制工作流（单例）。</summary>
-    /// <remarks>负责台达总线的初始化、伺服使能编排与急停；焊缝跟踪方案待定。</remarks>
     public class MotionControlWorkflow : DeviceWorkflowBase
     {
         #region 常量
 
-        // 步号：0 待机 900 收尾；10 启动 11 使能 12 回归；20 待机
+        // 步号：0 待机 900 收尾；10 启动 11 使能 12 焊前寻位；20 待机
         private const int StepServoOn = 11;
         private const int StepReturnToCal = 12;
+        private const int StepPreWorkSeek = 13;
         private const int StepReady = 20;
         private const int StepStopping = 700;
 
@@ -38,6 +38,16 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
 
         // 回归重试上限：不到位即重发，超过即报警
         private const int CalReturnMaxRetry = 3;
+
+        // 焊前寻位超时（秒）：X 到位后 Y 未到焊接点即判 PreWork 失败
+        private const int PreWorkSeekTimeoutSeconds = 60;
+
+        // 焊前寻位的 Y 到位容差（毫米）
+        private const double PreWorkSeekToleranceMm = 0.1;
+
+        // 焊前寻位：轴对跟踪的最小可观测响应位移（毫米）。
+        // 目标偏离起点时，轴必须真的走到目标；没动过不算到位（否则「未引导即判到位」）。
+        private const double PreWorkSeekMinMoveMm = 0.002;
 
         // 软目标到达窗口次数，仅作留痕，主判据仍是偏差
         private const ushort SoftTargetReachWindowTicks = 50;
@@ -60,29 +70,23 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         private const double FeedforwardVxSaneLimitMmPerS = 500.0;
 
         /// <summary>查图 X 取数开关：真取焊参值，假走旧取数。</summary>
-        /// <remarks>查图与入图须同源，旧取数在真实模式恒 0。</remarks>
         private static readonly bool _cspQueryXFromWeldParam = true;
         // 段速时基上限，过小高估段速，段末冲过端点
         private const double CspSegSecondsCap = 0.25;
 
         /// <summary>写段时间门限（秒）：超时且攒够 1 个整脉冲即强写。</summary>
-        /// <remarks>慢速时会超时基上限，段速高估致段末干等。</remarks>
         private const double CspWriteIntervalMaxSeconds = 0.15;
 
         /// <summary>段距写入门限（毫米）：段时长须 ≥ 驱动器 S 曲线时间。</summary>
-        /// <remarks>取 0.01mm；早期「门限致停走」实因时基截断高估段速。</remarks>
         private const double CspMinWriteSegMm = 0.01;
 
         /// <summary>几何钳位上带系数：段速不得高于本段几何均速。</summary>
-        /// <remarks>快于墙钟间隔必然抽空 FIFO，轴冲过端点再被拉回。</remarks>
         private const double CspVelGeomHiFactor = 1.0;
 
         /// <summary>几何钳位下带系数：段速不低于本段几何均速 0.85 倍。</summary>
-        /// <remarks>过慢会让队列长期积压、滞后持续累积；0.85 仍保留段间平滑余量。</remarks>
         private const double CspVelGeomLoFactor = 0.85;
 
         /// <summary>队列积压反馈增益（1/秒）：段速增量 = 增益 ×（积压 − 死区）。</summary>
-        /// <remarks>轴落后多为队列积压而非跟不上；比例项随积压趋零自限，不会重蹈「恒定提速 ⇒ FIFO 抽空」。</remarks>
         private const double CspBacklogVelGainPerS = 0.5;
 
         /// <summary>积压反馈增量上限（毫米/秒）：防起步阶跃拉高速。</summary>
@@ -93,6 +97,10 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         private const double CspMaxTickSeconds = 0.1;
         // 首次启动预载段数，过多会累积滞后
         private const int BufferPreloadSegments = 3;
+        // 焊前寻位阶段的预载段数：寻位只是微调（亚毫米级），
+        // 攒满 3 段会迟迟不启动 ⇒ 段进了 FIFO 而轴不动。
+        // 台达手册 P9-146：建立座标系并存入运动指令「至少两阶段」方可执行 ⇒ 取 2。
+        private const int BufferPreloadSegmentsPreWork = 2;
         // 静止拍数达此值判队列耗干，误判则轴停走
         private const int BufferIdleTicksToDrain = 60;
         // 示教值与轴起点偏差超此值告警，防标定对失效
@@ -107,6 +115,10 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         private const int CspBufferDiagIntervalMs = 5000;
         // 启动连续失败上限：恒返回 4352 须计数收敛
         private const int BufferStartMaxFailures = 3;
+        // 写段连续失败上限：收尾重建后仍失败即报警停焊（4610 = 此模块不支持此 API）
+        private const int CspWriteFailMaxRetry = 3;
+        // 写段失败后的重试延时（秒）：给台达侧状态就绪时间，跨拍重写同一段
+        private const double CspWriteRetryDelaySeconds = 0.05;
         // 行程限幅告警阈值（毫米）：超过即偏差失控，须暴露
         private const double CspStrokeClampWarnMm = 1.0;
         // 限幅告警限频：每拍可能命中，只按间隔报一次
@@ -141,10 +153,10 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         /// <summary>小步 21：判位与下发回归指令。</summary>
         private const int SubCalCheck = 21;
 
-        /// <summary>小步 22：按拍等轴运动停止（CSP 模式取驱动器 Mdone；超时未停即失败报警）。</summary>
+        /// <summary>小步 22：按拍等轴运动停止</summary>
         private const int SubCalWait = 22;
 
-        /// <summary>小步 23：停止后判到位偏差（≤ CalReturnToleranceMm 才完成；未到位重试回小步 21）。</summary>
+        /// <summary>小步 23：停止后判到位偏差</summary>
         private const int SubCalVerify = 23;
 
         /// <summary>伺服使能小步状态（SubServoIssue/SubServoWait）。</summary>
@@ -154,24 +166,33 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         private int _calSubStep;
 
         /// <summary>回归本轮已重试次数（超 CalReturnMaxRetry 即报警）。</summary>
-        /// <remarks>Y 轴为 CSP 模式：发令 → 等停 → 判偏差，未到位重发；
-        /// 在小步 11 复位，每次启动均为全新计数。</remarks>
         private int _calRetryCount;
 
         /// <summary>等停止计时起点（每下发移动重置，供小步 22 判超时）。</summary>
         private DateTime _calStopWaitStart;
 
         /// <summary>本次下发是否已确认启动（小步 22 两段判前半）。</summary>
-        /// <remarks>指令刚下发时 Mdone 仍是上次已完成态。
-        /// ⇒ 直接判已停会跳判重发。故先等运动中再等已完成。</remarks>
         private bool _calMotionStarted;
 
         /// <summary>跟踪轴是否已停在标定位（供观测与起焊防呆）。</summary>
         private bool _calReturnReady;
 
+        /// <summary>焊前寻位起始时刻（Ticks）：超时判据用。</summary>
+        private long _preWorkSeekStartTicks;
+
+        /// <summary>焊前寻位中 X 是否已到位（机器人到焊前位 / 模拟到设定点）。</summary>
+        private bool _preWorkXArrived;
+
+        /// <summary>焊前寻位起始时的 Y 轴位置（毫米）：判「轴是否真的响应了跟踪」。</summary>
+        private double _preWorkSeekStartAxisPos;
+
+        /// <summary>焊前寻位是否真正完成。</summary>
+        private bool _preWorkSeekReady;
+
+        /// <summary>PreWork 建系时刻（Ticks）：建系后留稳定窗口再写段，避开建系未就绪窗口。</summary>
+        private long _cspPreWorkBuildTicks;
+
         /// <summary>停止收尾是否已进入（首入只停输出）。</summary>
-        /// <remarks>靠本标志保证停输出只做一次。
-        /// ⛔ StepStopping 未完成时会按拍重入。</remarks>
         private bool _stopTeardownStarted;
 
         /// <summary>失败收尾是否已进入：避免重入重复停输出。</summary>
@@ -213,8 +234,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         /// <summary>跟踪激活标志（上周期态，供起止沿判，跨线程读）。</summary>
         private volatile bool _seamTrackingActive;
 
-        /// <summary>起焊沿触发次数（取证）：正常只应为 1。
-        /// 反复触发即「手动固定宽度仍变动」的嫌疑源。</summary>
+        /// <summary>起焊沿触发次数（取证）</summary>
         private int _seamTrackingStartCount;
 
         /// <summary>CSP 输出节拍基准时刻（Stopwatch 计数，用于实测两次写入间隔）。</summary>
@@ -229,7 +249,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         /// <summary>机器人 X 向速度 EMA 平滑值（毫米/秒幅值）。</summary>
         private double _ffVxFiltered;
 
-        /// <summary>本拍速度前馈需求（毫米/秒，已乘安全系数；诊断观测）。</summary>
+        /// <summary>本拍速度前馈需求</summary>
         private double _cspFeedforwardVelMmPerS;
 
         /// <summary>段速度 EMA 平滑值（毫米/秒）：端点平滑必须配速度平滑。</summary>
@@ -253,7 +273,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         /// <summary>缓冲重启次数（失步或耗干）：取证用，重启打断段流。</summary>
         private int _cspRestartCount;
 
-        /// <summary>累计写段数（跨耗干重启累计；_cspQueuedSegments 语义是启动阈值计数，会清零，不可作健康度指标）。</summary>
+        /// <summary>累计写段数</summary>
         private long _cspQueuedSegmentsTotal;
 
         /// <summary>缓冲收尾连续失败场数（成功清零；达 3 场告警）。</summary>
@@ -271,12 +291,26 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         /// <summary>CSP 输出是否已启用（起焊沿置位，停焊沿复位）。</summary>
         private bool _cspOutputRunning;
 
+        /// <summary>PreWork 跟踪是否已启动（建系并激活地图跟踪，起焊沿复用不重复建系）。</summary>
+        private bool _cspPreWorkTracking;
+
+        /// <summary>缓冲写段连续失败次数（超上限即报警停焊）。</summary>
+        private int _cspWriteFailCount;
+
+
+        /// <summary>写段失败后挂起待重试的段终点（毫米）；NaN 表示无挂起段。</summary>
+        private double _cspPendingSegCommand = double.NaN;
+
+        /// <summary>挂起待重试段的段速（毫米/秒）。</summary>
+        private double _cspPendingSegVel;
+
+        /// <summary>挂起段的重试时刻（Ticks）：到点才重试，给台达状态就绪时间。</summary>
+        private long _cspPendingSegRetryTicks;
+
         /// <summary>CSP 平滑速度（毫米/秒），跨拍保持以限加速度。</summary>
         private double _cspSmoothedVelocity;
 
         /// <summary>跟随器内部位置（毫米）：每拍独立推进，与末段解耦。</summary>
-        /// <remarks>以末段为基准会丢弃未写拍位移。
-        /// 故须自持位置量。</remarks>
         private double _cspFollowPos;
 
         /// <summary>缓冲是否已 Start 且未判耗尽。</summary>
@@ -357,8 +391,6 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         }
 
         /// <summary>闭环基准位置（毫米）：有轴取反馈，无轴取虚拟轴。</summary>
-        /// <remarks>无轴时以虚拟轴顶替测量时刻轴值。
-        /// 使建图与反算同构。</remarks>
         private double SeamAxisPosMm
         {
             get { return _seamAxis != null ? _seamAxis.GetPosition() : _simAxisPos; }
@@ -433,8 +465,6 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         public override string StateName { get { return Tag; } }
 
         /// <summary>是否处于已使能待机。</summary>
-        /// <remarks>判**实际使能信号**（<see cref="MontionAxis.IsServoOn"/>），Standby 下 Ready 与 Idle 同形。
-        /// 对外状态只允许一个来源。</remarks>
         public bool IsRunning
         {
             get
@@ -451,11 +481,14 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         /// <summary>跟踪轴是否已停在标定位（供观测与起焊防呆）。</summary>
         public bool IsCalibrationYReady { get { return _calReturnReady; } }
 
+        /// <summary>焊前寻位是否完成（X 到位且 Y 到达焊接点）。</summary>
+        public bool IsPreWorkSeekReady { get { return _preWorkSeekReady; } }
+
         /// <summary>模组配置文件名（不含扩展名），落在本流程目录下。</summary>
         protected override string ConfigFileName { get { return "MotionControlWorkflow"; } }
 
-        /// <summary>配置落 MotionControl\Workflow_XML 子目录。</summary>
-        protected override string ConfigRelativeDir { get { return @"Config\MotionControl\Workflow_XML"; } }
+        /// <summary>模组配置所属模块（全局配置目录下的模块层）。</summary>
+        protected override string ConfigModule { get { return "MotionControl"; } }
 
         #endregion
 
@@ -487,7 +520,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         }
 
         /// <summary>切换焊接过程态，并按目标态把执行步推到对应</summary>
-        /// <remarks>入口。</remarks>
+
         /// <param name="status">目标焊接过程态（基类抽象状态）</param>
         /// <param name="reason">切换原因（纯文本，无符号）</param>
         /// <param name="enterServoStep">是否进入使能段（大步 10：11 使能 → 12 等 → 21 判位 → 22 等回归）</param>
@@ -530,7 +563,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         }
 
         /// <summary>执行步 10 小步流（11 发指令 → 12 等完成）：全部轴伺服使能。</summary>
-        /// <remarks>小步 12 判定是热路径，静默，仅完成与超时拍写 log。</remarks>
+
         /// <returns>全部使能返回 true</returns>
         private bool DoServoOn()
         {
@@ -546,7 +579,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
                     if (on)
                     {
                         // 使能完成 → 回归标定位（标定对成立的前提）
-                        // ⛔ 此处不得清缓冲：本会话从未建系，清必报 4352
+                        // 未建系时不清缓冲，避免报错
                         // （ERR_ECAT_NEED_INITIAL），且当时并无残留可清；缓冲清理只在「已建系且轴已停稳」时做。
                         _calSubStep = SubCalCheck;
                         _calReturnReady = false;
@@ -589,9 +622,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         }
 
         /// <summary>执行步 12：21 判位下发 → 22 等停 → 23 判到位。</summary>
-        /// <remarks>Y 轴 CSP：先判运动停止，再判到位偏差 ≤ 容差。
-        /// 未到位重发，超 3 次或等停超时即报警；已静止且在容差内直转 23。
-        /// 全程非阻塞按拍推进（⛔ 禁 while/Sleep）；移动门禁只看行程上下限，越界即 Fail。</remarks>
+
         /// <returns>到位返回 true</returns>
         private bool DoReturnToCalibration()
         {
@@ -693,8 +724,8 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
                     }
                     double calY = WeldParamManager.Instance.AlgorithmsConfig.TeachLockYMm;
                     double pos = _seamAxis.GetPosition();
-                    double minLimit = WeldParamManager.Instance.AlgorithmsConfig.YAxisMinMm;
-                    double maxLimit = WeldParamManager.Instance.AlgorithmsConfig.YAxisMaxMm;
+                    // 行程上下限取 Y 轴软限位
+                    bool strokeLimited = TryGetSeamAxisSoftLimit(out double minLimit, out double maxLimit);
                     if (Math.Abs(calY - pos) <= CalReturnToleranceMm)
                     {
                         Log(string.Format("焊缝跟踪轴已在 Y 轴标定位 {0:F3}mm", pos));
@@ -704,10 +735,10 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
                     // 移动门禁：回归不看固定距离，只看行程上下限
                     // 目标与当前位置都在行程内即放行，多远都可动
                     // 越界即报警暴露，不静默拒绝移动
-                    if (!IsWithinYStroke(calY, minLimit, maxLimit) || !IsWithinYStroke(pos, minLimit, maxLimit))
+                    if (strokeLimited && (!IsWithinYStroke(calY, minLimit, maxLimit) || !IsWithinYStroke(pos, minLimit, maxLimit)))
                     {
                         Fail(string.Format(
-                            "Y 轴回归标定位越界 目标 {0:F3}mm 当前 {1:F3}mm 行程 [{2:F3} 到 {3:F3}] 请核 TeachLockYMm 与 Y轴行程上下限",
+                            "Y 轴回归标定位越界 目标 {0:F3}mm 当前 {1:F3}mm 行程 [{2:F3} 到 {3:F3}] 请核 TeachLockYMm 与 Y 轴软限位",
                             calY, pos, minLimit, maxLimit));
                         return false;
                     }
@@ -728,9 +759,80 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             }
         }
 
+        /// <summary>执行步 13：焊前寻位（X 到位且 Y 到达焊接点即完成）。</summary>
+        private bool DoPreWorkSeek()
+        {
+            if (_preWorkSeekStartTicks == 0)
+            {
+                _preWorkSeekStartTicks = Stopwatch.GetTimestamp();
+                _preWorkXArrived = false;
+                _preWorkSeekReady = false;
+                _preWorkSeekStartAxisPos = _seamAxis != null ? _seamAxis.GetPosition() : 0.0;
+                Log(string.Format("焊前寻位开始 X 移动中 Y 跟随跟踪 起始轴位置 {0:F3}mm 到达焊前位且 Y 到位后完成",
+                    _preWorkSeekStartAxisPos));
+            }
+
+            // Y 按跟踪目标跟随
+            UpdateSeamTracking();
+
+            DeviceControlWork main = DeviceControlWork.Instance;
+            bool xArrived = main.IsPreWorkXArrived;
+            if (xArrived && !_preWorkXArrived)
+            {
+                _preWorkXArrived = true;
+                TryStartPreWorkCsp();
+                Log(string.Format("焊前寻位 X 已到位 当前 X {0:F1}mm 建系并判 Y 是否到达焊接点",
+                    WeldParamManager.Instance.CurrentRobotX));
+            }
+
+            // Y 到位判定：取当前跟踪目标，轴反馈与其比较
+            bool yReady = false;
+            double targetY = 0.0;
+            double axisPos = _seamAxis != null ? _seamAxis.GetPosition() : 0.0;
+            double movedMm = Math.Abs(axisPos - _preWorkSeekStartAxisPos);
+            if (xArrived)
+            {
+                double robotX = ResolveCspQueryRobotX();
+                double robotY = WeldParamManager.Instance.CurrentRobotY;
+                if (WeldParamManager.Instance.TryGetSeamTrackingTargetY(robotX, robotY, out targetY))
+                {
+                    bool atTarget = Math.Abs(targetY - axisPos) <= PreWorkSeekToleranceMm;
+                    // 目标偏离起点时轴须真动过
+                    bool needMove = Math.Abs(targetY - _preWorkSeekStartAxisPos) > PreWorkSeekToleranceMm;
+                    bool moved = movedMm >= PreWorkSeekMinMoveMm;
+                    yReady = atTarget && (!needMove || moved);
+                    if (yReady)
+                    {
+                        Log(string.Format("焊前寻位完成 X {0:F1}mm Y 目标 {1:F3}mm 实际 {2:F3}mm 偏差 {3:F4}mm 累计位移 {4:F4}mm",
+                            robotX, targetY, axisPos, Math.Abs(targetY - axisPos), movedMm));
+                    }
+                }
+            }
+
+            if (xArrived && yReady)
+            {
+                _calReturnReady = true;
+                _preWorkSeekReady = true;
+                return true;
+            }
+
+            // 超时：X 到位但 Y 未到（或 X 一直未到位）即判 PreWork 失败
+            double elapsed = (Stopwatch.GetTimestamp() - _preWorkSeekStartTicks) / (double)Stopwatch.Frequency;
+            if (elapsed > PreWorkSeekTimeoutSeconds)
+            {
+                string reason = xArrived
+                    ? string.Format("焊前寻位失败 PREWORK X 已到位但 Y 未到焊接点 目标 {0:F3}mm 实际 {1:F3}mm 起始 {2:F3}mm 累计位移 {3:F4}mm 用时 {4:F0}s",
+                        targetY, axisPos, _preWorkSeekStartAxisPos, movedMm, elapsed)
+                    : string.Format("焊前寻位失败 PREWORK X 未到焊前位 当前 X {0:F1}mm 用时 {1:F0}s",
+                        WeldParamManager.Instance.CurrentRobotX, elapsed);
+                Fail(reason);
+                return false;
+            }
+            return false;
+        }
+
         /// <summary>判断一个位置是否落在 Y 轴行程上下限内（闭区间）。</summary>
-        /// <remarks>回归门禁只判行程上下限，限内即可移动。
-        /// ⛔ 不设距离阈值。</remarks>
+
         /// <param name="pos">待判位置（毫米）</param>
         /// <param name="minLimit">Y 轴行程下限（毫米）</param>
         /// <param name="maxLimit">Y 轴行程上限（毫米）</param>
@@ -741,8 +843,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         }
 
         /// <summary>执行步 700：停止收尾（停跟踪输出 → 等轴停稳 → 清缓冲 → Y 向</summary>
-        /// <remarks>收尾须清报警并恢复初始态，清报警在下电之后。
-        /// ⚠️ 只处理 Y 向跟踪轴，其他轴不得下电或清报警。</remarks>
+
         /// <returns>收尾完成返回 true</returns>
         private bool DoStopping()
         {
@@ -772,10 +873,6 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         }
 
         /// <summary>收尾轴处理（按需）：无报警则保持使能。</summary>
-        /// <remarks>有报警才清报警并重新使能，无报警保持原态。
-        /// ⛔ 不无条件下电：断电需二次使能，且易触发报警。
-        /// 全轴操作会波及送丝轴并报 256，故只处理跟踪轴；
-        /// 报警判据 = `MontionAxis.IsAlarm()`；无轴直接返回。</remarks>
         private void ShutdownSeamAxis()
         {
             if (_seamAxis == null) return;
@@ -791,9 +888,6 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         }
 
         /// <summary>配置 CSP 软目标到达窗口（CSP 族专用到位判定，台达手册 9.1.12 / 9.1.13）。</summary>
-        /// <remarks>CSP 从站无 target reached 功能时，用此启用到位信号。
-        /// `PositionWindow` 单位 = 脈波數、`WindowTime` 单位 = 次數（手册示例 1ms×100 次=0.1s，超窗计数归零）；9.1.13 读取：0 = 未到達 / 1 = 到達。
-        /// ⚠️ 主判据仍是位置偏差，本窗口仅作留痕佐证；未装配跟踪轴直接返回。</remarks>
         private void ConfigureSoftTargetReachWindow()
         {
             if (_seamAxis == null) return;
@@ -805,9 +899,6 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         }
 
         /// <summary>收尾清缓冲：清掉本会话已建的缓冲段与坐标系。</summary>
-        /// <remarks>① `BufferClear` 报 4359 = `ERR_ECAT_NEED_STOP`（需要先停止）⇒ 清缓冲必须在轴停稳态；
-        /// ② 从未建系时清缓冲必报 4352 ⇒ 以已启动过门控。
-        /// 调用点只有步 700 / 900 停稳后（⛔ 不在 PreWork 前调用）；无轴直接返回。</remarks>
         private void ResetSeamAxisBufferBeforeMove()
         {
             if (_seamAxis == null) return;
@@ -832,8 +923,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         }
 
         /// <summary>停止收尾等待判据：跟踪轴已停稳或超时。</summary>
-        /// <remarks>收尾用 Mode 1 停轴，须等停稳再下电。
-        /// ⛔ 未停稳下电会报警。禁 while/Sleep，未停稳由调用方返回 false 重入。</remarks>
+
         /// <returns>可继续收尾返回 true</returns>
         private bool IsSeamAxisSettled()
         {
@@ -847,8 +937,6 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         }
 
         /// <summary>跟踪输出收尾：关输出、冲尽缓存、复位跟踪态。</summary>
-        /// <remarks>DoStopping（步 700）与模拟态 Stop（直接跳 Idle、绕过 DoStopping）共用。
-        /// 不收尾会残留跟踪态，致下次起焊沿被吞。</remarks>
         private void StopSeamTrackingOutput()
         {
             StopCspOutput();
@@ -858,8 +946,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         }
 
         /// <summary>执行步 900：失败收尾（停输出 → 等停稳 → 清理）。</summary>
-        /// <remarks>异常终止同样须收尾，否则残留致下次启动失败。
-        /// 与 DoStopping 同构：先停输出、等停稳再清缓冲与下电。</remarks>
+
         /// <returns>收尾完成返回 true</returns>
         private bool DoFinishFail()
         {
@@ -900,7 +987,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         #region 公共函数
 
         /// <summary>启动运控，置已使能待机。</summary>
-        /// <remarks>置 Ready 相位后由执行步完成伺服使能。</remarks>
+
         /// <returns>受理成功返回 true</returns>
         public bool Start()
         {
@@ -945,8 +1032,6 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         }
 
         /// <summary>清除焊缝跟踪折返报警（标志 + 算法侧）。</summary>
-        /// <remarks>会话切换必调，残留标志会致首拍报警。
-        /// ⛔ 表现为启动即报警。</remarks>
         public void ClearSeamAlarm()
         {
             _seamAlarmPending = false;
@@ -989,14 +1074,15 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         }
 
         /// <summary>线激光结果回调把结果喂入轨迹算法</summary>
-        /// <remarks>运行在相机 SDK 回调线程；轴位置读取失败按 0 处理不中断跟踪。</remarks>
+
         /// <param name="sender">事件源</param>
         /// <param name="e">线激光结果事件参数</param>
         private void OnSeamResultReady(object sender, LineLaserResultEventArgs e)
         {
             // 无轴记录仍须喂入：CSP 以虚拟轴顶替反馈，才能建图；
             // PVT 依赖实轴，无轴静默，避免空引用
-            if (!_seamTrackingActive) return;
+            // 起焊沿或 PreWork 跟踪其一开启才喂帧
+            if (!_seamTrackingActive && !_cspPreWorkTracking) return;
             if (_seamAxis == null && !IsSimRecordOnly) return;
             if (_seamAxis == null && !IsCspMode) return;
 
@@ -1004,8 +1090,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             {
                 if (IsCspMode)
                 {
-                    // CSP：本帧结果连同轴位置入图，Y 轴目标写入时反算。
-                    // 轴位置即「测量时刻轴值 Ya1」；无轴记录模式取虚拟轴位置
+                    // CSP：帧结果连同轴位置入图
                     WeldParamManager.Instance.OnSeamLaserResult(e.Result, SeamAxisPosMm);
                     return;
                 }
@@ -1032,8 +1117,6 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         }
 
         /// <summary>Ready 检查通过后开启焊缝 Y 记录会话（一次性）。</summary>
-        /// <remarks>记录起点 = Ready 通过，此前不落行。
-        /// ⛔ 否则曲线前端压空行。开启动作幂等，会话复位清零本标志，下次重等 Ready。</remarks>
         private void TryStartSeamTraceYOnReady()
         {
             if (_seamTraceYReadyStarted) return;
@@ -1043,7 +1126,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             if (!ProductFileRecordManager.Instance.BeginSeamTraceYSession())
             {
                 // 生产会话基名未就绪（Ready 早于 BeginProductSession）：
-                // ⛔ 不得自造基名（生成孤儿目录），改为按拍重试
+                // 不自造基名，按拍重试
                 if (TakeElapsed(ref _seamTraceYWaitLogTime, SeamTraceYWaitLogIntervalMs))
                     Log("焊缝 Y 记录等待生产会话基名 就绪后自动开启（未开启不落任何行）", MessageLevel.Warning);
                 return;
@@ -1053,12 +1136,15 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         }
 
         /// <summary>按焊接态起止沿驱动焊缝跟踪输出</summary>
-        /// <remarks>CSP 每拍补写段、PVT 每拍下发，起停与输出同序列。</remarks>
         private void UpdateSeamTracking()
         {
             // Ready 后开记录（轴到位且有数据），早于按模式早退，
             // 保证无轴模式同样在 Ready 后开记
             TryStartSeamTraceYOnReady();
+
+            // PreWork 起跟踪：轴已到标定位且线激光已有数据即建系并激活跟踪，
+            // 起焊沿直接复用（不在建系未就绪窗口写段 ⇒ 避免 4610）
+            if (!_seamTrackingActive) TryStartPreWorkTracking();
 
             // 模拟记录模式无轴仍须采样，不能整体早退
             if (_seamAxis == null && !IsSimRecordOnly) return;
@@ -1068,7 +1154,14 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             if (active && !_seamTrackingActive) OnSeamTrackingStart(IsCspMode);
             if (!active && _seamTrackingActive) OnSeamTrackingStop(IsCspMode);
             _seamTrackingActive = active;
-            if (!active) return;
+
+            // PreWork 已建系：即使未起焊沿也驱动写段循环，
+            // 让跟踪在 PreWork 就进入稳态（无引导则目标恒标定位、不写段）
+            if (!active)
+            {
+                if (_cspPreWorkTracking) OutputCspTick();
+                return;
+            }
 
             // 运行中按模式二选一：CSP 每拍写实时目标；PVT 走缓冲下发
             if (IsCspMode) CspTick();
@@ -1085,12 +1178,17 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             Log(string.Format("焊缝跟踪起焊沿 第 {0} 次 模式 {1}",
                 _seamTrackingStartCount, cspMode ? "CSP" : "PVT"),
                 _seamTrackingStartCount > 1 ? MessageLevel.Warning : MessageLevel.Info);
-            WeldParamManager.Instance.ResetTrackingForWeldStart(cspMode ? "起焊沿 CSP 跟踪启动" : "起焊沿 PVT 跟踪启动");
+            // PreWork 已建图时复用，不复位
+            if (!_cspPreWorkTracking)
+            {
+                WeldParamManager.Instance.ResetTrackingForWeldStart(cspMode ? "起焊沿 CSP 跟踪启动" : "起焊沿 PVT 跟踪启动");
+            }
+            else
+            {
+                Log("起焊沿复用 PreWork 已建的焊缝地图与位姿基准 不复位跟踪算法");
+            }
             _seamRunning = false;
-            // 无轴记录：虚拟轴从标定轴值起步，基准一致
             _simAxisPos = WeldParamManager.Instance.AlgorithmsConfig.TeachLockYMm;
-            // 跟踪须先激活：无轴模式也靠它放开特征门禁，
-            // 否则地图恒空、RecordOnlyTick 永远取不到目标
             if (cspMode) WeldParamManager.Instance.BeginSeamTrackingCorrection();
             if (!cspMode || _seamAxis == null)
             {
@@ -1245,7 +1343,10 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
                     if (DoServoOn()) AdvanceStep(StepReturnToCal);
                     break;
                 case StepReturnToCal:
-                    if (DoReturnToCalibration()) AdvanceStep(StepReady);
+                    if (DoReturnToCalibration()) AdvanceStep(StepPreWorkSeek);
+                    break;
+                case StepPreWorkSeek:
+                    if (DoPreWorkSeek()) AdvanceStep(StepReady);
                     break;
                 case StepReady:
                     // 已使能待机：按拍驱动跟踪输出（CSP 写目标 / PVT 下发）
@@ -1264,23 +1365,28 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         }
 
         /// <summary>流程复位：解除急停并回工作零位。</summary>
-        /// <remarks>由主控复位链驱动，本方法只做本流程动作。
-        /// 轴动作在锁外执行，避免阻塞流程线程。</remarks>
+
         /// <returns>复位到位返回 true</returns>
         public override bool ResetProcess()
         {
             lock (_lock)
             {
-                if (IsSimulation)
+                // 焊前寻位会话态重置（与 ClearStatus 同源，双保险）
+                _preWorkSeekStartTicks = 0;
+                _preWorkXArrived = false;
+                _preWorkSeekReady = false;
+                _preWorkSeekStartAxisPos = 0.0;
+                // 模拟无实轴：仅清状态到待机，不驱动真实轴
+                if (IsSimRecordOnly)
                 {
-                    // 模拟态运控可能未经真实初始化（_initialized 为 false），
-                    // 不得据此拒绝复位，否则残留无法清理、互相锁死。
                     _servoSubStep = SubServoIssue;
                     _calSubStep = SubCalCheck;
                     ResetToIdle("模拟复位");
                     return true;
                 }
-                if (!_initialized) return false;
+                // 模拟带实轴（运控已连）：与真机同走复位链，TA 回零、Y 到工作零位
+                // 用 Manager.IsInitialized 判据，模拟态 workflow 的 _initialized 未必置位
+                if (!Manager.IsInitialized) return false;
                 if (!EnsureResetReadiness()) return false;
                 Manager.SetEmergencyStop(false);
                 _servoSubStep = SubServoIssue;
@@ -1298,6 +1404,12 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             _failStep = 0;
             _servoSubStep = SubServoIssue;
             _calSubStep = SubCalCheck;
+            // 焊前寻位是「每轮复位后重新开始」的会话态：不清则第二轮沿用上一轮
+            // 的计时起点与轴起始位置，进寻位即判超时失败
+            _preWorkSeekStartTicks = 0;
+            _preWorkXArrived = false;
+            _preWorkSeekReady = false;
+            _preWorkSeekStartAxisPos = 0.0;
             // 直接置相位（清除后必须是 NoReset，杜绝中间态）
             SetWeldStatus(SubDeviceWeldStatus.NoReset, "状态清除");
         }
@@ -1323,7 +1435,6 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         private static extern uint TimeEndPeriod(uint periodMs);
 
         /// <summary>跟踪轴工程单位当量（毫米/脉冲）。</summary>
-        /// <remarks>与驱动器 ToPulse 同口径；无轴或当量非法时回缺省值。</remarks>
         private double AxisEquivMm
         {
             get
@@ -1333,10 +1444,133 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             }
         }
 
+        /// <summary>建立运动缓冲坐标系（残留失败先收尾再重试一次）。</summary>
+        /// <returns>建系成功返回 true</returns>
+        private bool BuildCspCoordinateSystem(WeldParamConfig config)
+        {
+            if (_seamAxis == null) return false;
+            // 缓冲插补 API 只在 CSP 模式有效（台达手册 P9-11）。
+            // 点位运动（MoveTo）会把轴切离 CSP，且模式切换失败曾被静默忽略，
+            // 导致建系成功但写段被拒（4610 ERR_ECAT_SLAVE_TYPE）。建系前显式确保。
+            if (!_seamAxis.EnsureCspMode())
+            {
+                Log("轴不在 CSP 运动模式 缓冲坐标系无法建立 焊缝跟踪不输出", MessageLevel.Error);
+                return false;
+            }
+            // 原点按轴当前坐标系，段目标 = 标定轴值 + 修正量
+            if (_seamAxis.StartCrdBuffer(config.MaxVelMmPerS, config.MaxAccMmPerS2)) return true;
+
+            // 残留坐标系 / 缓冲会让建系失败（实测 4627）：
+            // 先收尾再重试——Mode 1 已清 FIFO 并解除坐标系，无须再 Clear；
+            // 仅当 Stop 自身失败时才兜底 Clear。
+            if (_seamAxis.BufferStop(BufferStopModeSmooth) != 0) _seamAxis.BufferClear();
+            if (!_seamAxis.StartCrdBuffer(config.MaxVelMmPerS, config.MaxAccMmPerS2))
+            {
+                Log("缓冲坐标系建立失败 焊缝跟踪不输出", MessageLevel.Error);
+                return false;
+            }
+            Log("缓冲坐标系已清残留后重建成功", MessageLevel.Warning);
+            return true;
+        }
+
+        /// <summary>焊前寻位：激活地图跟踪并建系开输出，Y 连续跟随。</summary>
+        private void TryStartPreWorkTracking()
+        {
+            if (_cspPreWorkTracking) return;
+            if (_seamAxis == null) return;
+            if (RunStep != StepPreWorkSeek) return;
+            if (!IsEnabled) return;
+            if (LineLaserWorkflow.Instance.WeldStatus != SubDeviceWeldStatus.PreWork) return;
+
+            _cspPreWorkTracking = true;
+            // 只激活跟踪、不开缺值量测（PreWork 引导未稳，量测开启会误累计并报警停焊）
+            WeldParamManager.Instance.BeginSeamTrackingForPreWork();
+
+            // 建系后立即开始写段：建系必须紧贴首次写缓存（坐标系表闲置会失效 ⇒ 4610）。
+            // 此后全程连续：PreWork 跟随 → 到达焊前 X 不停启 → 起焊沿继续复用同一条缓冲流。
+            if (!TryStartPreWorkCsp())
+            {
+                Log("PreWork 建系未成功 将在 X 到位时重试", MessageLevel.Warning);
+                return;
+            }
+            WeldParamConfig config = WeldParamManager.Instance.AlgorithmsConfig;
+            Log(string.Format("PreWork 焊缝跟踪已启动 轴起点 {0:F3}mm 标定位 {1:F3}mm 前置量 {2:F1}mm 全程连续跟随",
+                _seamAxis.GetPosition(), config.TeachLockYMm, config.LeadDistanceMm));
+        }
+
+        /// <summary>建系并开启跟踪输出（幂等：已开启直接返回）。</summary>
+        /// <returns>已就绪返回 true</returns>
+        private bool TryStartPreWorkCsp()
+        {
+            if (_cspOutputRunning) return true;
+            if (_seamAxis == null) return false;
+
+            if (!_highResolutionTimerRaised)
+            {
+                TimeBeginPeriod(HighResolutionTimerPeriodMs);
+                _highResolutionTimerRaised = true;
+            }
+
+            WeldParamConfig config = WeldParamManager.Instance.AlgorithmsConfig;
+            if (!BuildCspCoordinateSystem(config))
+            {
+                Log("PreWork 坐标系建立失败 寻位无法跟随 将以 Y 不到位报 PREWORK 错误", MessageLevel.Warning);
+                return false;
+            }
+
+            _cspOutputRunning = true;
+            _cspBufferRunning = false;
+            _cspBufferStartedOnce = false;
+            _cspQueuedSegments = 0;
+            _cspIdleTicks = 0;
+            _cspBufferStartFailCount = 0;
+            _cspWriteFailCount = 0;
+            _cspPendingSegCommand = double.NaN;
+            _cspAxisStallTicks = 0;
+            _cspSmoothedVelocity = 0.0;
+            _cspTickCount = 0;
+            _cspWriteCount = 0;
+            _cspVelFiltered = 0.0;
+            _cspQueuedSegmentsTotal = 0;
+            _cspLastQueuedPos = _seamAxis.GetPosition();
+            _cspFollowPos = _cspLastQueuedPos;
+            _cspLastAxisFeedbackPos = _cspLastQueuedPos;
+            _ffRobotXPrev = double.NaN;
+            _ffVxFiltered = 0.0;
+            _cspFeedforwardVelMmPerS = 0.0;
+            _cspLastTickTimestamp = Stopwatch.GetTimestamp();
+            _cspLastSegTimestamp = _cspLastTickTimestamp;
+            _cspLastDebugLogTime = DateTime.Now;
+            _cspRestartCount = 0;
+            _cspHasHeldTarget = false;
+            _cspHeldTargetY = 0.0;
+            _noValueAlarmRaised = false;
+            _cspPreWorkBuildTicks = Stopwatch.GetTimestamp();
+
+            Log(string.Format("PreWork 坐标系已建立 轴起点 {0:F3}mm 开始焊缝跟随寻位", _cspLastQueuedPos));
+            return true;
+        }
+
         /// <summary>启用缓冲流式输出并建坐标系</summary>
-        /// <remarks>仅由起焊沿调用；限幅在本步完成，算法只给修正量。</remarks>
         private void StartCspOutput()
         {
+            // PreWork 已建系并起跟踪：起焊沿直接复用，不再收尾重建
+            // （收尾会解坐标系，等于把 PreWork 的准备作废、又回到「建系未就绪即写段」的窗口）
+            if (_cspPreWorkTracking)
+            {
+                _cspPreWorkTracking = false;
+                _cspHasHeldTarget = false;
+                _cspHeldTargetY = 0.0;
+                _cspWriteFailCount = 0;
+                if (_cspOutputRunning)
+                {
+                    Log("起焊沿复用 PreWork 已建坐标系与缓冲 跟踪直接进入闭环", MessageLevel.Info);
+                    return;
+                }
+                // PreWork 只扫图未建系（如 X 未到位就收到焊接指令）⇒ 此处补建
+                Log("起焊沿补建坐标系 PreWork 阶段未建系", MessageLevel.Warning);
+            }
+
             // 残留收口：上一会话未收尾（停焊沿被吞、Stop 绕过）时
             // _cspOutputRunning 仍为真。旧逻辑此时直接 return，本会话便永不重建坐标系，
             // 首拍写段即 0x1100(NEED_INITIAL，实测 4352) 且 BufferStart 恒失败——二跑必然起不来。
@@ -1349,21 +1583,11 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
                 _highResolutionTimerRaised = true;
             }
 
-            WeldAlgorithmsConfig config = WeldParamManager.Instance.AlgorithmsConfig;
+            WeldParamConfig config = WeldParamManager.Instance.AlgorithmsConfig;
 
-            // 原点按轴当前坐标系，段目标 = 标定轴值 + 修正量
-            if (!_seamAxis.StartCrdBuffer(config.MaxVelMmPerS, config.MaxAccMmPerS2))
+            if (!BuildCspCoordinateSystem(config))
             {
-                // 残留坐标系 / 缓冲会让建系失败（实测 4627）：
-                // 先收尾再重试——Mode 1 已清 FIFO 并解除坐标系，无须再 Clear；
-                // 仅当 Stop 自身失败时才兜底 Clear。
-                if (_seamAxis.BufferStop(BufferStopModeSmooth) != 0) _seamAxis.BufferClear();
-                if (!_seamAxis.StartCrdBuffer(config.MaxVelMmPerS, config.MaxAccMmPerS2))
-                {
-                    Log("缓冲坐标系建立失败 焊缝跟踪不输出", MessageLevel.Error);
-                    return;
-                }
-                Log("缓冲坐标系已清残留后重建成功", MessageLevel.Warning);
+                return;
             }
 
             _cspOutputRunning = true;
@@ -1372,6 +1596,8 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             _cspQueuedSegments = 0;
             _cspIdleTicks = 0;
             _cspBufferStartFailCount = 0;
+            _cspWriteFailCount = 0;
+            _cspPendingSegCommand = double.NaN;
             _cspAxisStallTicks = 0;
             _cspSmoothedVelocity = 0.0;
             _cspTickCount = 0;
@@ -1410,6 +1636,11 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         {
             if (!_cspOutputRunning) return;
 
+            // 会话收尾：挂起段作废（未入 FIFO，写了会串到下一场），PreWork 标记复位
+            _cspPendingSegCommand = double.NaN;
+            _cspWriteFailCount = 0;
+            _cspPreWorkTracking = false;
+
             ProductFileRecordManager.Instance.FlushSeamTraceY();
             _cspOutputRunning = false;
             _cspBufferRunning = false;
@@ -1426,6 +1657,10 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
                 ushort stopRet = _seamAxis.BufferStop(BufferStopModeSmooth);
                 if (stopRet == 0)
                 {
+                    // Mode 1 已清 FIFO 并解坐标系，须同步清标志：
+                    // 否则后续 ResetSeamAxisBufferBeforeMove 会再 Stop 一次 ⇒ 4352（坐标系已解除）
+                    // ⇒ 再把兜底 Clear 也报 4352，形成「收尾清缓冲异常」的假报错
+                    _cspBufferStartedOnce = false;
                     _cspBufferCloseFailStreak = 0;
                     Log("缓冲收尾 平滑停止完成 已清 FIFO 并解除坐标系 Mode 1");
                 }
@@ -1444,8 +1679,6 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         }
 
         /// <summary>执行单拍 CSP 输出并写段</summary>
-        /// <remarks>仅由 CspTick 在有轴分支调用；段端点取起焊锚点加修正量。
-        /// 平滑基准与段距差分取队列末端。静止达空闲拍数即判耗干。</remarks>
         private void OutputCspTick()
         {
             if (!_cspOutputRunning) return;
@@ -1462,14 +1695,11 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         }
 
         /// <summary>执行单拍闭环并把段写入缓冲</summary>
-        /// <remarks>目标按当拍位姿实时查询。
-        /// 缺值期保持上次有效目标，不回落标定位。
-        /// 达缺值阈值即报警停焊，本拍不再下发。</remarks>
         private void RunCspTick()
         {
             try
             {
-                WeldAlgorithmsConfig config = WeldParamManager.Instance.AlgorithmsConfig;
+                WeldParamConfig config = WeldParamManager.Instance.AlgorithmsConfig;
                 double tickSeconds = TakeCspElapsedSeconds();
 
                 double robotX = ResolveCspQueryRobotX();
@@ -1503,8 +1733,8 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
                     // 起焊首个有效目标前允许以标定位起步
                     rawTarget = config.TeachLockYMm;
                 }
-                double target = ClampToStroke(rawTarget, config);
-                ReportStrokeClamp(rawTarget, target, config);
+                double target = ClampToStroke(rawTarget);
+                ReportStrokeClamp(rawTarget, target);
                 // 前馈只抬速度与加速度上限，不产生位移
                 double minVelocity = 0.0;
                 if (WeldParamManager.Instance.TryGetSeamTrackingRequiredVelocityMmPerS(
@@ -1528,7 +1758,13 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
                 DetectCspExecutionStall(wroteSeg, axisNow);
 
                 // 攒够阈值段即 Start，失败达上限即停闭环
-                int startThreshold = _cspBufferStartedOnce ? 1 : BufferPreloadSegments;
+                // 焊前寻位阶段用 2 段阈值（亚毫米级微调攒不满 3 段 ⇒ 轴永不动）
+                int preloadSegments = (_cspPreWorkTracking && !_seamTrackingActive)
+                    ? BufferPreloadSegmentsPreWork
+                    : BufferPreloadSegments;
+                // 缓存内须已成功写入预载段数才开启：台达 CSP 缓冲开启后按缓存内容执行，
+                // 空缓存开启等于空转（轴不动）⇒ 用成功段数而非尝试次数作阈值
+                int startThreshold = _cspBufferStartedOnce ? 1 : preloadSegments;
                 if (!_cspBufferRunning && _cspQueuedSegments >= startThreshold)
                 {
                     if (_seamAxis.BufferStart())
@@ -1570,7 +1806,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         /// <summary>判缺值累计是否已达阈值</summary>
         /// <param name="config">算法配置（取缺值阈值）</param>
         /// <returns>达到阈值返回 true</returns>
-        private static bool IsNoValueThresholdReached(WeldAlgorithmsConfig config)
+        private static bool IsNoValueThresholdReached(WeldParamConfig config)
         {
             double threshold = config.NoValueToleranceMm;
             if (threshold <= 0.0) return false;
@@ -1578,10 +1814,9 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         }
 
         /// <summary>缺值报警停焊（一次焊段只下发一次）</summary>
-        /// <remarks>不复用 DoStopMachine：不断设备、不关模组线程。
-        /// 报警后保持连接与就绪分层，CSP 停发但不清累计器。</remarks>
+
         /// <param name="config">算法配置（取缺值阈值）</param>
-        private void RaiseNoValueAlarm(WeldAlgorithmsConfig config)
+        private void RaiseNoValueAlarm(WeldParamConfig config)
         {
             if (_noValueAlarmRaised) return;
             _noValueAlarmRaised = true;
@@ -1596,8 +1831,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         }
 
         /// <summary>取 CSP 查图用机器人 X（与入图键同源）</summary>
-        /// <remarks>入图键取位姿预测值，查图须用同一来源。
-        /// 开关置假可回退旧取数（真实模式恒 0）。</remarks>
+
         /// <returns>查图 X 坐标（毫米）</returns>
         private static double ResolveCspQueryRobotX()
         {
@@ -1611,8 +1845,54 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         /// <param name="config">算法配置（速度上限、加速度上限）</param>
         /// <param name="axisNowMm">本拍轴反馈位置（毫米，积压反馈输入）</param>
         /// <returns>本拍已写段返回 true</returns>
-        private bool QueueCspSegment(double command, double segMm, WeldAlgorithmsConfig config, double axisNowMm)
+        private bool QueueCspSegment(double command, double segMm, WeldParamConfig config, double axisNowMm)
         {
+            // 建系稳定窗口：PreWork 刚建系后留一段就绪时间再写段
+            // （4610 = 此模块不支持此 API，多为台达侧状态未就绪）
+            if (_cspPreWorkBuildTicks != 0
+                && Stopwatch.GetTimestamp() - _cspPreWorkBuildTicks
+                   < (long)(Stopwatch.Frequency * CspWriteRetryDelaySeconds))
+            {
+                return false;
+            }
+            _cspPreWorkBuildTicks = 0;
+
+            // 共用 CSP 缓冲流：建系后持续写入执行，不在到 X 处停启
+
+            // 挂起段优先重试：上一拍写失败被拒，延时到点后重写该段
+            if (!double.IsNaN(_cspPendingSegCommand))
+            {
+                if (Stopwatch.GetTimestamp() < _cspPendingSegRetryTicks) return false;
+                ushort retryRet = _seamAxis.BufferLineTo(_cspPendingSegCommand, _cspPendingSegVel,
+                    _cspPendingSegVel, config.MaxAccMmPerS2);
+                if (retryRet != CspResult.OK)
+                {
+                    ReportCspResult(retryRet);
+                    _cspWriteFailCount++;
+                    _cspPendingSegRetryTicks = Stopwatch.GetTimestamp()
+                        + (long)(Stopwatch.Frequency * CspWriteRetryDelaySeconds);
+                    Log(string.Format("CSP 缓冲挂起段重写失败 返回码 {0} 第 {1}/{2} 次",
+                        retryRet, _cspWriteFailCount, CspWriteFailMaxRetry), MessageLevel.Warning);
+                    if (_cspWriteFailCount >= CspWriteFailMaxRetry)
+                    {
+                        Fail(string.Format("CSP 缓冲写入连续失败 {0} 次 返回码 {1} 停止缓冲闭环输出",
+                            _cspWriteFailCount, retryRet));
+                    }
+                    return false;
+                }
+                // 重写成功：段已入队，账本按挂起段终点推进
+                _cspWriteFailCount = 0;
+                double queuedPos = _cspPendingSegCommand;
+                _cspPendingSegCommand = double.NaN;
+                _cspLastQueuedPos = queuedPos;
+                _cspLastSegTimestamp = Stopwatch.GetTimestamp();
+                _cspQueuedSegments++;
+                _cspQueuedSegmentsTotal++;
+                _cspWriteCount++;
+                _cspIdleTicks = 0;
+                return true;
+            }
+
             // 段距门限与钳位共保段时长，段距照常累计
             long nowTs = Stopwatch.GetTimestamp();
             double sinceWriteSeconds = (nowTs - _cspLastSegTimestamp) / (double)Stopwatch.Frequency;
@@ -1671,8 +1951,33 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             _cspLastSegVelMmPerS = vel;
             _cspLastBacklogMm = backlogMm;
             _cspLastBacklogBoostMmPerS = boostMmPerS;
-            // 返回码限频记录（含缓冲满 0x1200）
-            ReportCspResult(_seamAxis.BufferLineTo(command, vel, vel, config.MaxAccMmPerS2));
+            // 写段：失败不推进队列账本（否则软件账本与 FIFO 实际内容脱节），
+            // 段挂起待跨拍重试：4610 = 此模块不支持此 API，多为台达侧状态未就绪，
+            // 给一段就绪时间再重写；连续失败超限即收尾重建系，仍失败则报警停焊
+            ushort writeRet = _seamAxis.BufferLineTo(command, vel, vel, config.MaxAccMmPerS2);
+            if (writeRet != CspResult.OK)
+            {
+                ReportCspResult(writeRet);
+                // 写缓存失败即故障：写不进缓存则开启后无可执行内容（轴不动）。
+                // 挂起原段跨拍重写，达 CspWriteFailMaxRetry 次即 Fail 终止焊接暴露原因。
+                _cspWriteFailCount++;
+                _seamAxis.EnsureCspMode();
+                _cspPendingSegCommand = command;
+                _cspPendingSegVel = vel;
+                _cspPendingSegRetryTicks = Stopwatch.GetTimestamp()
+                    + (long)(Stopwatch.Frequency * CspWriteRetryDelaySeconds);
+                Log(string.Format("CSP 缓冲写入失败 返回码 {0} 段挂起待重试 第 {1}/{2} 次",
+                    writeRet, _cspWriteFailCount, CspWriteFailMaxRetry), MessageLevel.Warning);
+                if (_cspWriteFailCount >= CspWriteFailMaxRetry)
+                {
+                    Fail(string.Format("CSP 缓冲写入连续失败 {0} 次 返回码 {1} 停止缓冲闭环输出",
+                        _cspWriteFailCount, writeRet));
+                }
+                return false;
+            }
+            _cspWriteFailCount = 0;
+            _cspPendingSegCommand = double.NaN;
+
             _cspLastQueuedPos = command;
             _cspLastSegTimestamp = nowTs;
             _cspQueuedSegments++;
@@ -1683,9 +1988,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         }
 
         /// <summary>缓冲执行失步检测：已写段而轴反馈长时间不动</summary>
-        /// <remarks>缓冲排空后 Start 只一次，追加段不会自动续跑。
-        /// 软件侧靠段距不足计时翻假。目标仍推进时计时器不触发。轴零报错冻结。
-        /// 故以位移为第二判据。位移小于阈值即置假。由调用方本拍重建执行。</remarks>
+
         /// <param name="wroteSeg">本拍是否已写段</param>
         /// <param name="axisNow">本拍轴反馈位置（毫米）</param>
         private void DetectCspExecutionStall(bool wroteSeg, double axisNow)
@@ -1714,29 +2017,44 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
                 MessageLevel.Warning);
         }
 
-        /// <summary>按行程上下限限幅。</summary>
-        /// <param name="value">待限幅值（毫米）</param>
-        /// <param name="config">算法配置（行程上下限）</param>
-        /// <returns>限幅后的值（毫米）</returns>
-        private static double ClampToStroke(double value, WeldAlgorithmsConfig config)
+        /// <summary>取焊缝跟踪轴（Y）的软限位：负向为下限、正向为上限。</summary>
+        /// <param name="minMm">负向软限位（未启用时为 0）</param>
+        /// <param name="maxMm">正向软限位（未启用时为 0）</param>
+        /// <returns>至少一侧启用返回 true</returns>
+        private bool TryGetSeamAxisSoftLimit(out double minMm, out double maxMm)
         {
-            if (value > config.YAxisMaxMm) return config.YAxisMaxMm;
-            return value < config.YAxisMinMm ? config.YAxisMinMm : value;
+            minMm = 0.0;
+            maxMm = 0.0;
+            DeltaAxisConfig axisCfg = Manager.GetAxisConfigByName(SeamTrackAxisName);
+            if (axisCfg == null) return false;
+            if (axisCfg.NegativeLimit < 0.0) minMm = axisCfg.NegativeLimit;
+            if (axisCfg.PositiveLimit > 0.0) maxMm = axisCfg.PositiveLimit;
+            return minMm != 0.0 || maxMm != 0.0;
         }
 
-        /// <summary>目标被行程限幅时限频告警。</summary>
-        /// <remarks>静默限幅会掩盖失控；目标被截后轴可能冲到行程末端；日志只见稳定斜率，
-        /// 故超阈值即按间隔报警；核查方向为增益与标定中心。</remarks>
+        /// <summary>按 Y 轴软限位限幅（未启用限位则原样返回）。</summary>
+        /// <param name="value">待限幅值（毫米）</param>
+        /// <returns>限幅后的值（毫米）</returns>
+        private double ClampToStroke(double value)
+        {
+            if (!TryGetSeamAxisSoftLimit(out double minMm, out double maxMm)) return value;
+            if (maxMm != 0.0 && value > maxMm) return maxMm;
+            if (minMm != 0.0 && value < minMm) return minMm;
+            return value;
+        }
+
+        /// <summary>目标被限幅时限频告警。</summary>
+
         /// <param name="rawTarget">限幅前目标（毫米）</param>
         /// <param name="target">限幅后目标（毫米）</param>
-        /// <param name="config">算法配置（行程上下限）</param>
-        private void ReportStrokeClamp(double rawTarget, double target, WeldAlgorithmsConfig config)
+        private void ReportStrokeClamp(double rawTarget, double target)
         {
             if (Math.Abs(rawTarget - target) < CspStrokeClampWarnMm) return;
             if (!TakeElapsed(ref _cspLastClampWarnTime, CspStrokeClampWarnIntervalMs)) return;
 
+            TryGetSeamAxisSoftLimit(out double minMm, out double maxMm);
             Log(string.Format("跟踪目标 {0:F3}mm 超出行程 [{1:F3} 到 {2:F3}] 已限幅到 {3:F3}mm 闭环偏差过大 请核 AxisMmPerLaserMm、CalibratedCenterY 与特征量纲",
-                rawTarget, config.YAxisMinMm, config.YAxisMaxMm, target), MessageLevel.Error);
+                rawTarget, minMm, maxMm, target), MessageLevel.Error);
         }
 
         /// <summary>记录缓冲运行态与两查询原值</summary>
@@ -1757,7 +2075,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         /// <summary>[DEBUG-REMOVE] 闭环 Debug 行（算法侧）：目标分量与地图健康度。</summary>
         /// <param name="config">算法配置（标定轴值 / 标定中心 / 机器人 Y 系数）</param>
         /// <param name="targetY">本拍绝对 Y 轴目标（毫米）</param>
-        private void LogCspCorrectionDebug(WeldAlgorithmsConfig config, double targetY)
+        private void LogCspCorrectionDebug(WeldParamConfig config, double targetY)
         {
             Log(string.Format("调试闭环 标定轴值 {0:F3} 标定中心 {1:F3} 特征Y {2:F3} 特征修正 {3:F3} 机器人项 {4:F3} 目标 {5:F3} 地图点 {6} 平滑跳过 {7} 野值 {8} 无效帧 {9} 抖动回退 {10} 机器人X {11:F1}",
                 config.TeachLockYMm,
@@ -1775,8 +2093,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         }
 
         /// <summary>[DEBUG-REMOVE] 闭环 Debug 行：当拍位姿、目标、命令、段距与缓冲状态</summary>
-        /// <remarks>写段三联留痕：时基、几何段速、写入段速。
-        /// 轴实速远大于写入段速即被抬到最小值。接近 1 有锯齿即亚脉冲量化。两条均归周期写段处置。</remarks>
+
         /// <param name="robotX">当拍机器人 X 坐标（毫米）</param>
         /// <param name="robotY">当拍机器人 Y 坐标（毫米）</param>
         /// <param name="ready">本拍是否取到地图目标</param>
@@ -1840,17 +2157,15 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         }
 
         /// <summary>无轴记录模式下平滑并采样轨迹点</summary>
-        /// <remarks>无控制器时本方法替代 OutputCspTick，提供连续轨迹供回看；
-        /// 目标与有轴同源（当拍位姿查询，基准标定轴值）；两种曲线可比。</remarks>
         private void RecordOnlyTick()
         {
-            WeldAlgorithmsConfig config = WeldParamManager.Instance.AlgorithmsConfig;
+            WeldParamConfig config = WeldParamManager.Instance.AlgorithmsConfig;
             double robotX = DeviceControlWork.Instance.GetEffectiveRobotX();
             double robotY = WeldParamManager.Instance.CurrentRobotY;
             bool ready = WeldParamManager.Instance.TryGetSeamTrackingTargetY(robotX, robotY, out double targetY);
 
             // 虚拟轴：目标与有轴同源（绝对直传），限幅后推进
-            double target = ClampToStroke(ready ? targetY : config.TeachLockYMm, config);
+            double target = ClampToStroke(ready ? targetY : config.TeachLockYMm);
             // 不写段：逐拍把虚拟轴位置带入跟随器；两模式共用同一整形器
             _cspFollowPos = _simAxisPos;
             double command = StepCspTarget(target, TakeCspElapsedSeconds(), 0.0);
@@ -1867,8 +2182,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         }
 
         /// <summary>取本拍与上一拍的实际间隔秒值</summary>
-        /// <remarks>节拍由编排层模组线程 Sleep 决定，实测值随调度抖动；
-        /// 按实测间隔折算速度与加速度才保量纲；两端钳位防跳变。</remarks>
+
         /// <returns>实测节拍（秒）</returns>
         private double TakeCspElapsedSeconds()
         {
@@ -1890,16 +2204,14 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         }
 
         /// <summary>单拍输出整形：跟随 → 速度限幅 → 加速度限幅 → 段端点。</summary>
-        /// <remarks>跟随器按内部浮点位置推进，与末段解耦；保留亚脉冲残差，攒够整脉冲才写段。
-        /// 前馈 = 机器人 X 速度 × 地图斜率 × 安全系数；上限抬到两者较大值，前馈 0 时同原行为。
-        /// ⛔ 不得对残差设死区；也不得用本拍输出作残差（会轴停走）。</remarks>
+
         /// <param name="target">本拍算法原始目标（毫米，调用方已完成限幅）</param>
         /// <param name="tickSeconds">本拍实测节拍（秒）</param>
         /// <param name="minVelocityMmPerS">前馈速度下限（毫米/秒幅值，0 = 无前馈）</param>
         /// <returns>本拍段端点（毫米）</returns>
         private double StepCspTarget(double target, double tickSeconds, double minVelocityMmPerS)
         {
-            WeldAlgorithmsConfig config = WeldParamManager.Instance.AlgorithmsConfig;
+            WeldParamConfig config = WeldParamManager.Instance.AlgorithmsConfig;
 
             // 残差取跟随器位置，不得抹零致段端点冻结
             double error = target - _cspFollowPos;
@@ -1925,9 +2237,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         }
 
         /// <summary>由机器人 X 相邻拍差分推算 X 向速度（EMA 平滑）。</summary>
-        /// <remarks>
-        /// X 坐标连续可得，差分即速度；折返/毛刺由幅值取绝对 + 合理上限钳位 + EMA 三重吸收。
-        /// 首拍基准未建立时返回 0（无前馈，回退旧行为）。</remarks>
+
         /// <param name="robotX">本拍机器人 X 坐标（毫米）</param>
         /// <returns>X 向速度幅值（毫米/秒）</returns>
         private double EstimateRobotVelocityX(double robotX)
@@ -1971,7 +2281,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         }
 
         /// <summary>折返报警回调只置待处置标志</summary>
-        /// <remarks>跨线程推进执行步会与流程线程竞争；故只置标志。</remarks>
+
         /// <param name="sender">事件源</param>
         /// <param name="e">报警请求事件参数</param>
         private void OnSeamTrackingAlarmRequested(object sender, TrackingAlarmEventArgs e)
@@ -2066,9 +2376,6 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         }
 
         /// <summary>焊接工作状态切换管控。</summary>
-        /// <remarks>级联迁移后由编排入口调用（WeldStatus 已是目标态）；停焊收尾须落在本入口。
-        /// DoStopping 要等步机迁移才跑，而 StepReady 是唯一驱动跟踪的步；
-        /// 一离步停焊沿即被吞；跟踪态与缓冲态残留（二跑首拍即 0x1100）。</remarks>
         public override void WeldStatusTrans()
         {
             if (WeldStatus == SubDeviceWeldStatus.NoReset) return;
@@ -2115,7 +2422,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         private Action _axisReadyHandler;
         private bool _axisReadyWired;
 
-        /// <summary>TA（送丝力矩电机）运行轴；运控未初始化或未装配返回 null。</summary>
+        /// <summary>TA（送丝力矩电机）运行轴；运控未初始化或未装配返</summary>
         private DeltaMontionAxis TaAxis
         {
             get
@@ -2135,8 +2442,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             }
         }
 
-        /// <summary>轴就绪变化（转发硬件层事件，按轴过滤）；订阅后刷新指令区。</summary>
-        /// <remarks>后台线程触发，订阅方自负封送；⛔ 不用轮询 Timer 掩盖。</remarks>
+        /// <summary>轴就绪变化</summary>
         public event Action AxisReadyChanged
         {
             add
@@ -2155,7 +2461,6 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         }
 
         /// <summary>Y 轴流程层就绪：委托硬件层 MontionManager 判定轴状态。</summary>
-        /// <remarks>⛔ 门禁按轴独立：Y 失败只关 Y 闸门，不连带 TA / LA。</remarks>
         public bool YReady { get { return Manager.YReady; } }
 
         /// <summary>Y 轴不可用原因（就绪返回空串）。</summary>
@@ -2180,9 +2485,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             }
         }
 
-        /// <summary>TA 最近一次撤力是否失败（true = 力矩可能仍在输出；只读，供 UI 显示「撤力失败」而非「力矩输出中」）。</summary>
-        /// <remarks>与 <see cref="TaTorqueActive"/> 互补。输出态可能是正常出力或撤力失败残留。
-        /// UI 只读本属性区分。⛔ 不得自行推导。</remarks>
+        /// <summary>TA 最近一次撤力是否失败</summary>
         public bool TaTorqueRetractFailed
         {
             get
@@ -2253,11 +2556,10 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         /// <summary>状态检测未达成（应用动作入口拒绝码）</summary>
         public const string AxisRejectNotReached = "NOT_REACHED";
 
-        /// <summary>自动焊接流程进行中，手动动作与生产流程互斥（应用动作入口拒绝码）</summary>
+        /// <summary>自动焊接流程进行中，手动动作与生产流程互斥</summary>
         public const string AxisRejectAutoWelding = "AUTO_WELDING";
 
         /// <summary>阶段变化（开始/结束/失败）；据此选中并按结果上色。</summary>
-        /// <remarks>后台线程触发，订阅方自负封送。</remarks>
         public event Action TaZeroPoseStageChanged;
 
         /// <summary>TA_ZeroPose 是否正在执行（初始化自动与手动共用）。</summary>
@@ -2315,7 +2617,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         #region 应用动作与初始化叙述（流程层）
 
         /// <summary>退出 TA 力矩输出（撤 CST 输出并回 CSP 位置模式）。</summary>
-        /// <remarks>是否真出力由 <see cref="DeltaMontionAxis.TorqueOutputEnabled"/> 判定，未在输出时不重复下发。</remarks>
+
         /// <param name="reason">触发来源（日志用）</param>
         /// <returns>撤力成功或本来就不在扭矩输出态返回 true</returns>
         public bool ExitTaTorque(string reason)
@@ -2330,7 +2632,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         }
 
         /// <summary>设置 TA 轴控制模式</summary>
-        /// <remarks>送丝即 TA（同一台达轴），不存在独立送丝轴；唯一写口，页面不得直接改轴配置</remarks>
+
         /// <param name="enabled">true=允许力矩模式；false=退出力矩模式</param>
         /// <param name="reason">触发来源（日志用）</param>
         /// <returns>false 表示未找到 TA 轴配置，本次未生效</returns>
@@ -2350,7 +2652,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         }
 
         /// <summary>TA 力矩下发（CST，唯一写口）。</summary>
-        /// <remarks>未进入力矩模式或轴未伺服使能时拒绝下发；底层失败已回滚到 CSP，不会留下半使能状态。</remarks>
+
         /// <param name="targetTorque">目标力矩（额定千分比）</param>
         /// <param name="slope">扭矩爬升速率（0.1%/s）</param>
         /// <returns>下发成功返回 true</returns>
@@ -2489,11 +2791,8 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             return false;
         }
 
-        /// <summary>自动焊接流程禁入门禁：焊接流程在运行中 ⇒ 拒绝手动动作</summary>
-        /// <remarks>2026-11-17 新增（ADR-100 演进）：通过界面 UI 发起的动作一律是手动模式，
-        /// 自动焊接流程一旦启动到结束必须拒绝——手动与生产流程同时驱动同一根轴会互相打架。
-        /// 判据唯一来源 = <see cref="DeviceControlWork.IsAutoWeldingRunning"/>（主设备级权威）。
-        /// ⛔ 不复用 <c>IsWelding</c>：后者覆盖整段开机期，过宽会把正常调试也禁掉。</remarks>
+        /// <summary>自动焊接流程禁入门禁</summary>
+
         /// <param name="actionName">动作名（日志用）</param>
         /// <returns>允许执行返回 true</returns>
         private bool CheckAutoWeldingConflict(string actionName)
@@ -2504,7 +2803,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         }
 
         /// <summary>TA 目标位置绝对移动</summary>
-        /// <remarks>Pose 动作共用；调用方负责先退出力矩输出</remarks>
+
         /// <param name="posMm">目标位置（毫米）</param>
         /// <param name="actionName">动作名（日志用）</param>
         /// <returns>下发成功返回 true</returns>
@@ -2556,7 +2855,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         }
 
         /// <summary>TA 力矩参数解析（TA_Auto 与 TA_Retract 共用）</summary>
-        /// <remarks>力值大小 / 方向 / 100% 基准 / 爬升速率校验并换算 CST 千分比。</remarks>
+
         /// <param name="actionName">指令名（日志用）</param>
         /// <param name="reverse">true=按 TA_Auto 的反方向出力（TA_Retract 回缩）</param>
         /// <param name="axis">TA 轴（输出）</param>
@@ -2579,7 +2878,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
                 Log(actionName + " 失败 TA 轴未装配或配置缺失", MessageLevel.Error);
                 return false;
             }
-            WeldAlgorithmsConfig taCfg = WeldParamManager.Instance.AlgorithmsConfig;
+            WeldParamConfig taCfg = WeldParamManager.Instance.AlgorithmsConfig;
             if (taCfg == null)
             {
                 Log(actionName + " 失败 TA 工艺配置不可用", MessageLevel.Error);
@@ -2657,7 +2956,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             string actionName = pose1 ? "TA Pose1" : "TA Pose2";
             if (!CheckTaAvailable(actionName)) return false;
             ExitTaTorque(actionName);
-            WeldAlgorithmsConfig cfg = WeldParamManager.Instance.AlgorithmsConfig;
+            WeldParamConfig cfg = WeldParamManager.Instance.AlgorithmsConfig;
             if (cfg == null)
             {
                 Log(actionName + " 失败 TA 工艺配置不可用", MessageLevel.Error);
@@ -2667,8 +2966,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         }
 
         /// <summary>TA 力矩指令实现</summary>
-        /// <remarks>两条分支不同构，合并须逐字保留差异。
-        /// Retract 先读起点，日志措辞也不同。</remarks>
+
         /// <param name="command">指令类型</param>
         /// <returns>受理并下发成功返回 true</returns>
         private bool ExecuteTaTorque(TaCommand command)
@@ -2819,14 +3117,13 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             }
         }
 
-        /// <summary>TA ZeroPose：走到 TA 工作零位（CSP 绝对定位，⛔ 不是回零 Home）</summary>
-        /// <remarks>绝对编码器掉电保留位置，无需 Home_Move。手动点击与初始化第 3 步共用；阻塞到出结果，
-        /// 单飞登记与运行态由唯一 finally 释放。</remarks>
+        /// <summary>走到 TA 工作零位</summary>
+
         /// <returns>到位返回 true，失败/超时/被停止打断返回 false</returns>
         private bool ExecuteTaZeroPose()
         {
-            // ⛔ 本指令不受「工作零位已到位」限制（否则降级后无法重试）；
-            // 但 2026-11-17 起与其它 TA 指令同口径：**必须已回零**（位置可信才谈得上定位到工作零位）
+            // 本指令不受零位到位限制
+            // 与其它 TA 指令同需已回零
             if (!CheckTaAvailable("TA ZeroPose")) return false;
             if (_taZeroPoseRunning)
             {
@@ -2890,7 +3187,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
                 }
 
                 Manager.StopAxis(axis);
-                // 急停打断与超时一律按失败上色；⛔ 不与从未执行同形
+                // 急停与超时按失败上色
                 MarkTaZeroPoseFailed(reason);
                 return false;
             }
@@ -2909,9 +3206,8 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         // —— 轴动作入口（UI 只调用、不持轴对象）：回零 / 绝对移动 ——
 
         /// <summary>按指令取 TA 门禁原因（就绪返回空串）</summary>
-        /// <remarks>2026-11-17 改版：<b>allowZeroPose 不再放宽</b>——TA_Zero 与其它 TA 指令同口径，
-        /// 一律要求「已使能 + 已回零」（位置可信）；「工作零位到位」仍只是观测事实，不是门禁。</remarks>
-        /// <param name="allowZeroPose">true=按 TA_ZeroPose 判据（<b>2026-11-17 起与其它指令同判</b>）</param>
+
+        /// <param name="allowZeroPose">true 表示按 ZeroPose 判据</param>
         /// <returns>不可执行原因；空串表示放行</returns>
         public string GetTaGateReason(bool allowZeroPose)
         {
@@ -2919,7 +3215,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             if (!Manager.IsInitCompleted) return "初始化未完成（使能阶段进行中）";
             if (Manager.TaAvailable) return string.Empty;
             string reason = Manager.TaDegradedReason;
-            // 观测事实：工作零位未到位（不阻断 TA 指令，仅提示当前坐标基准）
+            // 零位未到位仅提示不阻断
             if (!Manager.TaAtWorkZero)
             {
                 string zeroReason = Manager.TaZeroPoseReason;
@@ -2929,12 +3225,12 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         }
 
         /// <summary>TA 指令统一入口</summary>
-        /// <remarks>力矩与定位类均阻塞到结果；ZeroPose 同样阻塞到到位或超时。</remarks>
+
         /// <param name="command">指令类型</param>
         /// <returns>执行成功返回 true</returns>
         public bool TaExecute(TaCommand command)
         {
-            // 自动焊接流程进行中 ⇒ 拒绝一切 TA 手动指令（手动与生产流程互斥）
+            // 焊接中拒绝 TA 手动指令
             if (!CheckAutoWeldingConflict("TA " + command)) return false;
             switch (command)
             {
@@ -2954,9 +3250,15 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             }
         }
 
+        /// <summary>TA 自动模式入口（焊前阶段进工作模式）。</summary>
+        /// <returns>执行成功返回 true</returns>
+        public bool TaExecuteAuto()
+        {
+            return ExecuteTaTorque(TaCommand.Auto);
+        }
+
         /// <summary>初始化闸门打开后执行一次 TA 工作零位</summary>
-        /// <remarks>阻塞执行；失败即降级，允许后续手动重试。
-        /// 初始化闸门、可动、装配与并发判定均由 <see cref="ExecuteTaZeroPose"/> 负责；此处不重复判。</remarks>
+
         /// <returns>到位返回 true</returns>
         public bool RunTaZeroPoseAfterInit()
         {
@@ -2964,8 +3266,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         }
 
         /// <summary>回退开关：初始化末尾自动回零（默认关闭）</summary>
-        /// <remarks>初始化只做连接与使能，回零归复位入口（N01）。
-        /// 配置键 INIT_RUN_TA_HOME=1 时恢复旧行为，仅作阶段 3 回退路径。</remarks>
+
         /// <returns>开关关闭或回零成功返回 true；开启且回零失败返回 false</returns>
         public bool RunInitAutoHomeIfEnabled()
         {
@@ -3000,15 +3301,18 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         }
 
         /// <summary>轴复位动作：线性阻塞，落到管理器</summary>
-        /// <remarks>免回零轴跳过 Home 只去工作零位；需回零轴先 Home 再去工作零位。
-        /// 失败停在 L2 或 L3，可再次复位重试。</remarks>
+
         /// <returns>全部到位返回 true</returns>
         private bool ResetAxesToWorkZero()
         {
             if (HasHomingRequiredAxis)
             {
-                // 需回零轴先回零，未回零不得进工作零位
-                if (!Manager.TaHomed)
+                // TA 复位区分：本次上电首次（未回零）先回零再走工作位；已回零只走工作位
+                // TaHomed = 本次上电是否已回零，正是该区分的权威判据
+                bool needHome = !Manager.TaHomed;
+                Log(needHome ? "TA 首次复位 先回零再走工作位" : "TA 已回零复位 仅走工作位",
+                    MessageLevel.Info);
+                if (needHome)
                 {
                     if (!TryHomeAxisWithWait(MontionManager.TaAxisKeys, "复位回零", out string taAxisName,
                             out _, out string rejectDetail, out string evidence))
@@ -3053,8 +3357,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         private bool HasFreeHomingAxis { get { return HasAbsoluteEncoder && HasSeamTrackAxis; } }
 
         /// <summary>初始化收尾：先满扭矩回零，再走 TA 工作零位</summary>
-        /// <remarks>伺服下电后位置不可信。未回零不得直接定位。
-        /// 回零失败即降级，不继续 ZeroPose；失败原因随日志给出。</remarks>
+
         /// <returns>回零与 ZeroPose 均达成返回 true</returns>
         public bool RunTaHomeThenZeroPose()
         {
@@ -3090,7 +3393,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
                 rejectCode = AxisRejectNotInitialized;
                 return false;
             }
-            // 自动焊接流程进行中 ⇒ 拒绝手动轴动作（手动与生产流程互斥）
+            // 焊接中拒绝手动轴动作
             if (DeviceControlWork.Instance.IsAutoWeldingRunning)
             {
                 rejectCode = AxisRejectAutoWelding;
@@ -3129,11 +3432,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
                     rejectCode = AxisRejectNotReached;
                     rejectDetail = "回零未完成（未启动或超时），已中止后续定位";
                     evidence = axis.HomeEvidence;
-                    try { Manager.StopAxis(axis); }
-                    catch (Exception ex)
-                    {
-                        rejectDetail = rejectDetail + " " + ex.GetType().Name;
-                    }
+                    // 回零已由 Home_Status 确认完成时不再 Stop：对已静止轴发停止会报 4866（无描述）
                     return false;
                 }
                 bool ok = Manager.WaitAxisHomed(axis, token, out evidence);
@@ -3145,11 +3444,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
                 {
                     rejectCode = AxisRejectNotReached;
                     if (string.IsNullOrEmpty(evidence)) evidence = axis.HomeEvidence;
-                    try { Manager.StopAxis(axis); }
-                    catch (Exception ex)
-                    {
-                        rejectDetail = ex.GetType().Name + " " + ex.Message;
-                    }
+                    // 同上：不再对回零已完成轴补发 Stop（4866 噪声源）
                 }
                 return ok;
             }
@@ -3160,7 +3455,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         }
 
         /// <summary>按轴角色下发绝对移动并等待到位</summary>
-        /// <remarks>UI 应用动作入口</remarks>
+
         /// <param name="roleKeys">轴名角色关键字</param>
         /// <param name="targetMm">目标位置（mm）</param>
         /// <param name="actionName">动作名（单飞隔离键与日志用）</param>
@@ -3182,7 +3477,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
                 rejectCode = AxisRejectNotInitialized;
                 return false;
             }
-            // 自动焊接流程进行中 ⇒ 拒绝手动轴动作（手动与生产流程互斥）
+            // 焊接中拒绝手动轴动作
             if (DeviceControlWork.Instance.IsAutoWeldingRunning)
             {
                 rejectCode = AxisRejectAutoWelding;
@@ -3242,7 +3537,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         #region 可观测性与释放
 
         /// <summary>执行步号转中文名。</summary>
-        /// <remarks>新增步必须登记，否则该步不可观测。</remarks>
+
         /// <param name="step">执行步号</param>
         /// <returns>步号对应中文名；未登记的步返回「未登记步(N)」</returns>
         protected override string GetStepName(int step)
@@ -3252,6 +3547,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
                 case StepIdle: return "空闲待机";
                 case StepServoOn: return "PreWork-伺服使能(小步11)";
                 case StepReturnToCal: return "PreWork-标定位回归(小步12)";
+                case StepPreWorkSeek: return "PreWork-焊前寻位(X到位且Y到焊接点)";
                 case StepReady: return "已使能待机(大步20)";
                 case StepStopping: return "停止收尾";
                 case StepFinishFail: return "失败收尾";
@@ -3269,13 +3565,6 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         /// <param name="commandOk">指令下发结果；前置拒绝时为 false</param>
         /// <param name="rejectReason">前置拒绝原因；为空串表示前置通过（此时只看 <paramref name="commandOk"/>）</param>
         /// <returns>前置是否通过（true = 已执行，结果看 <paramref name="commandOk"/>）</returns>
-        /// <remarks>分层：应用动作归属本工作流；Manager 只提供按角色取轴、初始化门禁与单轴基础指令。
-        /// 门禁与迁移前逐条一致：① 运控已初始化；② 角色轴已装配（配置启用且轴名命中关键字）。
-        /// 其余保护（使能、PreMotionCheck、急停）仍在轴实现内，未被绕过。
-        /// UI 唯一入口：UI 只表达角色与动作，不持有轴对象。
-        /// 2026-11-17 改版：① MoveTo / StepMove 改走非阻塞下发（<see cref="MontionManager.MoveToNoBlock"/>），
-        /// 本方法在 UI 线程调用不再等待到位；② 回零不在本入口 —— 统一走 <see cref="TryHomeAxisWithWait"/>，
-        /// 使「手动回零」与「复位回零」共用同一实现，TA 回零结论（已回零）不区分来源。</remarks>
         public bool TryManualAxisOperation(string[] roleKeys, AxisManualOperation operation, double value, ushort dir,
             out string axisName, out bool servoOn, out bool commandOk, out string rejectReason)
         {
@@ -3298,8 +3587,8 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             }
             axisName = axis.AxisName;
 
-            // 自动焊接流程进行中 ⇒ 拒绝手动轴操作（手动与生产流程互斥）。
-            // ⛔ 停止类（Stop / JogStop）永远放行：安全操作必须随时可中断在途运动。
+            // 焊接中拒绝手动轴操作
+            // 停止类指令始终放行
             bool isStopOperation = operation == AxisManualOperation.Stop
                 || operation == AxisManualOperation.JogStop;
             if (!isStopOperation && DeviceControlWork.Instance.IsAutoWeldingRunning)
@@ -3336,7 +3625,6 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         }
 
         /// <summary>释放钩子。</summary>
-        /// <remarks>基类 Dispose 调用；关闭台达总线统一走 InitializeOff，保持唯一入口与幂等。</remarks>
         protected override void DisposeManaged()
         {
             InitializeOff();
@@ -3345,3 +3633,4 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         #endregion
     }
 }
+

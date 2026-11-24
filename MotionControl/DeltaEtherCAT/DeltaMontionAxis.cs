@@ -8,23 +8,22 @@ using AdaWeldSystem.FileOperate;
 namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
 {
     /// <summary>台达轴</summary>
-    /// <remarks>对外一律工程单位，脉冲换算在本层完成；所有运动入口先做前置检查。</remarks>
     public class DeltaMontionAxis : MontionAxis
     {
         #region 私有变量
 
         // 超时取自 ROOT/FLOW_TIMEOUT，改配置即时生效。
-        // ⛔ 不要在这里再写固定秒数；缺省值见 FlowTimeoutConfig 构造函数。
+        // 超时缺省值由配置类提供
         private static int MoveDoneTimeoutSeconds { get { return FlowTimeoutSettings.Current.MoveDoneSeconds; } }
         private static int HomeDoneTimeoutSeconds { get { return FlowTimeoutSettings.Current.HomeDoneSeconds; } }
         private static int ServoOnTimeoutSeconds { get { return FlowTimeoutSettings.Current.ServoOnSeconds; } }
         private static int PollIntervalMs { get { return FlowTimeoutSettings.Current.AxisPollMs; } }
         private static int StopSettleMs { get { return FlowTimeoutSettings.Current.StopSettleMs; } }
 
-        /// <summary>CST 曲线模式：1=直线加速（手册默认值），2=曲线加速；依据《EtherCAT 程式開發手冊》§11.1(P630)</summary>
+        /// <summary>CST 曲线模式：1=直线加速</summary>
         private const ushort TorqueCurveModeLinear = 1;
 
-        /// <summary>额定力矩千分比满量程（1000 = 额定力矩）；依据《EtherCAT 程式開發手冊》§11.1(P630) Target_Torque 千分比 1~1000</summary>
+        /// <summary>额定力矩千分比满量程</summary>
         private const short TorqueRatedPermille = 1000;
 
         /// <summary>输出使能开启（开力矩输出）</summary>
@@ -47,13 +46,12 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
         private short _lastTorqueTarget;
 
         /// <summary>撤力是否失败；true 表示力矩可能仍在输出</summary>
-        /// <remarks>⛔ 不清 <see cref="_torqueOutputEnabled"/>：它是硬件真值，伪造会误判</remarks>
         private volatile bool _torqueRetractFailed;
 
         /// <summary>最近一次撤力失败的返回码（0 = 无失败记录）</summary>
         private ushort _torqueRetractFailCode;
 
-        /// <summary>已写入驱动器 16#6072 的上限值（额定千分比；-1 = 本进程尚未写入）</summary>
+        /// <summary>已写入驱动器 16#6072 的上限值</summary>
         private int _appliedDriveTorqueLimit = -1;
 
         /// <summary>本轮使能窗口写失败后不再重试</summary>
@@ -106,26 +104,18 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
         public override string LastCommand { get { return _lastCommand; } }
 
         /// <summary>当前是否 CST 输出态；不作门禁</summary>
-        /// <remarks>冷启动与热切换全部成功后才置 true；StopTorque 成功或回滚 CSP 后置 false。
-        /// ⛔ 撤力失败时保持 true（硬件真值），撤力结果看 <see cref="TorqueRetractFailed"/>。</remarks>
         public bool TorqueOutputEnabled { get { return _torqueOutputEnabled; } }
 
         /// <summary>最近一次撤力（CST_Output_Enable(0)）是否失败：true 表示力矩可能仍在输出</summary>
-        /// <remarks>与 <see cref="TorqueOutputEnabled"/> 互补：后者是输出态，本属性是撤力结果；下次撤力成功或重新下发目标成功即清零。</remarks>
         public bool TorqueRetractFailed { get { return _torqueRetractFailed; } }
 
         /// <summary>最近撤力失败的返回码，供定位</summary>
         public ushort TorqueRetractFailCode { get { return _torqueRetractFailCode; } }
 
         /// <summary>扭矩上限（千分比 1~1000），CSP 与 CST 共用</summary>
-        /// <remarks>由 <see cref="DeltaTaHomeConfig.GetTorqueLimitPerMille"/> 换算后写入。
-        /// 软件侧用于钳制 CST 目标。驱动侧在伺服 OFF 窗口写入 16#6072。
-        /// ⛔ 未配置（&lt;=0）按 1000 处理，避免把现役轴限到推不动。</remarks>
         public int TorqueLimitPerMille { get; set; }
 
         /// <summary>使能时按满扭矩写 16#6072（TA 回零推动不被阻力停车）</summary>
-        /// <remarks>只抬驱动侧上限；CST 目标仍按 TorqueLimitPerMille 软件钳制。
-        /// 须在伺服 OFF 窗口写入，故随每次使能生效。</remarks>
         public bool FullTorqueOnEnable { get; set; }
 
         /// <summary>本次回零是否经驱动器确认完成</summary>
@@ -141,7 +131,7 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
         }
 
         /// <summary>读取该从站的连接状态与报警状态</summary>
-        /// <remarks>诊断用，非热路径</remarks>
+
         /// <param name="opState">EtherCAT 状态机值（8 = Operational）</param>
         /// <param name="alarmStatus">从站报警状态字</param>
         public void ReadConnectStatus(out ushort opState, out ushort alarmStatus)
@@ -223,11 +213,6 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
         }
 
         /// <summary>写扭矩上限到驱动器（CSP/CST 共用）</summary>
-        /// <remarks>使能窗口写值，须在切模式之前。
-        /// 回零后回落见 <see cref="RestoreTorqueLimitAfterHome"/>。
-        /// 基线读通才探测，读通才写。
-        /// 回读不符即失败。
-        /// 失败只告警：CST 按软件钳制。</remarks>
         private void EnsureDriveTorqueLimit()
         {
             // TA 回零用满扭矩：驱动侧放到额定上限
@@ -268,8 +253,6 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
         }
 
         /// <summary>只读探测正负扭矩限值对象（每进程一次）</summary>
-        /// <remarks>16#60E0/16#60E1 若在线可写，可替代 16#6072。
-        /// 返回码入日志，供现场定案。</remarks>
         private void ProbeTorqueLimitObjectsOnce()
         {
             if (_torqueLimitProbeDone) return;
@@ -283,8 +266,7 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
         }
 
         /// <summary>写标准对象 16#6072（UINT16，额定转矩 0.1%）</summary>
-        /// <remarks>与其它对象字典共用 <see cref="DeltaSlaveDevice"/> 的握手与重试；
-        /// 顺序为基线读 16#6041 → 子索引只读探测 → 读通才写 → 回读。</remarks>
+
         /// <param name="limit">上限（额定千分比，1~1000）</param>
         /// <param name="reason">失败原因（含 API 返回码 / SDO 中止码，供汇总日志引用）</param>
         /// <returns>写入且回读一致返回 true</returns>
@@ -421,7 +403,6 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
 
         /// <summary>下发回零配置并启动</summary>
         /// <returns>启动成功返回 true</returns>
-        /// <remarks>回零前校验伺服、未在回零、速度与加速度为正；参数原样下发（模式语义以台达手册为准）。</remarks>
         private bool StartHome()
         {
             if (!PreMotionCheck("回零")) return false;
@@ -493,8 +474,6 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
 
         /// <summary>回读 16#6098 并按同一补码规则反解，打印下发值与逻辑</summary>
         /// <param name="modeWord">已下发的 16 位模式值</param>
-        /// <remarks>回读失败只告警不阻断回零；用于消除「UI 可填但下发值无痕」的现场盲区。
-        /// 走 <see cref="DeltaSlaveDevice.ReadSdo"/>，失败按三态说明。</remarks>
         private void VerifyHomeModeReadback(ushort modeWord)
         {
             byte[] data = new byte[1];
@@ -527,16 +506,13 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
         /// <summary>回零模式逻辑值转 16 位补码字</summary>
         /// <param name="mode">逻辑模式号（16#6098，有符号）</param>
         /// <returns>16 位补码值，如 -3 → 65533</returns>
-        /// <remarks>保存与下发都经此换算，日志打印两端值。负值按补码，正值原样</remarks>
         private static ushort ToHomeModeWord(short mode)
         {
             return (ushort)(mode & 0xFFFF);
         }
 
         /// <summary>反号切换：撤输出经位置停止再反向建立</summary>
-        /// <remarks>撤输出后切 CSP 让位置环刹住电流。
-        /// ⛔ 切前把位置目标锁到当前位，防回退。
-        /// 停稳再回 CST 下发反向目标。</remarks>
+
         /// <param name="targetTorque">反向目标力矩（额定千分比）</param>
         /// <param name="slope">扭矩爬升速率（0.1%/s）</param>
         /// <returns>下发成功返回 true</returns>
@@ -546,7 +522,7 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
                 CardNo, _nodeId, _slotNo, DeltaEnableOff);
             if (ret != DeltaErrorCode.NO_ERROR)
             {
-                // 撤输出失败：⛔ 不改 _torqueOutputEnabled（硬件真值）
+                // 撤输出失败不改硬件真值标志
                 LogFail("反向切换撤除扭矩输出", ret);
                 _torqueRetractFailed = true;
                 _torqueRetractFailCode = ret;
@@ -554,7 +530,7 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
             }
             Log("反号切换 撤除扭矩输出 CST_Output_Enable(0)", MessageLevel.Info);
 
-            // 切 CSP 前锁当前位置，⛔ 防按旧目标回退
+            // 切 CSP 前锁当前位置防回退
             double lockedPos = GetPosition();
             SetPosition(lockedPos);
             Log(string.Format("反号切换 位置目标锁定当前位 {0:F3}", lockedPos), MessageLevel.Info);
@@ -673,8 +649,6 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
         /// <param name="requestedTorque">调用方请求的目标（额定千分比，含符号）</param>
         /// <param name="appliedTorque">实际下发目标（钳制后）</param>
         /// <param name="limit">上限（额定千分比，正值）</param>
-        /// <remarks>⛔ 目标 = 上限即无余量，已贴边。
-        /// 余量 ≤10%（如 270‰ / 300‰）时位置保持几乎没有剩余。 不足 / 有余量四种状态。</remarks>
         private void LogTorqueLimitRelation(short requestedTorque, short appliedTorque, int limit)
         {
             int magnitude = Math.Abs((int)requestedTorque);
@@ -705,7 +679,7 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
         }
 
         /// <summary>切 CST 前确认 CSP 位置运动已停稳</summary>
-        /// <remarks>位置未停就切力矩，残留速度会被继承；超时即拒绝，由上层撤力回 CSP。</remarks>
+
         /// <returns>已停稳返回 true</returns>
         private bool EnsureCspMotionStoppedForTorque()
         {
@@ -800,14 +774,20 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
             }
 
             // OFF 窗口写 16#6072 上限，CSP 与 CST 共用。
-            // ⛔ 必须在 Set_MoveMode 之前：切模式（写 16#6060）占邮箱，紧跟 SDO 即
+            // 须在切换模式之前执行
             // 0x1305（邮箱未就绪）的典型诱因，勿加延时硬凑。
             // 每次使能重试一次，轮次计数可在日志分辨。
             _driveTorqueLimitUnavailable = false;
             EnsureDriveTorqueLimit();
 
-            EtherCATMotionNative.CS_ECAT_Slave_Motion_Set_MoveMode(CardNo, _nodeId, _slotNo,
+            ushort modeRet = EtherCATMotionNative.CS_ECAT_Slave_Motion_Set_MoveMode(CardNo, _nodeId, _slotNo,
                 (ushort)MoveMode.CSP);
+            if (modeRet != DeltaErrorCode.NO_ERROR && GetMoveMode() != (ushort)MoveMode.CSP)
+            {
+                // 模式未切成功则后续缓冲写段必被拒（4610），使能也不应继续
+                LogFail("伺服使能前切 CSP 运动模式", modeRet);
+                return;
+            }
             ushort ret = EtherCATMotionNative.CS_ECAT_Slave_Motion_Set_Svon(CardNo, _nodeId, _slotNo, 1);
             if (ret != DeltaErrorCode.NO_ERROR)
             {
@@ -842,9 +822,7 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
         }
 
         /// <summary>回零后回落扭矩上限（伺服 ON 窗口）</summary>
-        /// <remarks>回零期间为满量程，成功即回落配置值。
-        /// 幂等：已是目标值直接返回。
-        /// 失败不阻断，只告警并说明仍为满量程。</remarks>
+
         /// <returns>已回落或无需回落返回 true</returns>
         public bool RestoreTorqueLimitAfterHome()
         {
@@ -906,9 +884,6 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
 
         /// <summary>等待回零完成</summary>
         /// <returns>完成返回 true，超时返回 false</returns>
-        /// <remarks>须先观察 Home_Status=1，再等 0 才算完成。
-        /// 始终为 0 视为未启动，一律判失败。
-        /// 失败不置完成标记，调用方须中止后续动作。</remarks>
         public override bool WaitHomeDone()
         {
             const int StartGraceMs = 2000;   // 下发后等状态字置 1 的宽限
@@ -1104,13 +1079,45 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
         }
 
         /// <summary>读取驱动器当前运动模式字</summary>
-        /// <remarks>用于模式切换后回读校验</remarks>
+
         /// <returns>模式字原始值（1=PP 3=PV 6=回零 8=CSP 9=CSV 10=CST）</returns>
         public ushort GetMoveMode()
         {
             byte mode = 0;
             EtherCATMotionNative.CS_ECAT_Slave_Motion_Get_MoveMode(CardNo, _nodeId, _slotNo, ref mode);
             return mode;
+        }
+
+        /// <summary>确保轴处于 CSP 周期同步位置模式</summary>
+        /// <remarks>缓冲插补 API 只在 CSP 模式下有效（台达手册 P9-11）。
+        /// 点位运动（MoveTo）会把轴切离 CSP，且 ServoOn 的模式切换返回值曾被忽略，
+        /// 导致建系后写段被拒（4610 ERR_ECAT_SLAVE_TYPE）。</remarks>
+        /// <returns>已是或已切到 CSP 返回 true</returns>
+        public bool EnsureCspMode()
+        {
+            ushort mode = GetMoveMode();
+            if (mode == (ushort)MoveMode.CSP) return true;
+            ushort prevMode = mode;
+            ushort ret = EtherCATMotionNative.CS_ECAT_Slave_Motion_Set_MoveMode(
+                CardNo, _nodeId, _slotNo, (ushort)MoveMode.CSP);
+            if (ret != DeltaErrorCode.NO_ERROR)
+            {
+                // 返回非 0 但读回已是 CSP 时按成功处理（重复设置可能带警告码）
+                if (GetMoveMode() != (ushort)MoveMode.CSP)
+                {
+                    LogFail("切换 CSP 运动模式", ret);
+                    return false;
+                }
+            }
+            mode = GetMoveMode();
+            if (mode != (ushort)MoveMode.CSP)
+            {
+                Log(string.Format("切换 CSP 运动模式后读回不一致 当前模式 {0} 目标 {1}",
+                    mode, (ushort)MoveMode.CSP), MessageLevel.Warning);
+                return false;
+            }
+            Log(string.Format("已切换到 CSP 运动模式 原模式 {0}", prevMode));
+            return true;
         }
 
         /// <summary>读取回零状态</summary>
@@ -1123,14 +1130,7 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
         }
 
         /// <summary>以 CST 扭矩模式建立送丝下压力</summary>
-        /// <remarks>冷启动：停稳 → 切 CST → 下发目标 → 开输出。
-        /// CSP 电流已无方向，⛔ 不发 ±1‰ 同号种子。
-        /// 热切换同号直发目标，按斜率爬升；反号撤输出切位置停止再反向建立。
-        /// ⛔ 不设「参数相同即跳过」的捷径。任一步失败即撤输出并回滚 CSP。
-        /// 退出用 <see cref="StopTorque"/>。Curve_Mode 固定 1（手册 §11.1 P630）。
-        /// 4609 由目标或斜率为 0 触发，故先校验。
-        /// ⚠️ 斜率只管力建立快慢，治不了跑飞与撞击（详见 wiki modules CommentConstraintRegistry）。
-        /// </remarks>
+
         /// <param name="targetTorque">目标力矩（额定千分比，±1~1000）</param>
         /// <param name="slope">扭矩爬升速率（0.1%/s，0 非法）</param>
         /// <returns>下发成功返回 true</returns>
@@ -1269,8 +1269,7 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
         }
 
         /// <summary>撤除 CST 扭矩输出并切回 CSP 位置模式</summary>
-        /// <remarks>用 CST_Output_Enable(0) 先撤力矩再切 CSP；⛔ 不用运动指令减速：缓减速会继续下压。
-        /// ⛔ 撤力失败时不动 <see cref="TorqueOutputEnabled"/>（硬件真值），只置 <see cref="TorqueRetractFailed"/> 并记回读值。</remarks>
+
         /// <returns>设置成功返回 true</returns>
         public bool StopTorque()
         {
@@ -1301,8 +1300,7 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
         }
 
         /// <summary>配置 CSP 软目标到达判定窗口（仅 CSP 运动族）</summary>
-        /// <remarks>位置偏差进入 <c>positionWindow</c> 并持续 <c>windowTime</c> 后由驱动器判到位，
-        /// 用 <see cref="IsSoftTargetReached"/> 读取；单位与语义以台达手册为准。</remarks>
+
         /// <param name="positionWindow">位置窗口（脉冲，与 ToPulse 同口径）</param>
         /// <param name="windowTime">时间窗口</param>
         /// <param name="enable">是否启用</param>
@@ -1317,8 +1315,7 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
         }
 
         /// <summary>读取 CSP 软目标到达状态（驱动器给出的到位判定）。</summary>
-        /// <remarks>与 <see cref="MontionAxis.IsMoving"/> 互补。Mdone 只表示运动结束，不区分走到目标还是被中断。
-        /// 返回值语义未核实，仅留痕不作判据。</remarks>
+
         /// <param name="status">到达状态原值</param>
         /// <returns>读取成功返回 true</returns>
         public bool TryGetSoftTargetReachStatus(out ushort status)
@@ -1330,7 +1327,7 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
         }
 
         /// <summary>读取 CSP 软目标到达状态并在失败时记日志。</summary>
-        /// <remarks>失败原因取原生真实返回码，⛔ 不得记 NO_ERROR。</remarks>
+
         /// <returns>到达状态原值；读取失败返回 0</returns>
         public ushort GetSoftTargetReachStatus()
         {
@@ -1363,10 +1360,16 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
         private const ushort CrdTableNo = 0;
         private const ushort CrdFifoNo = 0;
         private const ushort CrdAbsModeAbsolute = 1;
+        // S 曲线时间缺省值：台达建议 10ms，现场原型亦取 10；⛔ 传 0 时驱动器侧滤波关闭
+        private const ushort CrdDefaultSCurveTimeMs = 10;
+        // 工作坐标偏移标志：现场原型取 1（0=不需要偏移 / 1=需要偏移）。
+        // 传 0 时坐标系未按该驱动器要求建立，写段会被判「此模块不支持此 API」
+        private const ushort CrdSetOriginFlag = 1;
+        // 坐标系速度/加速度上限相对标称值的倍数（段速会被积压提速短时放大）
+        private const int CrdMaxLimitScale = 4;
 
         /// <summary>建立单轴运动缓冲坐标系（不设原点，段目标即轴</summary>
-        /// <remarks>S 曲线取轴配置 S_TIME（配置驱动，非固定值）。
-        /// ⚠️ 必须不设原点：SetOriginFlag=1 会把原点平移。绝对目标叠加偏移即跑飞。示教坐标即轴坐标。</remarks>
+
         /// <param name="maxVelMmPerS">同步最大速度（毫米/秒）</param>
         /// <param name="maxAccMmPerS2">同步最大加速度（毫米/秒²）</param>
         /// <returns>建立成功返回 true</returns>
@@ -1377,17 +1380,23 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
             ushort axis = _nodeId;
             ushort slot = _slotNo;
             int originPos = 0;
+            // S 曲线：轴配置优先；未配置时取 10ms（台达建议值，亦为现场原型取值），⛔ 不用 0
             ushort sCurveTimeMs = (ushort)(STime * 1000);
+            if (sCurveTimeMs == 0) sCurveTimeMs = CrdDefaultSCurveTimeMs;
+            // 工作坐标偏移标志取 1（现场原型取值：该驱动器需工作坐标偏移；
+            // 传 0 时坐标系未按其要求建立，写段会被判为「此模块不支持此 API」）
+            ushort setOriginFlag = CrdSetOriginFlag;
             ushort ret = EtherCATMotionBufferNative.CS_ECAT_Slave_CSP_Start_MotionBuffer_Set_Crd_Parameters(
                 CardNo, CrdTableNo, 1, ref axis, ref slot,
-                ToPulse(maxVelMmPerS), ToPulse(maxAccMmPerS2), sCurveTimeMs,
-                0, 0, ref originPos);
+                // 坐标系上限须大于实际段速：手册 9.7.1 明确「运动参数超越此坐标系的最大值则回传错误」。
+                // 段速会因积压反馈提速而短时超过标称值，故留余量（现场原型也取远大于段速的上限）
+                ToPulse(maxVelMmPerS) * CrdMaxLimitScale, ToPulse(maxAccMmPerS2) * CrdMaxLimitScale, sCurveTimeMs,
+                0, setOriginFlag, ref originPos);
             if (ret == DeltaErrorCode.NO_ERROR)
             {
                 RecordCmdOk("缓冲坐标系建立");
-                // S 曲线取轴配置 S_TIME，日志可直接核对
-                Log(string.Format("缓冲坐标系建立 同步速度 {0:F1}mm/s 加速度 {1:F0}mm/s2 S 曲线 {2}ms",
-                    maxVelMmPerS, maxAccMmPerS2, sCurveTimeMs));
+                Log(string.Format("缓冲坐标系建立 同步速度 {0:F1}mm/s 加速度 {1:F0}mm/s2 S 曲线 {2}ms 工作坐标偏移 {3} 轴数 1 节点 {4} 槽 {5} 表 {6}",
+                    maxVelMmPerS, maxAccMmPerS2, sCurveTimeMs, setOriginFlag, _nodeId, _slotNo, CrdTableNo));
                 return true;
             }
             LogFail("缓冲坐标系建立", ret);
@@ -1395,8 +1404,7 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
         }
 
         /// <summary>向运动缓冲写入一段单轴直线插补（本坐标系绝</summary>
-        /// <remarks>热路径不打日志，返回码由调用方限频记录；
-        /// 段速度与段末速度相等保证段间连续不停顿。 对目标）</remarks>
+
         /// <param name="targetPosMm">段终点（毫米，坐标系绝对值）</param>
         /// <param name="velMmPerS">段速度（毫米/秒）</param>
         /// <param name="endVelMmPerS">段末速度（毫米/秒，与段速度相等为连续路径）</param>
@@ -1404,12 +1412,28 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
         /// <returns>台达返回码，0 为成功</returns>
         public ushort BufferLineTo(double targetPosMm, double velMmPerS, double endVelMmPerS, double accMmPerS2)
         {
-            ushort axis = _nodeId;
             int target = ToPulse(targetPosMm);
-            return EtherCATMotionBufferNative.CS_ECAT_Slave_CSP_Start_MotionBuffer_Line_MultiAxis2(
-                CardNo, CrdTableNo, 1, ref axis, ref target,
-                ToPulse(velMmPerS), ToPulse(endVelMmPerS), ToPulse(accMmPerS2),
-                CrdAbsModeAbsolute, CrdFifoNo);
+            int vel = ToPulse(velMmPerS);
+            int endVel = ToPulse(endVelMmPerS);
+            int acc = ToPulse(accMmPerS2);
+
+            // 优先 9.7.3 Line_MultiAxis：手册图 9.2.22.1 标准流程 Step3 指定的接口，
+            // 不传轴数组、不依赖速度模式设置，兼容性最好
+            ushort ret = EtherCATMotionBufferNative.CS_ECAT_Slave_CSP_Start_MotionBuffer_Line_MultiAxis(
+                CardNo, CrdTableNo, ref target, vel, endVel, acc, CrdAbsModeAbsolute, CrdFifoNo);
+            if (ret != CspResult.EcatSlaveType) return ret;
+
+            // 4610 = ERR_ECAT_SLAVE_TYPE「此模块不支持此 API」：回落 MultiAxis2 再试一次，
+            // 两者结果一并记日志，便于现场判定驱动器是否支持缓冲插补
+            ushort axis = _nodeId;
+            ushort ret2 = EtherCATMotionBufferNative.CS_ECAT_Slave_CSP_Start_MotionBuffer_Line_MultiAxis2(
+                CardNo, CrdTableNo, 1, ref axis, ref target, vel, endVel, acc, CrdAbsModeAbsolute, CrdFifoNo);
+            if (ret2 != DeltaErrorCode.NO_ERROR)
+            {
+                Log(string.Format("缓冲写段两种接口均被拒 Line_MultiAxis {0} MultiAxis2 {1} 节点 {2} 槽 {3} 表 {4} FIFO {5} 目标脉冲 {6}",
+                    ret, ret2, _nodeId, _slotNo, CrdTableNo, CrdFifoNo, target), MessageLevel.Warning);
+            }
+            return ret2;
         }
 
         /// <summary>启动运动缓冲执行（缓冲内须已有段）</summary>
@@ -1424,8 +1448,7 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
         }
 
         /// <summary>停止运动缓冲执行（MotionBuffer 收尾）</summary>
-        /// <remarks>Mode 以手册 9.7.16 为准：0=Feedhold（不清 FIFO 不解坐标系）；1=平滑停止、2=急停（清 FIFO 解坐标系）。
-        /// 收尾不可传 0，残留坐标系会破坏后续点位。</remarks>
+
         /// <param name="mode">停止模式（见上：1 = 平滑停止 + 清 FIFO + 解坐标系）</param>
         /// <returns>台达返回码，0 为成功</returns>
         public ushort BufferStop(ushort mode)
@@ -1457,7 +1480,7 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
         }
 
         /// <summary>读取从站总线状态与报警状态</summary>
-        /// <remarks>仅作现场取证，不参与控制判据；用于区分「驱动停机/报警」与「反馈链路问题」。</remarks>
+
         /// <param name="opState">总线状态原值</param>
         /// <param name="alarmStatus">报警状态原值</param>
         /// <returns>台达返回码，0 为成功</returns>
@@ -1490,3 +1513,4 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
         #endregion
     }
 }
+

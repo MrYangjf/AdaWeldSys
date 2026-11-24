@@ -3,10 +3,7 @@ using AdaWeldSystem.EmguALG.Core;
 
 namespace AdaWeldSystem.EmguALG.Manager
 {
-    /// <summary>
-    /// 结果缓存：池化快照 + 版本号，线程安全拉取。
-    /// 避免高频结果走事件造成风暴。
-    /// </summary>
+    /// <summary>结果缓存</summary>
     /// <typeparam name="TResult">缓存的结果类型</typeparam>
     public sealed class AlgorithmResultStore<TResult> : IResultStore<TResult> where TResult : AlgorithmResult
     {
@@ -30,9 +27,7 @@ namespace AdaWeldSystem.EmguALG.Manager
 
         #region 公共函数
 
-        /// <summary>
-        /// 取最新结果
-        /// </summary>
+        /// <summary>取最新结果</summary>
         /// <param name="version">取出时对应的版本号</param>
         /// <returns>最新结果；尚无结果时返回 null</returns>
         public TResult GetLatest(out int version)
@@ -44,9 +39,7 @@ namespace AdaWeldSystem.EmguALG.Manager
             }
         }
 
-        /// <summary>
-        /// 发布一次结果并推进版本号
-        /// </summary>
+        /// <summary>发布一次结果并推进版本号</summary>
         /// <param name="result">待发布的结果</param>
         public void Publish(TResult result)
         {

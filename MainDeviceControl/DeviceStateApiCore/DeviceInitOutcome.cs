@@ -4,8 +4,6 @@ using System.Collections.Generic;
 namespace AdaWeldSystem.MainDeviceControl.DeviceStateApiCore
 {
     /// <summary>设备初始化结果三态。</summary>
-    /// <remarks>与 <see cref="SubDeviceState"/> 正交，只表达初始化处置。
-    /// 不是设备运行态；因父级未就绪而没尝试的连接记 <see cref="Skipped"/>，不计入失败。</remarks>
     public enum DeviceInitOutcome
     {
         /// <summary>成功（已连接或已就绪）。</summary>

@@ -30,7 +30,7 @@ namespace AdaWeldSystem.UIDesign.SubDialog.ParamContolDialog
         /// <summary>单元格编辑结束事件：将编辑后的值写回行对象，</summary>
         /// <param name="sender">发送方。</param>
         /// <param name="e">事件参数。</param>
-        /// <remarks>供保存逻辑读取。</remarks>
+
         /// <returns>是否成功。</returns>
         private bool uiDataGridView1_CellEndEdit(object sender, AntdUI.TableEndEditEventArgs e)
         {
@@ -119,7 +119,7 @@ namespace AdaWeldSystem.UIDesign.SubDialog.ParamContolDialog
         }
 
         /// <summary>按摆幅宽度取摆幅频率（走 AutoParam 基准公式，基准点缺失</summary>
-        /// <remarks>时回默认值）。</remarks>
+
         /// <param name="autoParam">自动参数配置</param>
         /// <param name="swingWidthMm">摆幅宽度（毫米）</param>
         /// <returns>摆幅频率（Hz）</returns>

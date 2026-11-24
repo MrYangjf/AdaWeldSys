@@ -1,24 +1,36 @@
 using System;
 using System.IO;
 using AdaWeldSystem.FileOperate;
+using AdaWeldSystem.ConfigFileControl.Implementations;
 
 namespace AdaWeldSystem.MainDeviceControl
 {
     /// <summary>模拟测试参数配置（SimulationController.ini 的唯一持有者）</summary>
-    /// <remarks>业务类（<see cref="DeviceControlWork"/>）只调用本对象，⛔ 不再自行 <c>new INIFile</c>。
-    /// 生命周期：由 <see cref="DeviceControlWork"/> 单例以只读字段持有，全进程一份。
-    /// 线程安全：读写同一把锁，避免交叉写文件。</remarks>
     public sealed class SimulationConfig
     {
         #region 常量
 
-        /// <summary>节名</summary>
+        /// <summary>仿真配置所属模块（全局配置目录下的模块层）。</summary>
+        private const string ConfigModule = "MainDeviceControl";
+
         private const string Section = "Simulation";
 
         /// <summary>线激光数据频率键名（30/60/80/120Hz）</summary>
         private const string KeyLaserFrequencyHz = "LineLaserDataFrequencyHz";
 
+        /// <summary>焊接前寻位起点 X 键名（毫米）：模拟机器人 PreWork 段移动到该点后停</summary>
+        private const string KeyPreWorkStartXmm = "PreWorkStartXmm";
+
+        /// <summary>焊接前寻位起点 X 缺省值（毫米）</summary>
+        public const double DefaultPreWorkStartXmm = 100.0;
+
         #endregion
+
+        /// <summary>默认配置文件绝对路径（与 ConfigFileManager 载体同路径）</summary>
+        public static string DefaultFilePath
+        {
+            get { return ConfigFileManager.ModuleAbsolutePath(ConfigModule, "SimulationController.ini"); }
+        }
 
         #region 私有变量
 
@@ -43,7 +55,7 @@ namespace AdaWeldSystem.MainDeviceControl
 
         /// <summary>读取线激光数据频率</summary>
         /// <param name="fallback">文件或键缺失时的缺省值（保留调用方当前值）</param>
-        /// <remarks>读取失败不抛异常，缺失不阻断启动。</remarks>
+
         /// <returns>频率（Hz）</returns>
         public int LoadLaserFrequencyHz(int fallback)
         {
@@ -53,7 +65,7 @@ namespace AdaWeldSystem.MainDeviceControl
                 {
                     if (!File.Exists(_filePath)) return fallback;
                     // 每次新建实例读取，避免缓存与外部改动不一致
-                    INIFile ini = new INIFile(_filePath);
+                    INIFile ini = ConfigFileManager.Instance.GetModuleIni(ConfigModule, "SimulationController.ini").Raw;
                     return ini.ReadInt(Section, KeyLaserFrequencyHz, fallback);
                 }
                 catch (Exception)
@@ -65,7 +77,7 @@ namespace AdaWeldSystem.MainDeviceControl
 
         /// <summary>保存线激光数据频率</summary>
         /// <param name="value">频率（Hz）</param>
-        /// <remarks>写失败不抛异常，保存失败不影响运行时。</remarks>
+
         /// <returns>保存成功返回 true</returns>
         public bool SaveLaserFrequencyHz(int value)
         {
@@ -75,9 +87,57 @@ namespace AdaWeldSystem.MainDeviceControl
                 {
                     string dir = Path.GetDirectoryName(_filePath);
                     if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
-                    INIFile ini = new INIFile(_filePath);
+                    IniConfigFile file = ConfigFileManager.Instance.GetModuleIni(ConfigModule, "SimulationController.ini");
+                    INIFile ini = file.Raw;
                     ini.WriteInt(Section, KeyLaserFrequencyHz, value);
-                    ini.SaveToFile();
+                    ConfigFileManager.SaveIni(file, "仿真参数", "配置变更");
+                    return true;
+                }
+                catch (Exception)
+                {
+                    return false;   // 磁盘/权限异常时不阻断界面操作
+                }
+            }
+        }
+
+        /// <summary>读取焊接前寻位起点 X（毫米）</summary>
+        /// <param name="fallback">文件或键缺失时的缺省值</param>
+
+        /// <returns>起点 X（毫米）</returns>
+        public double LoadPreWorkStartXmm(double fallback)
+        {
+            lock (_sync)
+            {
+                try
+                {
+                    if (!File.Exists(_filePath)) return fallback;
+                    INIFile ini = ConfigFileManager.Instance.GetModuleIni(ConfigModule, "SimulationController.ini").Raw;
+                    double value = ini.ReadDouble(Section, KeyPreWorkStartXmm, fallback);
+                    return value < 0.0 ? fallback : value;
+                }
+                catch (Exception)
+                {
+                    return fallback;   // 配置损坏时按缺省值继续，不影响启动
+                }
+            }
+        }
+
+        /// <summary>保存焊接前寻位起点 X（毫米）</summary>
+        /// <param name="value">起点 X（毫米），负值按缺省值处理</param>
+
+        /// <returns>保存成功返回 true</returns>
+        public bool SavePreWorkStartXmm(double value)
+        {
+            lock (_sync)
+            {
+                try
+                {
+                    string dir = Path.GetDirectoryName(_filePath);
+                    if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+                    IniConfigFile file = ConfigFileManager.Instance.GetModuleIni(ConfigModule, "SimulationController.ini");
+                    INIFile ini = file.Raw;
+                    ini.WriteDouble(Section, KeyPreWorkStartXmm, value < 0.0 ? DefaultPreWorkStartXmm : value);
+                    ConfigFileManager.SaveIni(file, "仿真参数", "配置变更");
                     return true;
                 }
                 catch (Exception)

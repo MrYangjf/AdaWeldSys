@@ -3,8 +3,6 @@ using System;
 namespace AdaWeldSystem.Comm.SystemComm
 {
     /// <summary>权限等级职责与门控判定</summary>
-    /// <remarks>等级比较集中在此，禁止 UI 各处分散硬编码；启动默认 Admin 便于调试。
-    /// 降权须经 <see cref="SetLevel"/> 广播 <see cref="GlobalCommData.OperateLevelChanged"/>，禁直接改 mOperateLevel。</remarks>
     public static class PermissionLevel
     {
         /// <summary>权限等级显示名。</summary>

@@ -1,4 +1,4 @@
-﻿﻿using AdaWeldSystem.Comm.SystemComm;
+﻿using AdaWeldSystem.Comm.SystemComm;
 using AdaWeldSystem.EmguALG.Manager;
 using AdaWeldSystem.MainDeviceControl;
 using AdaWeldSystem.MainDeviceControl.DeviceWorkflow;
@@ -20,8 +20,6 @@ using System.Windows.Forms;
 namespace AdaWeldSystem.UIDesign.TabPage
 {
     /// <summary>系统设置页：跟踪/光丝/温控/模拟测试四区。</summary>
-    /// <remarks>轴表用按钮 + 信号灯，限位按软限位推导；
-    /// 负/正向按住连续 JOG，步距按钮单击点动。</remarks>
     public partial class SystemControlPage : UserControl
     {
         #region 常量
@@ -127,12 +125,11 @@ namespace AdaWeldSystem.UIDesign.TabPage
             this.HandleDestroyed += SystemControlPage_HandleDestroyed;
             // 温度/气压与轴表共用计时器（常驻 500ms；轴表刷新仍受自动刷新开关控制）
             timerRefresh.Start();
-            // 手动操作按钮初始可用性由统一管控函数给出（⛔ 不在刷新节拍里管控）
+            // 按钮初始态由统一管控给出
             RefreshActionButtonStates();
         }
 
         /// <summary>权限门控：激光头参数页仅管理员可见。</summary>
-        /// <remarks>隐藏≠禁用：非管理员同步禁用面板。保存入口再校验。</remarks>
         private void ApplyPermissionGate()
         {
             bool admin = PermissionLevel.IsAdmin(GlobalCommData.mOperateLevel);
@@ -150,7 +147,6 @@ namespace AdaWeldSystem.UIDesign.TabPage
         /// <summary>切页二次校验：非管理员直接选中管理员专属页</summary>
         /// <param name="sender">发送方。</param>
         /// <param name="e">事件参数。</param>
-        /// <remarks>可见性只在显示层，切页时再校验并回退。</remarks>
         private void tabsSystem_SelectedIndexChanged(object sender, EventArgs e)
         {
             if (PermissionLevel.IsAdmin(GlobalCommData.mOperateLevel)) return;
@@ -162,7 +158,7 @@ namespace AdaWeldSystem.UIDesign.TabPage
         }
 
         /// <summary>写权限二次校验：管理员专属参数写入前必须过</summary>
-        /// <remarks>此关。</remarks>
+
         /// <param name="action">写入动作描述，用于提示。</param>
         /// <returns>true 表示允许写入。</returns>
         private bool EnsureAdminForWrite(string action)
@@ -252,7 +248,7 @@ namespace AdaWeldSystem.UIDesign.TabPage
         }
 
         /// <summary>构建轴表列定义</summary>
-        /// <remarks>Y 轴与 TA 共用，保证两表列结构完全一致</remarks>
+
         /// <returns>轴表列集合（每次调用新建，两个表各持一份实例）</returns>
         private static ColumnCollection CreateAxisColumns()
         {
@@ -352,15 +348,13 @@ namespace AdaWeldSystem.UIDesign.TabPage
             _tooltip.SetTip(btnOptMotorMoveTo, "LA 绝对移动到「移动目标」输入值");
             _tooltip.SetTip(btnOptGalvoEnable, "振镜使能/撤销使能切换（焊接中由摆幅自动控制，不可手动切换）");
 
-            // 自动刷新开关：TA / LA / 振镜 / 温度四区共用 timerRefresh，按区分控；初值以设计器为准
+            // 自动刷新开关：TA / LA / 振镜三区共用 timerRefresh，按区分控；初值以设计器为准
             swTARefresh.CheckedChanged += SwTARefresh_CheckedChanged;
             swLARefresh.CheckedChanged += SwLARefresh_CheckedChanged;
             swGalvoRefresh.CheckedChanged += SwGalvoRefresh_CheckedChanged;
-            swTempRefresh.CheckedChanged += SwTempRefresh_CheckedChanged;
             _taAutoRefresh = swTARefresh.Checked;
             _laAutoRefresh = swLARefresh.Checked;
             _galvoAutoRefresh = swGalvoRefresh.Checked;
-            _tempAutoRefresh = swTempRefresh.Checked;
 
             timerRefresh.Tick += TimerRefresh_Tick;
             timerRefresh.Interval = FlowTimeoutSettings.UiRefreshMs;   // 30Hz 刷屏默认 33ms
@@ -371,8 +365,6 @@ namespace AdaWeldSystem.UIDesign.TabPage
         #region 数据加载
 
         /// <summary>跟踪页轴表只渲染 Y 向电机轴。</summary>
-        /// <remarks>重建行时按轴名保留用户已填的步距与目标。
-        /// 否则刷新或编辑返回后填值会被清零。</remarks>
         private void LoadAxisRows()
         {
             // 先快照旧行的用户输入，重建行时回填
@@ -410,7 +402,7 @@ namespace AdaWeldSystem.UIDesign.TabPage
 
         /// <summary>判断轴是否属于跟踪系统（Y 向电机轴）：轴名命中任</summary>
         /// <param name="axis">轴对象。</param>
-        /// <remarks>一关键字即纳入。</remarks>
+
         /// <returns>是否成功。</returns>
         private static bool IsTraceAxis(DeltaAxisConfig axis)
         {
@@ -424,8 +416,6 @@ namespace AdaWeldSystem.UIDesign.TabPage
         }
 
         /// <summary>重建 TA（送丝力矩电机）单行；保留用户已填的「步距 / 移</summary>
-        /// <remarks>与 Y 轴表同构：同一 AxisRow 模型、同一 FillAxisRuntime 刷新入口；
-        /// 参数按钮点击走 TA 专用回零参数弹窗（数据源 ROOT/TA_HOME）。 动目标」</remarks>
         private void LoadTaAxisRow()
         {
             AxisRow previous = _taRows.Count > 0 ? _taRows[0] : null;
@@ -481,7 +471,7 @@ namespace AdaWeldSystem.UIDesign.TabPage
             ApplyAxisReadout(row, CollectAxisReadout(row.Config));
         }
 
-        /// <summary>采集单轴只读快照（可在后台线程执行，⛔ 不碰控件）。</summary>
+        /// <summary>采集单轴只读快照</summary>
         private static AxisReadoutSnapshot CollectAxisReadout(DeltaAxisConfig config)
         {
             AxisReadoutSnapshot snapshot = new AxisReadoutSnapshot();
@@ -529,7 +519,6 @@ namespace AdaWeldSystem.UIDesign.TabPage
         }
 
         /// <summary>把单轴快照贴到行模型。</summary>
-        /// <remarks>行模型无变更通知，由调用方重绑表格重绘；必须在 UI 线程执行。</remarks>
         private void ApplyAxisReadout(AxisRow row, AxisReadoutSnapshot snapshot)
         {
             if (row == null || snapshot == null) return;
@@ -612,7 +601,7 @@ namespace AdaWeldSystem.UIDesign.TabPage
         }
 
         /// <summary>TA 表参数按钮：打开扭矩回零参数弹窗</summary>
-        /// <remarks>数据源与保存入口均为 MontionManager</remarks>
+
         /// <param name="sender">发送方</param>
         /// <param name="e">表格按钮事件（e.Record 为 TA 行）</param>
         private void TableTa_CellButtonClick(object sender, AntdUI.TableButtonEventArgs e)
@@ -622,11 +611,6 @@ namespace AdaWeldSystem.UIDesign.TabPage
         }
 
         /// <summary>TA 轴参数弹窗（通用区 + TA 特有区两段）。</summary>
-        /// <remarks>通用区读写 <c>ROOT/AXES/AXIS</c>，特有区读写 <c>ROOT/TA_HOME</c>。
-        /// 保存时按各自落点回写。
-        /// ⛔ 同一字段不存两份，AXIS 的 HOME_* 只是派生镜像。
-        /// 保存统一走 <see cref="MontionManager.SaveTaHomeConfig"/>。
-        /// 生效时机为下次回零。</remarks>
         private void OpenTaAxisEditor()
         {
             if (!EnsureAdminForWrite("修改 TA 轴参数")) return;
@@ -640,8 +624,8 @@ namespace AdaWeldSystem.UIDesign.TabPage
 
             using (AxisConfigForm editor = new AxisConfigForm(taCfg, taHome))
             {
-                // 界面值在弹窗「确定」时已写回配置实例（控件存活期），此处只负责落盘与推回运行期。
-                // ⛔ 不要用 Modal.open 的返回值判定：弹窗关闭后内容控件已被 AntdUI 销毁。
+                // 配置已写回，此处负责落盘推回
+                // 不用弹窗返回值判定
                 AntdUI.Modal.open(new AntdUI.Modal.Config(this.FindForm(), "TA 轴参数 - " + taCfg.AxisName, editor, AntdUI.TType.Info) { CloseIcon = true, BtnHeight = 0 });
                 if (!editor.Committed) return;
                 if (!MontionManager.Instance.SaveTaHomeConfig(taHome))
@@ -659,8 +643,8 @@ namespace AdaWeldSystem.UIDesign.TabPage
 
         #region 固定按钮（2026-10-19 自表格迁出；ADR-057 控制统一走 MontionManager · 本页固定轴=跟踪轴）
 
-        /// <summary>跟踪轴手动操作下发（不弹窗；提示统一由 UI 线程按执行消息给出）</summary>
-        /// <remarks>UI 只给「角色 + 动作」，轴对象不出 MontionManager</remarks>
+        /// <summary>跟踪轴手动操作下发</summary>
+
         /// <param name="operation">操作种类</param>
         /// <param name="value">MoveTo 目标 / StepMove 位移（其余传 0）</param>
         /// <param name="dir">JogStart 方向（1=负向 0=正向）</param>
@@ -677,7 +661,7 @@ namespace AdaWeldSystem.UIDesign.TabPage
                 out axisName, out servoOn, out commandOk, out rejectReason);
         }
 
-        /// <summary>由手动操作下发结果构造执行结果（后台线程用；⛔ 不弹窗）。</summary>
+        /// <summary>由手动操作下发结果构造执行结果</summary>
         /// <param name="gatePassed">前置是否通过</param>
         /// <param name="rejectReason">前置拒绝原因</param>
         /// <param name="commandOk">指令下发结果</param>
@@ -708,7 +692,6 @@ namespace AdaWeldSystem.UIDesign.TabPage
         }
 
         /// <summary>固定按钮取值行（本页轴表唯一跟踪轴行：步距/移</summary>
-        /// <remarks>动目标来源）。</remarks>
         private AxisRow GetFixedRow()
         {
             return _axisRows.Count > 0 ? _axisRows[0] : null;
@@ -726,7 +709,7 @@ namespace AdaWeldSystem.UIDesign.TabPage
 
         private void FixedHome_Click(object sender, EventArgs e)
         {
-            // 回零统一入口：与复位回零同一实现 ⇒ 手动回零同样置「已回零」结论，不区分来源
+            // 手动回零走统一入口
             StartManualOperation(ManualOpGroup.Trace, "跟踪轴回零", () =>
             {
                 bool ok = MotionControlWorkflow.Instance.TryHomeAxisWithWait(TraceAxisKeys, "跟踪轴回零",
@@ -738,7 +721,7 @@ namespace AdaWeldSystem.UIDesign.TabPage
 
         private void FixedStop_Click(object sender, EventArgs e)
         {
-            // 停止是安全操作：同步立即下发；⛔ 只下发一次（点动状态仅复位，不再叠加第二次停止）
+            // 停止同步下发一次
             ResetJogFlag();
             if (!TryTraceOperation(AxisManualOperation.Stop, 0, 0,
                     out string axisName, out _, out _, out string rejectReason))
@@ -782,7 +765,7 @@ namespace AdaWeldSystem.UIDesign.TabPage
             double delta = sign * ParseStep(row, 1.0);
             StartManualOperation(ManualOpGroup.Trace, "跟踪轴相对移动 " + delta.ToString("F3", CultureInfo.InvariantCulture), () =>
             {
-                // 相对步进统一换算为绝对目标，走同一绝对移动入口（等待到位在后台线程）
+                // 相对步进换算为绝对移动
                 if (!TryGetAxisPositionMm(TraceAxisKeys, out double currentMm, out string axisName))
                 {
                     return new ManualOpOutcome { Ok = false, Reason = "轴未装配或位置读取失败" };
@@ -806,10 +789,9 @@ namespace AdaWeldSystem.UIDesign.TabPage
 
         /// <summary>按下固定负向/正向按钮：以轴配置速度剖面启动</summary>
         /// <param name="dir">目录路径。</param>
-        /// <remarks>连续点动（dir 1=负向, 0=正向）。</remarks>
         private void FixedJog(ushort dir)
         {
-            // 点动不进「后台执行」模型：按钮须保持可接收 MouseUp，否则点动停不掉
+            // 点动按钮须保持接收松开事件
             if (IsGroupBusy(ManualOpGroup.Trace))
             {
                 Warn("上一条操作尚未完成，请等待完成后再点动");
@@ -835,7 +817,6 @@ namespace AdaWeldSystem.UIDesign.TabPage
         /// <summary>鼠标移出按钮的安全兜底：若仍在点动则停止（应</summary>
         /// <param name="sender">发送方。</param>
         /// <param name="e">事件参数。</param>
-        /// <remarks>对按住拖离后在别处释放）。</remarks>
         private void FixedJog_MouseLeave(object sender, EventArgs e)
         {
             if (_jogging) StopJog();
@@ -858,7 +839,7 @@ namespace AdaWeldSystem.UIDesign.TabPage
             _jogging = false;
         }
 
-        /// <summary>只复位点动标志（不下发指令；停止指令由停止键统一下发一次）。</summary>
+        /// <summary>只复位点动标志</summary>
         private void ResetJogFlag()
         {
             _jogging = false;
@@ -869,8 +850,6 @@ namespace AdaWeldSystem.UIDesign.TabPage
         #region 手动操作执行器（后台执行 + 执行消息 + 防呆）
 
         /// <summary>手动操作分组（每台电机一组，互不相干）</summary>
-        /// <remarks>2026-11-17：⛔ 一个电机的操作只影响它自己那组按钮 ——
-        /// Y 轴回零不得让 TA / LA / GA 的按钮一起变灰。</remarks>
         private enum ManualOpGroup
         {
             /// <summary>Y 跟踪轴</summary>
@@ -883,7 +862,7 @@ namespace AdaWeldSystem.UIDesign.TabPage
             Galvo
         }
 
-        /// <summary>各电机的手动操作在途标志（按组隔离，防呆：同组不重复下发）</summary>
+        /// <summary>各电机的手动操作在途标志</summary>
         private volatile bool _traceOpBusy;
         private volatile bool _taOpBusy;
         private volatile bool _laOpBusy;
@@ -917,12 +896,10 @@ namespace AdaWeldSystem.UIDesign.TabPage
             }
         }
 
-        /// <summary>振镜从站就绪且无报警（显示刷新采集的事实；管控统一走 RefreshActionButtonStates）</summary>
+        /// <summary>振镜从站就绪且无报警</summary>
         private bool _galvoStationReady = true;
 
         /// <summary>手动动作是否允许（自动焊接流程在跑 ⇒ 禁）。</summary>
-        /// <remarks>⛔ 构造期不读 <c>DeviceControlWork.Instance</c>（会触发主控单例初始化）；
-        /// 本值由焊接状态事件驱动刷新，初始为「允许」。真正的拒绝主防线在流程层门禁。</remarks>
         private bool _manualActionAllowed = true;
 
         /// <summary>手动操作执行结果（后台线程产出，UI 线程消费）</summary>
@@ -938,14 +915,10 @@ namespace AdaWeldSystem.UIDesign.TabPage
             public Action<bool> UiCallback;
         }
 
-        /// <summary>
-        /// 启动一次手动操作：控件立即置不可用（代表执行中），后台线程执行，
-        /// 完成后经执行消息回 UI 线程恢复控件并刷新显示。
-        /// </summary>
+        /// <summary>启动一次手动操作：控件立即置不可用</summary>
         /// <param name="group">电机组（防呆与按钮禁用只在本组内生效）</param>
         /// <param name="actionLabel">动作名（日志与提示用）</param>
         /// <param name="exec">后台执行体，返回执行结果</param>
-        /// <remarks>⛔ 后台线程禁止弹模态框（阻塞工作流线程）；提示统一由 UI 线程收到执行消息后给出。</remarks>
         private void StartManualOperation(ManualOpGroup group, string actionLabel, Func<ManualOpOutcome> exec)
         {
             if (IsGroupBusy(group))
@@ -960,7 +933,7 @@ namespace AdaWeldSystem.UIDesign.TabPage
             }
             SetGroupBusy(group, true);
             RefreshActionButtonStates();
-            // 界面按钮属手动动作，置手动模式（UI 线程执行，避免后台线程改运行模式）
+            // 界面按钮切换手动模式
             MotionControlWorkflow.Instance.SetRunMode(WorkflowRunMode.Manual);
             Thread worker = new Thread(() =>
             {
@@ -989,7 +962,7 @@ namespace AdaWeldSystem.UIDesign.TabPage
             worker.Start();
         }
 
-        /// <summary>手动操作完成（UI 线程）：恢复按钮可用性 + 刷新显示 + 写日志 + 提示</summary>
+        /// <summary>手动操作完成（UI 线程）</summary>
         /// <param name="group">电机组</param>
         /// <param name="actionLabel">动作名</param>
         /// <param name="outcome">执行结果</param>
@@ -1018,12 +991,10 @@ namespace AdaWeldSystem.UIDesign.TabPage
             RefreshLaserHeadRuntime();
         }
 
-        /// <summary>手动操作按钮统一管控（单一控制函数）：执行中不可用；自动焊接中禁手动；停止键永远可用。</summary>
-        /// <remarks>⛔ 刷新线程不参与按钮管控：可用性只由本方法在事件与操作完成时统一计算。
-        /// ⛔ 按电机组隔离：一个电机的操作只禁用它自己那组按钮，⛔ 不牵连其它电机。</remarks>
+        /// <summary>手动操作按钮统一管控（单一控制函数）</summary>
         private void RefreshActionButtonStates()
         {
-            // 自动焊接流程进行中 ⇒ 全部手动动作不可用（手动与生产流程互斥）
+            // 焊接中禁用全部手动动作
             bool manualAllowed = _manualActionAllowed;
             bool traceIdle = manualAllowed && !IsGroupBusy(ManualOpGroup.Trace);
             bool taIdle = manualAllowed && !IsGroupBusy(ManualOpGroup.Ta);
@@ -1050,7 +1021,7 @@ namespace AdaWeldSystem.UIDesign.TabPage
             SetControlEnabled(btnOptMotorMoveTo, laIdle);
             SetControlEnabled(btnOptGalvoEnable, galvoIdle && _galvoStationReady);
             SetControlEnabled(btnOptGalvoHome, galvoIdle);
-            // 停止键不参与禁用：安全操作必须随时可用（可中断在途点动与运动）
+            // 停止键始终可用
             SetControlEnabled(StopBtn, true);
             SetControlEnabled(TaStopBtn, true);
         }
@@ -1065,12 +1036,10 @@ namespace AdaWeldSystem.UIDesign.TabPage
             control.Enabled = value;
         }
 
-        /// <summary>刷新激光头区显示信息（温度 / 振镜 / 对焦电机）。</summary>
-        /// <remarks>⛔ 只贴显示文本，不做按钮管控（管控见 RefreshActionButtonStates）。</remarks>
+        /// <summary>刷新激光头区显示信息（振镜 / 对焦电机）。</summary>
         private void RefreshLaserHeadRuntime()
         {
             if (IsDisposed || Disposing) return;
-            RefreshTemperatureValues();
             RefreshGalvoStatus();
             RefreshLaMotorStatus();
         }
@@ -1101,8 +1070,8 @@ namespace AdaWeldSystem.UIDesign.TabPage
             if (row.Config == null) return;
             using (AxisConfigForm editor = new AxisConfigForm(row.Config))
             {
-                // 界面值在弹窗「确定」时已写回配置实例（控件存活期），此处只负责落盘。
-                // ⛔ 不要用 Modal.open 的返回值判定：弹窗关闭后内容控件已被 AntdUI 销毁。
+                // 配置已写回，此处只负责落盘
+                // 不用弹窗返回值判定
                 AntdUI.Modal.open(new AntdUI.Modal.Config(this.FindForm(), "轴参数 - " + row.Config.AxisName, editor, AntdUI.TType.Info) { CloseIcon = true, BtnHeight = 0 });
                 if (!editor.Committed) return;
                 try
@@ -1123,8 +1092,7 @@ namespace AdaWeldSystem.UIDesign.TabPage
 
         #region 跟踪系统参数：轨迹点设定
 
-        /// <summary>轨迹点设定区：按点过滤 / 方向平滑 / CSP 输出 / 折返监测 </summary>
-        /// <remarks>分组回填。</remarks>
+        /// <summary>轨迹点设定区：按点过滤 / 方向平滑 / CSP 输出 / 折返监测</summary>
         private void LoadAlgoThreshOnForm()
         {
             var cfg = WeldParamManager.Instance.AlgorithmsConfig;
@@ -1158,19 +1126,21 @@ namespace AdaWeldSystem.UIDesign.TabPage
             selParamMono.SelectedIndex = cfg.EnableMonotonicConstraint ? 0 : 1;
         }
 
-        /// <summary>轨迹跟踪参数设置页：线激光标定中心 Y/Z + 示教 Y 轴锁</summary>
-        /// <remarks>定坐标（LASER_CALIBRATION，XML）。</remarks>
+        /// <summary>轨迹跟踪参数设置页：标定角度 + 跟踪几何 4 项。</summary>
         private void LoadLaserCalibOnForm()
         {
-            WeldAlgorithmsConfig cfg = WeldParamManager.Instance.AlgorithmsConfig;
+            WeldParamConfig cfg = WeldParamManager.Instance.AlgorithmsConfig;
             if (cfg == null) return;
 
-            // 标定中心与示教锁已迁工艺设置页
             txtCalibAngle.Text = cfg.LaserToHorizontalAngleDeg.ToString("F3");
+            // 标定项存于几何段
+            txtGeoAxisPerLaser.Text = cfg.AxisMmPerLaserMm.ToString("F3");
+            selGeoGuideSign.SelectedIndex = cfg.GuideSign >= 0 ? 0 : 1;
+            txtGeoLeadDistance.Text = cfg.LeadDistanceMm.ToString("F3");
+            txtGeoRobotYGain.Text = cfg.RobotYGain.ToString("F3");
         }
 
         /// <summary>回填「流程等待超时」区</summary>
-        /// <remarks>流程等待六项 + 设备侧等待八项（含线激光三项）。</remarks>
         private void LoadTimeoutOnForm()
         {
             var cfg = LineLaserManager.Instance.Config;
@@ -1205,25 +1175,22 @@ namespace AdaWeldSystem.UIDesign.TabPage
         /// <summary>读取本地参数：配置文件→UI 全量回填（轨迹点设定 + 线</summary>
         /// <param name="sender">发送方。</param>
         /// <param name="e">事件参数。</param>
-        /// <remarks>激光标定 + 等待超时）。</remarks>
         private void BtnReadLocal_Click(object sender, EventArgs e)
         {
-            WeldParamManager.Instance.LoadAlgorithmsConfig();
+            WeldParamManager.Instance.LoadAlgorithmsZone(WeldParamConfig.AlgorithmsZone.System);
             LineLaserManager.Instance.LoadConfig();
             LoadAlgoThreshOnForm();
             LoadLaserCalibOnForm();
             LoadTimeoutOnForm();
-            LoadProcessEnableOnForm();
             AntdUI.Message.info(this.FindForm(), "已读取本地参数");
         }
 
         /// <summary>修改应用参数：UI→内存配置（不落盘；「保存参数」按钮再</summary>
         /// <param name="sender">发送方。</param>
         /// <param name="e">事件参数。</param>
-        /// <remarks>写入本地）。</remarks>
         private void BtnApplyParams_Click(object sender, EventArgs e)
         {
-            WeldAlgorithmsConfig cfg = WeldParamManager.Instance.AlgorithmsConfig;
+            WeldParamConfig cfg = WeldParamManager.Instance.AlgorithmsConfig;
             if (cfg == null) return;
 
             // 轨迹点设定 4 组（按点过滤 / 方向平滑 / CSP 输出 / 折返监测）
@@ -1256,6 +1223,12 @@ namespace AdaWeldSystem.UIDesign.TabPage
 
             // 线激光标定角度
             cfg.LaserToHorizontalAngleDeg = ParseCalibDouble(txtCalibAngle, cfg.LaserToHorizontalAngleDeg);
+
+            // 标定项存于几何段
+            cfg.AxisMmPerLaserMm = ParseCalibDouble(txtGeoAxisPerLaser, cfg.AxisMmPerLaserMm);
+            cfg.GuideSign = selGeoGuideSign.SelectedIndex == 0 ? 1 : -1;
+            cfg.LeadDistanceMm = ParseCalibDouble(txtGeoLeadDistance, cfg.LeadDistanceMm);
+            cfg.RobotYGain = ParseCalibDouble(txtGeoRobotYGain, cfg.RobotYGain);
 
             // 等待超时三项（LineLaserConfig 内存对象，随「保存参数」一并落盘）
             var ll = LineLaserManager.Instance.Config;
@@ -1291,10 +1264,9 @@ namespace AdaWeldSystem.UIDesign.TabPage
         /// <summary>保存参数至本地：内存→文件（①System 区）。</summary>
         /// <param name="sender">发送方。</param>
         /// <param name="e">事件参数。</param>
-        /// <remarks>落盘的是已应用的内存配置，须先点「修改参数」。</remarks>
         private void BtnSaveLocal_Click(object sender, EventArgs e)
         {
-            WeldParamManager.Instance.SaveAlgorithmsZone(WeldAlgorithmsConfig.AlgorithmsZone.System);
+            WeldParamManager.Instance.SaveAlgorithmsZone(WeldParamConfig.AlgorithmsZone.System);
             MontionManager.Instance.ApplyFlowTimeouts();   // 流程超时：校验 → 发布运行期快照 → 落盘
             LineLaserManager.Instance.SaveConfig();
             AntdUI.Message.success(this.FindForm(), "参数已保存至本地");
@@ -1303,7 +1275,7 @@ namespace AdaWeldSystem.UIDesign.TabPage
         #endregion
 
         /// <summary>解析标定输入控件的 double 值：校验失败回退原值（复用</summary>
-        /// <remarks>本页 TryReadDouble，与工艺设置页同一口径）。</remarks>
+
         /// <returns>计算结果。</returns>
         private static double ParseCalibDouble(AntdUI.Input box, double fallback)
         {
@@ -1311,7 +1283,7 @@ namespace AdaWeldSystem.UIDesign.TabPage
         }
 
         /// <summary>解析整型输入控件的数值：校验失败回退原值（复</summary>
-        /// <remarks>用本页 TryReadInt，与工艺设置页同一口径）。</remarks>
+
         /// <returns>结果码。</returns>
         private static int ParseInt(AntdUI.Input box, int fallback)
         {
@@ -1343,7 +1315,7 @@ namespace AdaWeldSystem.UIDesign.TabPage
             }
         }
 
-        /// <summary>写回 5 个工艺启用开关并落盘（快捷区）。</summary>
+        /// <summary>写回 5 个工艺启用开关并落盘（②′工艺启用管理区）。</summary>
         private void SaveProcessEnable()
         {
             var cfg = WeldParamManager.Instance.AlgorithmsConfig;
@@ -1355,7 +1327,7 @@ namespace AdaWeldSystem.UIDesign.TabPage
             cfg.EnableWireAlign = swEnableWireAlign.Checked;
             cfg.EnableTempCtrl = swEnableTempCtrl.Checked;
 
-            WeldParamManager.Instance.SaveAlgorithmsZone(WeldAlgorithmsConfig.AlgorithmsZone.Quick);
+            WeldParamManager.Instance.SaveAlgorithmsZone(WeldParamConfig.AlgorithmsZone.Flow);
             GlobalCommData.ShowLog("工艺设置", "工艺启用管理已保存", MessageLevel.Info);
             AntdUI.Message.success(System.Windows.Forms.Form.ActiveForm, "工艺启用管理已保存");
         }
@@ -1363,16 +1335,10 @@ namespace AdaWeldSystem.UIDesign.TabPage
         /// <summary>振镜摆动开关：工艺摆动的唯一 UI 入口。</summary>
         /// <param name="sender">发送方。</param>
         /// <param name="e">事件参数。</param>
-        /// <remarks>同时是焊缝宽度来源：开=实测，关=手动宽度；
-        /// 切换后重算光斑表，硬件使能归系统设置页。</remarks>
         private void swEnableGalvoWeaveQuick_CheckedChanged(object sender, AntdUI.BoolEventArgs e)
         {
             if (_loadingProcessEnable) return;
             SaveProcessEnable();
-            if (WeldParamManager.Instance.CurrentAutoParam != null)
-            {
-                WeldParamManager.Instance.RefreshSpotWidthByGain();
-            }
         }
 
         /// <summary>焊缝跟踪启用开关：勾选即生效并落盘。</summary>
@@ -1431,6 +1397,7 @@ namespace AdaWeldSystem.UIDesign.TabPage
                 cmbFreq.SelectedIndex = idx;
             else
                 cmbFreq.SelectedIndex = 0;
+            numPreWorkStartX.Value = (decimal)sc.SimPreWorkStartXmm;
         }
 
         /// <summary>线激光数据频率 → 下拉索引（默认 30Hz）。</summary>
@@ -1467,13 +1434,13 @@ namespace AdaWeldSystem.UIDesign.TabPage
             AntdUI.Message.success(System.Windows.Forms.Form.ActiveForm, "模拟参数已保存");
         }
 
-        /// <summary>将界面线激光数据频率同步到 DeviceControlWork（不含保存提示和</summary>
-        /// <remarks>持久化）。</remarks>
+        /// <summary>将界面模拟参数同步到 DeviceControlWork（不含保存提示和</summary>
         private void SyncSimParamsToController()
         {
             int idx = cmbFreq.SelectedIndex;
             if (idx >= 0)
                 DeviceControlWork.Instance.SimLaserFrequencyHz = IndexToFrequency(idx);
+            DeviceControlWork.Instance.SimPreWorkStartXmm = (double)numPreWorkStartX.Value;
         }
 
         private void BtnStartSim_Click(object sender, EventArgs e)
@@ -1522,36 +1489,13 @@ namespace AdaWeldSystem.UIDesign.TabPage
             LineLaserWorkflow.Instance.SetRunMode(WorkflowRunMode.Manual);
             MotionControlWorkflow.Instance.SetRunMode(WorkflowRunMode.Manual);
 
-            var llState = LineLaserWorkflow.Instance.WeldStatus;
-            if (llState != SubDeviceWeldStatus.Standby)
-            {
-                try { DeviceControlWork.Instance.ResetSimulationLineLaser(); }
-                catch (Exception ex)
-                {
-                    ShowSimErrorDialog("启动前复位工作流失败: " + ex.Message);
-                }
-            }
-
-            if (!_simError)
-            {
-                try { DeviceControlWork.Instance.StartSimulationLineLaser(); }
-                catch (Exception ex) { ShowSimErrorDialog("线激光流程启动失败: " + ex.Message); }
-            }
-
-            if (!_simError)
-            {
-                try { MotionControlWorkflow.Instance.Start(); }
-                catch (Exception ex)
-                {
-                    ShowSimErrorDialog(string.Format("V3跟踪工作流启动失败: {0}", ex.Message));
-                }
-            }
-
+            // 线激光/运控的启动改由 DeviceControlWork 复位完成后驱动：
+            // 模拟须先自复位（TA 回零 + Y 工作零位）才进 PreWork，
+            // 若此处立即 Start 会与复位链抢轴，导致 Y 未复位即回归标定位越界
             if (!_simError) SetSimButtonMode(SimButtonMode.Stop);
         }
 
         /// <summary>关闭模拟时反向停止三套流程（逐包 try/catch，忽略非运行</summary>
-        /// <remarks>态的异常）</remarks>
         private void StopSimulationFlows()
         {
             // 模拟停止属界面动作，置手动模式
@@ -1602,8 +1546,8 @@ namespace AdaWeldSystem.UIDesign.TabPage
                 return;
             }
 
-            // 焊接流程状态变化 ⇒ 重算手动动作可用性与按钮管控
-            // （振镜使能在焊接中禁手动切换；⛔ 构造期不读 DeviceControlWork 单例）
+            // 焊接态变化重算按钮可用性
+            // 构造期不读设备单例
             _manualActionAllowed = !DeviceControlWork.Instance.IsAutoWeldingRunning;
             RefreshActionButtonStates();
 
@@ -1630,7 +1574,7 @@ namespace AdaWeldSystem.UIDesign.TabPage
                 return;
             }
 
-            // 整机运行态变化 ⇒ 重算按钮可用性（⛔ 刷新节拍不做按钮管控）
+            // 运行态变化重算按钮可用性
             RefreshActionButtonStates();
 
             if (e.NewStatus != MainDeviceStatus.Alarm) return;
@@ -1643,7 +1587,6 @@ namespace AdaWeldSystem.UIDesign.TabPage
 
         /// <summary>模拟异常统一提示（需用户确认）：记录日志 + 在 UI 线程</summary>
         /// <param name="msg">消息内容。</param>
-        /// <remarks>弹出 Modal 错误对话框 + 按钮转红色「清理异常」。</remarks>
         private void ShowSimErrorDialog(string msg)
         {
             GlobalCommData.ShowLog("模拟流程", msg, MessageLevel.Error);
@@ -1663,7 +1606,6 @@ namespace AdaWeldSystem.UIDesign.TabPage
         }
 
         /// <summary>正常停止提示（无需确认）：记录日志 + 在 UI 线程弹出 Message 提</summary>
-        /// <remarks>示。</remarks>
         private void ShowSimStopMessage(string reason)
         {
             string tip = string.Format("模拟测试已停止：{0}", reason);
@@ -1675,7 +1617,6 @@ namespace AdaWeldSystem.UIDesign.TabPage
         }
 
         /// <summary>停止原因确认信息：汇总各流程/设备最终状态，给</summary>
-        /// <remarks>出「人话」式停止原因。</remarks>
         private void LogSimStopSummary(string reason)
         {
             var ll = LineLaserWorkflow.Instance.WeldStatus;
@@ -1690,7 +1631,6 @@ namespace AdaWeldSystem.UIDesign.TabPage
         }
 
         /// <summary>订阅线激光状态变更（贯穿整个模拟流程生命周</summary>
-        /// <remarks>期）。</remarks>
         private void SubscribeLineLaserEvents()
         {
             LineLaserWorkflow.Instance.WeldStatusChanged -= OnLineLaserStateChanged;
@@ -1704,7 +1644,6 @@ namespace AdaWeldSystem.UIDesign.TabPage
         }
 
         /// <summary>设置模拟流程按钮三态：开启 / 停止 / 清理异常（红色</summary>
-        /// <remarks>背景）。</remarks>
         private void SetSimButtonMode(SimButtonMode mode)
         {
             switch (mode)
@@ -1752,7 +1691,6 @@ namespace AdaWeldSystem.UIDesign.TabPage
         }
 
         /// <summary>清理异常并复位：停止全部流程、复位线激光工作</summary>
-        /// <remarks>流、清除主设备报警、复位按钮。</remarks>
         private void CleanupSimError()
         {
             UnsubscribeLineLaserEvents();
@@ -1815,9 +1753,6 @@ namespace AdaWeldSystem.UIDesign.TabPage
 
         #region 激光头系统参数（四区：温度 / 振镜 / TA-LA / 光丝对中标定曲线）
 
-        /// <summary>温度自动刷新开关（Switch；与轴表共用 timerRefresh，不新增计时器）。</summary>
-        private bool _tempAutoRefresh;
-
         /// <summary>振镜自动刷新开关（与轴表共用 timerRefresh，不新增计时器）。</summary>
         private bool _galvoAutoRefresh;
 
@@ -1830,7 +1765,7 @@ namespace AdaWeldSystem.UIDesign.TabPage
         /// <summary>程序回写刷新开关时抑制勾选事件。</summary>
         private bool _syncingRefreshSwitch;
 
-        /// <summary>轴读数签名（轴名 → 位置/使能/报警/最近指令）：用于判断表格是否需重绑。</summary>
+        /// <summary>轴读数签名（轴名 → 位置/使能/报警/最近指令）</summary>
         private readonly Dictionary<string, string> _axisReadoutSignatures = new Dictionary<string, string>();
 
         private bool _taJogging;
@@ -1845,7 +1780,7 @@ namespace AdaWeldSystem.UIDesign.TabPage
         private const int TraceTabIndex = 0;
 
         /// <summary>自动刷新开关前置校验：未连接时拒绝并回退。</summary>
-        /// <remarks>未连接则开关不可为 ON，否则名不副实。</remarks>
+
         /// <returns>true = 允许开启；false = 已拒绝并回退</returns>
         private bool AcceptRefreshSwitchOn(AntdUI.Switch toggle, string zoneName, Func<bool> zoneReady)
         {
@@ -1865,8 +1800,6 @@ namespace AdaWeldSystem.UIDesign.TabPage
         }
 
         /// <summary>重算五个刷新开关的可用性。</summary>
-        /// <remarks>按设备粒度分别判定：轴表看运控初始化完成；焊接头三区（LA / 振镜 / 温度）看 LA 从站就绪；
-        /// TA 区看运控初始化完成且 TA 轴已装载。⛔ 就绪只解冻，不自动开启（默认关闭）。</remarks>
         private void ApplyRefreshSwitchGate()
         {
             if (IsDisposed || Disposing) return;
@@ -1877,7 +1810,6 @@ namespace AdaWeldSystem.UIDesign.TabPage
             GateRefreshSwitch(swTARefresh, ref _taAutoRefresh, taReady);
             GateRefreshSwitch(swLARefresh, ref _laAutoRefresh, laReady);
             GateRefreshSwitch(swGalvoRefresh, ref _galvoAutoRefresh, laReady);
-            GateRefreshSwitch(swTempRefresh, ref _tempAutoRefresh, laReady);
         }
 
         /// <summary>单开关门禁：就绪解冻，否则置灰。</summary>
@@ -1929,30 +1861,9 @@ namespace AdaWeldSystem.UIDesign.TabPage
             return IsMotionZoneReady() && IsTaAxisLoaded();
         }
 
-        /// <summary>温度自动刷新开关：只切换刷新节拍并立即刷新</summary>
-        /// <param name="sender">发送方。</param>
-        /// <param name="e">事件参数。</param>
-        /// <remarks>一次。</remarks>
-        private void SwTempRefresh_CheckedChanged(object sender, AntdUI.BoolEventArgs e)
-        {
-            if (_loadingLaserHead || _syncingRefreshSwitch) return;
-            if (swTempRefresh.Checked && !AcceptRefreshSwitchOn(swTempRefresh, "温度", IsLaZoneReady))
-            {
-                _tempAutoRefresh = false;
-                return;
-            }
-            _tempAutoRefresh = swTempRefresh.Checked;
-            if (_tempAutoRefresh)
-            {
-                RefreshTemperatureValues();
-            }
-            Log(_tempAutoRefresh ? "温度自动刷新已开启" : "温度自动刷新已关闭");
-        }
-
         /// <summary>振镜自动刷新开关：只切换刷新节拍并立即刷新</summary>
         /// <param name="sender">发送方。</param>
         /// <param name="e">事件参数。</param>
-        /// <remarks>一次。</remarks>
         private void SwGalvoRefresh_CheckedChanged(object sender, AntdUI.BoolEventArgs e)
         {
             if (_loadingLaserHead || _syncingRefreshSwitch) return;
@@ -1972,7 +1883,6 @@ namespace AdaWeldSystem.UIDesign.TabPage
         /// <summary>LA 对焦电机自动刷新开关：只切换刷新节拍并立即</summary>
         /// <param name="sender">发送方。</param>
         /// <param name="e">事件参数。</param>
-        /// <remarks>刷新一次。</remarks>
         private void SwLARefresh_CheckedChanged(object sender, AntdUI.BoolEventArgs e)
         {
             if (_loadingLaserHead || _syncingRefreshSwitch) return;
@@ -1992,7 +1902,6 @@ namespace AdaWeldSystem.UIDesign.TabPage
         /// <summary>TA 送丝力矩电机自动刷新开关：只切换刷新节拍并</summary>
         /// <param name="sender">发送方。</param>
         /// <param name="e">事件参数。</param>
-        /// <remarks>立即刷新一次。</remarks>
         private void SwTARefresh_CheckedChanged(object sender, AntdUI.BoolEventArgs e)
         {
             if (_loadingLaserHead || _syncingRefreshSwitch) return;
@@ -2012,7 +1921,6 @@ namespace AdaWeldSystem.UIDesign.TabPage
         /// <summary>读取参数：配置→界面，并读一次温压与电机状态。</summary>
         /// <param name="sender">发送方。</param>
         /// <param name="e">事件参数。</param>
-        /// <remarks>焊接头配置须先从文件重载，否则读到内存旧值。</remarks>
         private void BtnLhRead_Click(object sender, EventArgs e)
         {
             MontionManager motion = MontionManager.Instance;
@@ -2026,7 +1934,6 @@ namespace AdaWeldSystem.UIDesign.TabPage
             }
             LoadOpticsFromConfig();
             LoadTempFromConfig();
-            RefreshTemperatureValues();
             // 刷新振镜/LA/TA 电机状态（只读，每拍一次）
             RefreshGalvoStatus();
             RefreshLaMotorStatus();
@@ -2068,7 +1975,7 @@ namespace AdaWeldSystem.UIDesign.TabPage
                 WeldHeadConfig headCfg = motion?.WeldHeadConfig;
                 if (headCfg != null)
                 {
-                    GalvoParams galvo = headCfg.DefaultGalvo;
+                    GalvoGlobalParams galvo = headCfg.DefaultGalvo;
                     txtOptGalvoAngle.Text = galvo.Angle.ToString();
                     txtOptGalvoStartAngle.Text = galvo.StartAngle.ToString("0.0", CultureInfo.InvariantCulture);
                     txtOptGalvoEndAngle.Text = galvo.EndAngle.ToString("0.0", CultureInfo.InvariantCulture);
@@ -2133,71 +2040,7 @@ namespace AdaWeldSystem.UIDesign.TabPage
                 : string.Format("曲线A {0} 点 / 曲线B {1} 点", curve.PointsA.Count, curve.PointsB.Count);
         }
 
-        /// <summary>刷新温度/气压实时值。</summary>
-        /// <remarks>受 swTempRefresh 开关控制，只读。</remarks>
-        private void RefreshTemperatureValues()
-        {
-            ApplyTemperature(CollectTemperature());
-        }
-
-        /// <summary>采集温度/气压快照（只读，可在后台线程执行）。</summary>
-        private static TemperatureSnapshot CollectTemperature()
-        {
-            LaserHeadTemperatureData temp = LaserWeldHeadWorkflow.Instance.LastTemperature;
-            HeadAlarmStatus alarm = LaserWeldHeadWorkflow.Instance.LastAlarmStatus;
-
-            MontionManager motion = MontionManager.Instance;
-            WeldHeadSlaveDevice head = motion?.WeldHead;
-            if (temp == null && head != null && head.IsInitialized)
-            {
-                temp = head.CurrentTemperature;
-                alarm = head.CurrentAlarmStatus;
-            }
-
-            TemperatureSnapshot snapshot = new TemperatureSnapshot();
-            if (temp == null)
-            {
-                snapshot.Lens = "—";
-                snapshot.Ambient = "—";
-                snapshot.Rise = "—";
-                snapshot.Pressure = "—";
-            }
-            else
-            {
-                snapshot.Lens = temp.ProtectiveLensTemp.ToString("0.0", CultureInfo.InvariantCulture);
-                snapshot.Ambient = temp.ProtectiveLensAmbientTemp.ToString("0.0", CultureInfo.InvariantCulture);
-                snapshot.Rise = temp.ProtectiveLensRiseTemp.ToString("0.0", CultureInfo.InvariantCulture);
-                snapshot.Pressure = temp.CuttingAirPressure.ToString("0.00", CultureInfo.InvariantCulture);
-            }
-
-            if (alarm == null)
-            {
-                snapshot.State = "报警状态：—";
-            }
-            else if (!alarm.HasAlarm)
-            {
-                snapshot.State = "报警状态：正常";
-            }
-            else
-            {
-                snapshot.State = "报警状态：" + alarm.Describe();
-            }
-            return snapshot;
-        }
-
-        /// <summary>把温度快照贴到标签（UI 线程）。</summary>
-        private void ApplyTemperature(TemperatureSnapshot snapshot)
-        {
-            if (snapshot == null) return;
-            lblTempLensValue.Text = snapshot.Lens;
-            lblTempAmbientValue.Text = snapshot.Ambient;
-            lblTempRiseValue.Text = snapshot.Rise;
-            lblTempPressureValue.Text = snapshot.Pressure;
-            lblTempState.Text = snapshot.State;
-        }
-
         /// <summary>刷新振镜使能与驱动报警。</summary>
-        /// <remarks>源 = 焊接头 0x6010 回读，只读。</remarks>
         private void RefreshGalvoStatus()
         {
             ApplyGalvo(CollectGalvo());
@@ -2228,7 +2071,7 @@ namespace AdaWeldSystem.UIDesign.TabPage
 
             snapshot.Enable = alarm.GalvoOn ? "已使能" : "未使能";
             snapshot.Driver = alarm.DriverAlarm ? "报警" : "正常";
-            // 从站就绪且无报警；焊接中禁手动切换由管控函数直接读整机焊接态判定
+            // 从站就绪且无报警时允许切换
             snapshot.StationReady = !alarm.DriverAlarm;
             return snapshot;
         }
@@ -2239,14 +2082,13 @@ namespace AdaWeldSystem.UIDesign.TabPage
             if (snapshot == null) return;
             lblOptGalvoEnableValue.Text = snapshot.Enable;
             lblOptGalvoDriverValue.Text = snapshot.Driver;
-            // ⛔ 刷新节拍只记录显示事实，不直接管控按钮；按钮可用性由 RefreshActionButtonStates 统一算
+            // 按钮管控由统一函数负责
             _galvoStationReady = snapshot.StationReady;
         }
 
         /// <summary>振镜使能切换：焊接中禁止手动切换。</summary>
         /// <param name="sender">发送方。</param>
         /// <param name="e">事件参数。</param>
-        /// <remarks>只翻转使能位，保留其余振镜参数。</remarks>
         private void BtnOptGalvoEnable_Click(object sender, EventArgs e)
         {
             if (!EnsureAdminForWrite("切换振镜使能")) return;
@@ -2283,7 +2125,6 @@ namespace AdaWeldSystem.UIDesign.TabPage
         }
 
         /// <summary>采集 LA 对焦电机快照。</summary>
-        /// <remarks>焊接头从站读，可在后台线程执行。</remarks>
         private static LaMotorSnapshot CollectLaMotor()
         {
             LaMotorSnapshot snapshot = new LaMotorSnapshot();
@@ -2326,7 +2167,7 @@ namespace AdaWeldSystem.UIDesign.TabPage
         }
 
         /// <summary>TA 轴手动操作统一入口（A-1）</summary>
-        /// <remarks>UI 只给「角色 + 动作」，轴对象不出工作流</remarks>
+
         /// <param name="operation">操作种类</param>
         /// <param name="value">MoveTo 目标 / StepMove 位移（其余传 0）</param>
         /// <param name="dir">JogStart 方向（1=负向 0=正向）</param>
@@ -2405,7 +2246,7 @@ namespace AdaWeldSystem.UIDesign.TabPage
                 Warn("焊接头配置不可用"); return false;
             }
 
-            GalvoParams galvo = headCfg.DefaultGalvo;
+            GalvoGlobalParams galvo = headCfg.DefaultGalvo;
             galvo.Angle = angle;
             galvo.StartAngle = startAngle;
             galvo.EndAngle = endAngle;
@@ -2437,13 +2278,13 @@ namespace AdaWeldSystem.UIDesign.TabPage
             }
 
             motion.SaveWeldHeadConfig();
-            // ⛔ 只存焊接头配置，不写 Preset 区，避免跨页副作用
+            // 只存焊接头配置
             DeltaMotionConfig cfg = GetConfig();
             if (cfg != null && cfg.WeldHeadSlave != null)
             {
                 // 启用开关随保存落盘，不即时下发
                 cfg.WeldHeadSlave.Enabled = swWeldHeadEnable.Checked;
-                // 节点号随保存落盘；⛔ 撞号不阻断整机，冲突设备由装配层跳过
+                // 节点撞号由装配层跳过
                 int nodeId = (int)numWeldHeadNode.Value;
                 if (nodeId < 0 || nodeId > ushort.MaxValue)
                 {
@@ -2467,17 +2308,22 @@ namespace AdaWeldSystem.UIDesign.TabPage
             }
             if (AlgorithmManager.Instance.WireFeed != null) AlgorithmManager.Instance.Save();
 
+            // 当前振镜图形档
+            WeldParamConfig algoCfg = WeldParamManager.Instance.AlgorithmsConfig;
+            WsgGalvoPattern galvoPattern = LaserWeldHeadWorkflow.ResolveGalvoPattern(algoCfg != null ? algoCfg.GalvoPattern : 0);
+
             WeldHeadSlaveDevice head = motion.WeldHead;
             if (head != null && head.IsInitialized)
             {
                 head.MotorPulsePerMm = headCfg.MotorPulsePerMm;
-                head.SetGalvoParams(headCfg.DefaultGalvo);
+                head.SetGalvoParams(headCfg.BuildGalvoParamsFor(galvoPattern));
                 head.TemperatureAlarmThreshold = headCfg.TempAlarmThreshold;   // 同步本机越阈判定阈值，否则改完要重连才生效
                 head.SetAlarmThresholds(headCfg.TempWarnThreshold, headCfg.TempAlarmThreshold,
                     headCfg.RiseWarnThreshold, headCfg.RiseAlarmThreshold,
                     headCfg.PressureAlarmThreshold, headCfg.PressureDelayMs);
             }
-            Log(string.Format("激光头参数已保存 振镜频率 {0}Hz", headCfg.DefaultGalvo.Frequency));
+            Log(string.Format("激光头参数已保存 振镜图形 {0} 频率 {1}Hz",
+                galvoPattern, headCfg.GetGalvoShape(galvoPattern).Frequency));
         }
 
         /// <summary>LA 对焦电机使能切换（Button，仅 Admin；当前状态由 lblOptMotorState 呈现）。</summary>
@@ -2604,7 +2450,7 @@ namespace AdaWeldSystem.UIDesign.TabPage
         /// <param name="e">事件参数。</param>
         private void TaStop_Click(object sender, EventArgs e)
         {
-            // 停止是安全操作：同步立即下发；⛔ 只下发一次（点动状态仅复位，不再叠加第二次停止）
+            // 停止同步下发一次
             ResetTaJogFlag();
             if (!TryTaOperation(AxisManualOperation.Stop, 0, 0,
                     out string axisName, out _, out _, out string rejectReason))
@@ -2618,7 +2464,7 @@ namespace AdaWeldSystem.UIDesign.TabPage
         private void TaHome_Click(object sender, EventArgs e)
         {
             if (!EnsureAdminForWrite("TA 回零")) return;
-            // 回零统一入口：与复位回零同一实现 ⇒ 手动回零同样置「已回零」结论，不区分来源
+            // 手动回零走统一入口
             StartManualOperation(ManualOpGroup.Ta, "TA 回零", () =>
             {
                 bool ok = MotionControlWorkflow.Instance.TryHomeAxisWithWait(MontionManager.TaAxisKeys, "TA 回零",
@@ -2629,7 +2475,7 @@ namespace AdaWeldSystem.UIDesign.TabPage
         }
 
         /// <summary>TA 绝对移动到「移动目标」</summary>
-        /// <remarks>与 Y 轴 FixedMoveTo 同实现，目标取 TA 表「移动目标」列</remarks>
+
         /// <param name="sender">发送方。</param>
         /// <param name="e">事件参数。</param>
         private void TaMoveTo_Click(object sender, EventArgs e)
@@ -2678,7 +2524,7 @@ namespace AdaWeldSystem.UIDesign.TabPage
             double delta = sign * step;
             StartManualOperation(ManualOpGroup.Ta, "TA 相对移动 " + delta.ToString("F3", CultureInfo.InvariantCulture), () =>
             {
-                // 相对步进统一换算为绝对目标，走同一绝对移动入口（等待到位在后台线程）
+                // 相对步进换算为绝对移动
                 if (!TryGetAxisPositionMm(MontionManager.TaAxisKeys, out double currentMm, out string axisName))
                 {
                     return new ManualOpOutcome { Ok = false, Reason = "轴未装配或位置读取失败" };
@@ -2702,7 +2548,7 @@ namespace AdaWeldSystem.UIDesign.TabPage
         private void StartTaJog(ushort dir)
         {
             if (!EnsureAdminForWrite("TA 点动")) return;
-            // 点动不进「后台执行」模型：按钮须保持可接收 MouseUp，否则点动停不掉
+            // 点动按钮须保持接收松开事件
             if (IsGroupBusy(ManualOpGroup.Ta))
             {
                 Warn("上一条操作尚未完成，请等待完成后再点动");
@@ -2736,7 +2582,7 @@ namespace AdaWeldSystem.UIDesign.TabPage
             _taJogging = false;
         }
 
-        /// <summary>只复位 TA 点动标志（不下发指令；停止指令由停止键统一下发一次）。</summary>
+        /// <summary>只复位 TA 点动标志</summary>
         private void ResetTaJogFlag()
         {
             _taJogging = false;
@@ -2770,7 +2616,6 @@ namespace AdaWeldSystem.UIDesign.TabPage
         /// <summary>TA/LA 曲线标定入口：选择 CSV/TSV 导入（曲线只读，导入即替换并</summary>
         /// <param name="sender">发送方。</param>
         /// <param name="e">事件参数。</param>
-        /// <remarks>落盘）。</remarks>
         private void BtnOptImportCurve_Click(object sender, EventArgs e)
         {
             if (!EnsureAdminForWrite("导入 TA/LA 曲线")) return;
@@ -2819,7 +2664,6 @@ namespace AdaWeldSystem.UIDesign.TabPage
         /// <summary>轨迹页轴表自动刷新开关：只切换刷新节拍并立</summary>
         /// <param name="sender">发送方。</param>
         /// <param name="e">事件参数。</param>
-        /// <remarks>即刷新一次（与四区同一套前置条件）。</remarks>
         private void SwAutoRefresh_CheckedChanged(object sender, AntdUI.BoolEventArgs e)
         {
             if (_syncingRefreshSwitch) return;
@@ -2837,8 +2681,7 @@ namespace AdaWeldSystem.UIDesign.TabPage
         }
 
         /// <summary>前置条件②：未切到本页只跳过刷新。</summary>
-        /// <remarks>开关状态原样保留。
-        /// ⛔ 不可并入前置条件①「运控已连接」，两者处置不同。</remarks>
+
         /// <returns>是否成功。</returns>
         private bool IsRefreshPageVisible()
         {
@@ -2849,7 +2692,6 @@ namespace AdaWeldSystem.UIDesign.TabPage
         /// <summary>运控连接态切换</summary>
         /// <param name="sender">发送方。</param>
         /// <param name="e">状态切换参数。</param>
-        /// <remarks>与初始化完成回调同走 ApplyRefreshSwitchGate 单入口；后台线程回调须封送到 UI 线程。</remarks>
         private void OnMotionStateSwitched(object sender, SubDeviceStateChangedEventArgs e)
         {
             if (IsDisposed || Disposing) return;
@@ -2863,7 +2705,6 @@ namespace AdaWeldSystem.UIDesign.TabPage
 
         /// <summary>整机初始化链结束（成功/失败均触发）</summary>
         /// <param name="allReady">是否全部模组就绪（门禁按各区状态重算）。</param>
-        /// <remarks>覆盖「初始化失败时连接态停留在 Disconnected、StateSwitched 不触发」的路径。</remarks>
         private void OnInitializationCompleted(bool allReady)
         {
             if (IsDisposed || Disposing) return;
@@ -2878,7 +2719,6 @@ namespace AdaWeldSystem.UIDesign.TabPage
         /// <summary>初始化汇总（成功 / 失败 / 跳过三态分开）</summary>
         /// <param name="sender">发送方。</param>
         /// <param name="e">汇总事件参数。</param>
-        /// <remarks>跳过不计入失败。只做 Debug 留痕，原因见模组跳过行。</remarks>
         private void OnInitializationSummaryReady(object sender, DeviceInitSummaryEventArgs e)
         {
             if (IsDisposed || Disposing) return;
@@ -2914,24 +2754,12 @@ namespace AdaWeldSystem.UIDesign.TabPage
             public bool Galvo;
             public bool La;
             public bool Ta;
-            public bool Temp;
             public List<DeltaAxisConfig> AxisConfigs;
             public DeltaAxisConfig TaConfig;
-            public TemperatureSnapshot Temperature;
             public GalvoSnapshot GalvoState;
             public LaMotorSnapshot LaMotor;
             public List<AxisReadoutSnapshot> AxisReadouts;
             public List<AxisReadoutSnapshot> TaReadouts;
-        }
-
-        /// <summary>温度/气压区快照。</summary>
-        private sealed class TemperatureSnapshot
-        {
-            public string Lens;
-            public string Ambient;
-            public string Rise;
-            public string Pressure;
-            public string State;
         }
 
         /// <summary>振镜区快照。</summary>
@@ -2939,7 +2767,7 @@ namespace AdaWeldSystem.UIDesign.TabPage
         {
             public string Enable;
             public string Driver;
-            /// <summary>从站就绪且无报警（显示事实；⛔ 不含焊接中判定，焊接态由管控函数直接读）</summary>
+            /// <summary>从站就绪且无报警</summary>
             public bool StationReady;
         }
 
@@ -2964,13 +2792,7 @@ namespace AdaWeldSystem.UIDesign.TabPage
 
         #endregion
 
-        /// <summary>
-        /// 刷新节拍：只做显示信息刷新。
-        /// </summary>
-        /// <remarks>2026-11-17 改版：⛔ 去掉 Task.Run + BeginInvoke 跨线程刷新（卡顿与显示异常根因）——
-        /// 采集与贴值都在 UI 线程同步完成（只读硬件摘要，微秒级）。
-        /// ⛔ 本节拍不碰按钮管控与状态判定：按钮可用性统一走 <see cref="RefreshActionButtonStates"/>，
-        /// 由连机 / 初始化 / 操作完成等事件驱动。</remarks>
+        /// <summary>刷新节拍：只做显示信息刷新。</summary>
         private void TimerRefresh_Tick(object sender, EventArgs e)
         {
             if (IsDisposed || Disposing) return;
@@ -2979,7 +2801,7 @@ namespace AdaWeldSystem.UIDesign.TabPage
             if (timerRefresh.Interval != interval) timerRefresh.Interval = interval;   // 配置晚到即生效
 
             // 前置条件①：未连接只跳过刷新。
-            // ⛔ 不在此判定，初始化期间会误判未连接。
+            // 初始化期不在此判定连接
             if (!IsMotionReady()) return;
 
             // 前置条件②：未切页只跳过刷新，开关保留。
@@ -2991,8 +2813,6 @@ namespace AdaWeldSystem.UIDesign.TabPage
                 request.Galvo = _galvoAutoRefresh;
                 request.La = _laAutoRefresh;
                 request.Ta = _taAutoRefresh;
-                request.Temp = _tempAutoRefresh;
-                if (!request.Galvo && !request.La && !request.Ta && !request.Temp) return;
                 if (request.Ta)
                 {
                     if (_taRows.Count == 0) LoadTaAxisRow();
@@ -3030,13 +2850,11 @@ namespace AdaWeldSystem.UIDesign.TabPage
             ApplyRefreshSnapshot(request);
         }
 
-        /// <summary>采集刷新快照（UI 线程同步执行；⛔ 不碰控件）。</summary>
-        /// <remarks>只读设备与配置，产出纯数据快照。</remarks>
+        /// <summary>采集刷新快照</summary>
         private static void CollectRefreshSnapshot(RefreshSnapshot request)
         {
             if (request.TabIndex == LaserHeadTabIndex)
             {
-                if (request.Temp) request.Temperature = CollectTemperature();
                 if (request.Galvo) request.GalvoState = CollectGalvo();
                 if (request.La) request.LaMotor = CollectLaMotor();
                 if (request.Ta) request.TaReadouts = CollectAxisReadouts(request.TaConfig);
@@ -3049,14 +2867,12 @@ namespace AdaWeldSystem.UIDesign.TabPage
         }
 
         /// <summary>把刷新快照贴到界面。</summary>
-        /// <remarks>2026-11-17 改版：刷新已改 UI 线程同步执行，本方法不再是跨线程封送落点。</remarks>
         private void ApplyRefreshSnapshot(RefreshSnapshot request)
         {
             if (IsDisposed || Disposing || request == null) return;
 
             if (request.TabIndex == LaserHeadTabIndex)
             {
-                if (request.Temp && request.Temperature != null) ApplyTemperature(request.Temperature);
                 if (request.Galvo && request.GalvoState != null) ApplyGalvo(request.GalvoState);
                 if (request.La && request.LaMotor != null) ApplyLaMotor(request.LaMotor);
                 if (request.Ta && request.TaReadouts != null)
@@ -3091,7 +2907,6 @@ namespace AdaWeldSystem.UIDesign.TabPage
         }
 
         /// <summary>刷新轴表运行状态与信号灯。</summary>
-        /// <remarks>按钮/脚本同步入口，与定时刷新共用采集。</remarks>
         private void RefreshRuntime()
         {
             if (IsDisposed || Disposing) return;
@@ -3106,8 +2921,7 @@ namespace AdaWeldSystem.UIDesign.TabPage
             tableTa.Binding(_taRows);
         }
 
-        /// <summary>把采集到的轴快照贴回行集合（UI 线程）；返回行内容是否有变化。</summary>
-        /// <remarks>变化才需重绑表格：整表 Binding 每拍执行是卡顿主因。</remarks>
+        /// <summary>把采集到的轴快照贴回行集合</summary>
         private bool ApplyAxisReadouts(IList<AxisRow> rows, IList<AxisReadoutSnapshot> readouts)
         {
             bool changed = false;
@@ -3126,7 +2940,7 @@ namespace AdaWeldSystem.UIDesign.TabPage
             return changed;
         }
 
-        /// <summary>轴读数签名（位置/使能/报警/最近指令）：用于判断是否需要重绑表格。</summary>
+        /// <summary>轴读数签名（位置/使能/报警/最近指令）</summary>
         private string AxisReadoutSignature(AxisReadoutSnapshot snapshot)
         {
             if (snapshot == null) return string.Empty;
@@ -3139,8 +2953,7 @@ namespace AdaWeldSystem.UIDesign.TabPage
         {
             string signature = AxisReadoutSignature(snapshot);
             string key = snapshot == null ? string.Empty : snapshot.AxisName;
-            string previous;
-            bool changed = !_axisReadoutSignatures.TryGetValue(key, out previous) || previous != signature;
+            bool changed = !_axisReadoutSignatures.TryGetValue(key, out string previous) || previous != signature;
             if (changed) _axisReadoutSignatures[key] = signature;
             return changed;
         }
@@ -3155,7 +2968,6 @@ namespace AdaWeldSystem.UIDesign.TabPage
         }
 
         /// <summary>释放自定义资源：停定时器 + 退订模拟相关事件 + 释</summary>
-        /// <remarks>放 TooltipComponent。</remarks>
         public void DisposeComponents()
         {
             timerRefresh?.Stop();
@@ -3175,3 +2987,4 @@ namespace AdaWeldSystem.UIDesign.TabPage
         #endregion
     }
 }
+

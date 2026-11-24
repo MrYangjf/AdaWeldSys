@@ -3,7 +3,6 @@ using System.Runtime.InteropServices;
 namespace AdaWeldSystem.MotionControl.DeltaEtherCAT.Native
 {
     /// <summary>台达高级运动原生封装</summary>
-    /// <remarks>覆盖插补、同步、龙门、锁存与虚拟坐标偏移。电子凸轮见 EtherCATEcam2Native，PVT 见 EtherCATPVTNative。</remarks>
     public static class EtherCATAdvancedNative
     {
 #if X86
@@ -62,13 +61,11 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT.Native
             ushort SlotNo, ref int LatchPosition);
 
         /// <summary>启用虚拟坐标偏移</summary>
-        /// <remarks>仅坐标系平移与零点偏移，不是虚拟主轴。</remarks>
         [DllImport(DllPath, EntryPoint = "_ECAT_Slave_CSP_Virtual_Set_Enable")]
         public static extern ushort CS_ECAT_Slave_CSP_Virtual_Set_Enable(ushort CardNo, ushort NodeID,
             ushort SlotID, ushort Enable);
 
         /// <summary>写入虚拟坐标偏移量</summary>
-        /// <remarks>单位为脉冲，Enable 为 1 时生效。</remarks>
         [DllImport(DllPath, EntryPoint = "_ECAT_Slave_CSP_Virtual_Set_Command")]
         public static extern ushort CS_ECAT_Slave_CSP_Virtual_Set_Command(ushort CardNo, ushort NodeID,
             ushort SlotID, int Command);

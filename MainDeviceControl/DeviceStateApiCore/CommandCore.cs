@@ -4,7 +4,6 @@ using System.Collections.Generic;
 namespace AdaWeldSystem.MainDeviceControl.DeviceStateApiCore
 {
     /// <summary>机器人指令协议常量。</summary>
-    /// <remarks>指令一律字符串常量、禁调用方自定义赋值；不监控机器人 pose；报文格式待协议细化，消费方以 // todo 占位。</remarks>
     public static class CommandCore
     {
         #region 协议方向标识
@@ -91,8 +90,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceStateApiCore
         }
 
         /// <summary>尝试把带坐标载荷的报文拆成「指令名 + 载荷」。</summary>
-        /// <remarks>报文格式：指令名 + 分隔符 + 数值列表。
-        /// 规整文本整体命中已知指令时按无载荷处理；头部不是已知指令返回 false。</remarks>
+
         /// <param name="normalized">已规整（Trim + 大写）的报文</param>
         /// <param name="command">输出：指令名（已知指令常量）</param>
         /// <param name="payload">输出：指令名后的载荷原文（无载荷为空串）</param>
@@ -154,7 +152,6 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceStateApiCore
         #region 指令释意字典（供 MainPage Dash 机器人指令显示）
 
         /// <summary>指令 → 中文释意（供 MainPage Dash 和日志显示）。</summary>
-        /// <remarks>新增指令须同步在此字典加释意。</remarks>
         public static readonly Dictionary<string, string> CommandDescriptions = new Dictionary<string, string>
         {
             // Rx（机器人 → 设备）
@@ -180,8 +177,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceStateApiCore
         };
 
         /// <summary>把指令常量翻译成中文释意（未命中返回原始指</summary>
-        /// <remarks>载荷报文先拆指令头再查字典。
-        /// 保证载荷报文也能显示释意。 令串）。</remarks>
+
         /// <returns>结果文本。</returns>
         public static string TranslateCommand(string command)
         {
@@ -201,8 +197,6 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceStateApiCore
         #region 数值码映射（RSI 数值化协议：上行 RxCmd / 下行 TxCmd）
 
         /// <summary>上行指令码（RxCmd）→ 指令常量名。</summary>
-        /// <remarks>契约见 robot-comm-spec/WeldControlConfig.xml SEND 段与《机器人通讯指令表.xlsx》RX 编码表。
-        /// RSI 的 SEND 段 TYPE 仅 BOOL/DOUBLE/LONG 不含 STRING，故上行指令必须数值化。</remarks>
         private static readonly Dictionary<int, string> RxCodeToCommand = new Dictionary<int, string>
         {
             { 1, RxHomePose },
@@ -217,8 +211,6 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceStateApiCore
         };
 
         /// <summary>下行指令码（TxCmd）→ 指令常量名。</summary>
-        /// <remarks>契约见《配置_本机(上位机)_RSI统一通讯配置.xml》。
-        /// 8=TX_NG 焊接异常，9=TX_ABORT，10 备用不映射；原 TX_OK 已由机器人侧移除。</remarks>
         private static readonly Dictionary<int, string> TxCodeToCommand = new Dictionary<int, string>
         {
             { 1, TxGoHome },
@@ -236,7 +228,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceStateApiCore
         private static readonly Dictionary<string, int> CommandToTxCode = BuildTxCodeReverse();
 
         /// <summary>构造下行指令码反查表（由 TxCodeToCommand 反向生成，避免两处手</summary>
-        /// <remarks>写不同步）。</remarks>
+
         /// <returns>指令常量名 → 数值码</returns>
         private static Dictionary<string, int> BuildTxCodeReverse()
         {
@@ -274,7 +266,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceStateApiCore
         }
 
         /// <summary>上行指令码 → 中文释意（调试面板用；未命中返回码</summary>
-        /// <remarks>值文本）。</remarks>
+
         /// <param name="rxCode">上行数值码</param>
         /// <returns>释意文本</returns>
         public static string DescribeRxCode(int rxCode)
@@ -285,7 +277,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceStateApiCore
         }
 
         /// <summary>下行指令码 → 中文释意（调试面板用；未命中返回码</summary>
-        /// <remarks>值文本）。</remarks>
+
         /// <param name="txCode">下行数值码</param>
         /// <returns>释意文本</returns>
         public static string DescribeTxCode(int txCode)

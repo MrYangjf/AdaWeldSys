@@ -2,11 +2,7 @@ using System.Drawing;
 
 namespace AdaWeldSystem.EmguALG.Roi
 {
-    /// <summary>
-    /// ROI 区域数据（纯数据，不含界面控件与事件）。
-    /// </summary>
-    /// <remarks>算法只在指定矩形区域内执行。
-    /// 区域运算（裁剪/掩膜）见 <see cref="ImageRoiTool"/>；本类只描述区域本身与坐标映射。</remarks>
+    /// <summary>ROI 区域数据（纯数据，不含界面控件与事件）。</summary>
     public sealed class ImageRoi
     {
         #region 公共变量

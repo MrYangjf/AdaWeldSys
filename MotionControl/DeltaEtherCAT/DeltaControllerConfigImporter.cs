@@ -60,7 +60,7 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
         /// <summary>ESI 从站名称（Device/Name）</summary>
         public string SlaveName = string.Empty;
 
-        /// <summary>既有配置中的从站节点号文本（ESI 无此字段；空表示待填）</summary>
+        /// <summary>既有配置中的从站节点号文本</summary>
         public string NodeIdText = string.Empty;
 
         /// <summary>既有配置中是否取到有效节点号（0 视为待填）</summary>
@@ -110,13 +110,6 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
     }
 
     /// <summary>台达控制器配置文档 → 项目 XML 生成器</summary>
-    /// <remarks>
-    /// 四类文档：轴/IO/气缸 CSV（复用 <see cref="MotionConfigImporter"/>）、从站 ESI、从站 IO 表。
-    /// 焊接头从站 IO 表 xlsx（PDO 映射，唯一权威源）。生成策略：解析到的节整节替换，其余节点保留；
-    /// 写前备份、校验失败零写入。
-    /// 主站下挂各轴 + 唯一额外从站 = 焊接头，ESI 即其文档。
-    /// IO 表为准：行数/列值/索引全取自表，ESI 只告警。
-    /// </remarks>
     public static class DeltaControllerConfigImporter
     {
         #region 私有变量
@@ -154,7 +147,7 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
         }
 
         /// <summary>对象索引规范化</summary>
-        /// <remarks>去 0x 前缀 / 转大写定宽，保证 0x1 与 0x0001 视为同一键</remarks>
+
         /// <param name="text">原始十六进制文本</param>
         /// <returns>规范化文本；空值返回空串</returns>
         private static string NormalizeObjectKeyHex(string text)
@@ -169,7 +162,7 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
         }
 
         /// <summary>拼装 Partial 级说明</summary>
-        /// <remarks>已加载可保存 + 缺文件跳过 + 内容不符拦截</remarks>
+
         /// <param name="scan">扫描结果</param>
         /// <param name="missingFiles">缺失文件清单</param>
         /// <param name="badContent">内容不符清单</param>
@@ -399,8 +392,6 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
         /// <summary>焊接头 PDO 表对象键</summary>
         /// <param name="entry">PDO 条目</param>
         /// <returns>规范化对象键，如 <c>PDO 1601/01</c> 或 <c>SDO 7010/01</c></returns>
-        /// <remarks>同一变量名在 Rx 与 Tx 成对出现属正常结构。唯一性只能按对象索引判，不得按变量名判。
-        /// 复合键：PDO 优先，其次 SDO；两者全空返回空串</remarks>
         public static string BuildPdoObjectKey(WeldHeadPdoEntry entry)
         {
             if (entry == null) return string.Empty;
@@ -417,7 +408,7 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
         }
 
         /// <summary>存在但解析失败的文档清单</summary>
-        /// <remarks>非空即必须拦下写盘，避免保存半成品</remarks>
+
         /// <param name="scan">扫描结果</param>
         /// <returns>失败项描述列表；无失败返回空列表</returns>
         public static List<string> GetParseFailures(ConfigDirectoryScan scan)
@@ -434,7 +425,7 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
         }
 
         /// <summary>按扫描结果生成项目 XML（写前备份，失败零写入）</summary>
-        /// <remarks>缺文件按分节跳过（保留原配置）；存在但解析失败则整次拦下，不写半成品。</remarks>
+
         /// <param name="directoryPath">配置文档目录</param>
         /// <param name="message">成功/失败说明</param>
         /// <returns>生成成功返回 true</returns>
@@ -448,7 +439,6 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
         /// <param name="pdoEntries">焊接头 PDO 行（表格唯一提交源；null 表示沿用目录 xlsx 解析结果）</param>
         /// <param name="message">成功/失败说明</param>
         /// <returns>生成成功返回 true</returns>
-        /// <remarks>ESI 仍需放置（取从站身份），CSV 内容来自表格。 焊接头 PDO 行取自表格，不再解析目录 xlsx</remarks>
         public static bool Generate(string directoryPath, IList<WeldHeadPdoEntry> pdoEntries, out string message)
         {
             ConfigDirectoryScan scan = Scan(directoryPath);
@@ -525,7 +515,7 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
         #region 私有函数
 
         /// <summary>按表头签名校验 CSV 内容</summary>
-        /// <remarks>文件名存在但内容不符时不得静默视为就绪</remarks>
+
         /// <param name="filePath">CSV 路径</param>
         /// <param name="signature">必须出现的表头列名</param>
         /// <param name="exists">回传文件是否存在（用于区分缺文件与内容不符）</param>
@@ -596,15 +586,6 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
         /// <param name="path">XML 路径</param>
         /// <param name="scan">扫描结果（就地写入身份字段）</param>
         /// <returns>是焊接头从站 ESI 返回 true</returns>
-        /// <remarks>
-        /// 真实 Wsx_ScanCut.xml 的厂商号在 <c>EtherCATInfo/Vendor/Id</c>（值为 #xE0000002），
-        /// 产品码/修订号在 <c>Device/Type</c> 的 ProductCode/RevisionNo 属性上；
-        /// Type 节点本身不含 VendorId，故不能只看 Type 属性。
-        /// ⛔ 不能取「文档顺序第一个 Type」。`Descriptions/Groups/Group/Type` 是分组标签。
-        /// 它排在 `Descriptions/Devices/Device/Type` 之前，且没有 ProductCode。
-        /// 会把整份 ESI 判成未识别。识别按结构判据，不写死厂商号。
-        /// 判据为有 Vendor/Id 且存在带 ProductCode 的 Type。供应商换版本仍可重新识别。
-        /// </remarks>
         private static bool TryParseEsi(string path, ConfigDirectoryScan scan)
         {
             try
@@ -671,8 +652,6 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
 
         /// <summary>读取既有配置中的从站节点号与启用状态</summary>
         /// <param name="scan">扫描结果（就地写入节点号/启用状态）</param>
-        /// <remarks>节点号来自 DeltaMotionConfig.xml 的 ROOT/WELD_HEAD_SLAVE/NODE_ID（子元素，非属性）；
-        /// 文件不存在或值为 0 按「待填」处理，不参与写入。 ESI 无节点号，不得编造</remarks>
         private static void ReadSlaveIdentity(ConfigDirectoryScan scan)
         {
             string path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, MotionXmlRelativePath);
@@ -708,8 +687,6 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
 
         /// <summary>IO 表与 ESI 交叉校验：差异只记告警，一律不覆盖 IO 表值</summary>
         /// <param name="scan">扫描结果（就地写入差异清单）</param>
-        /// <remarks>权威源固定为 EtherCAT协议.xlsx（供应商参考文档）；
-        /// ESI 仅核对点位与变量名，不得把 SubIndex 回写到表。</remarks>
         private static void CrossCheckProtocol(ConfigDirectoryScan scan)
         {
             try
@@ -797,7 +774,7 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
         }
 
         /// <summary>读取 ESI 的 PDO 容器与点位</summary>
-        /// <remarks>仅用于交叉校验，不作为写入源</remarks>
+
         /// <param name="doc">ESI 文档</param>
         /// <param name="containers">回传容器集合（键为 PDO 索引）；为 null 时只统计数量</param>
         /// <returns>有效点位数量（不含 padding）</returns>
@@ -848,7 +825,7 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
         }
 
         /// <summary>构造 PDO 点位键</summary>
-        /// <remarks>索引归一化为 0xXXXX，子索引归一化为十进制</remarks>
+
         /// <param name="index">PDO 索引文本（#x / 0x / 十进制）</param>
         /// <param name="subIndex">PDO 子索引文本</param>
         /// <returns>键文本</returns>

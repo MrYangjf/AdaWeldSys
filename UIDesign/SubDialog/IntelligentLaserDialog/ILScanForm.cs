@@ -67,7 +67,6 @@ namespace AdaWeldSystem.UIDesign.SubDialog.IntelligentLaserDialog
         #region 私有函数
 
         /// <summary>初始化表格列。参考 AntdUI 官方 TableDemo 范式：Columns 在代码后置设置，不</summary>
-        /// <remarks>可写入 Designer.cs。 选取列用 ColumnCheck（双参，表头无全选）+ SetAutoCheck(false)，配合 CellClick 实现单选互斥。</remarks>
         private void InitTableColumns()
         {
             uiTableSensor.Columns = new AntdUI.ColumnCollection

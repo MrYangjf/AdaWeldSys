@@ -50,12 +50,6 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
     }
 
     /// <summary>系统设置整站配置打包器</summary>
-    /// <remarks>
-    /// 导出为单文件 zip（扩展名 .awcfg），内部 = manifest.json + config/ 目录树；
-    /// 整站范围为 Config/ 与 DataBase/ 递归全部文件。仅排除生产记录库 Product.db 与用户库 Auth.db。
-    /// 两者含 SQLite 伴生文件，另排除导入 staging；不加密。
-    /// 导入走 staging → 校验 → 备份 → 原子替换 → 失败回滚。
-    /// </remarks>
     public static class SystemConfigPackager
     {
         #region 私有变量
@@ -255,7 +249,7 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
         #region 私有函数
 
         /// <summary>递归收集 Config 与 DataBase 全部文件</summary>
-        /// <remarks>排除生产记录库/用户库/staging）并计算 SHA256</remarks>
+
         /// <returns>按路径排序的文件清单</returns>
         private static List<ConfigPackageFile> CollectFiles()
         {
@@ -305,7 +299,7 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
         }
 
         /// <summary>是否属于排除项</summary>
-        /// <remarks>生产记录库/用户库及其 SQLite 伴生文件</remarks>
+
         /// <param name="relative">相对路径</param>
         /// <returns>排除返回 true</returns>
         private static bool IsExcluded(string relative)

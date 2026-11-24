@@ -6,24 +6,13 @@ using AdaWeldSystem.WeldParamControl.Abstractions;
 
 namespace AdaWeldSystem.WeldParamControl.Algorithms
 {
-    /// <summary>
-    /// 焊接参数查表调整算法实现（非单例）。
-    /// </summary>
-    /// <remarks>
-    /// 维护宽度查找表，匹配送丝/功率/焊接速度。
-    /// 由 <see cref="WeldParamManager"/> 持有。
-    /// 公式：FeedSpeed = 60 × KVar × SeamWidth × PlateThickness × RobotSpeed / (π/4 × WireDiameter²)；
-    /// LaserPower = JVar × (π/4 × WireDiameter² × FeedSpeed/60) / MVar。
-    /// </remarks>
+    /// <summary>焊接参数查表调整算法实现（非单例）。</summary>
     public class WeldParamLookupAlgorithm : WeldAlgorithmBase
     {
         #region 公共变量
 
         /// <summary>日志标签。</summary>
         private const string Tag = "焊接参数查表";
-
-        /// <summary>光斑宽度系数 W（默认 1.0），重建前同步。</summary>
-        private double _spotWidthGain = 1.0;
 
         /// <summary>焊缝宽度列表（参数查找表的键）。</summary>
         public List<double> SeamWidthList { get; set; }
@@ -39,17 +28,13 @@ namespace AdaWeldSystem.WeldParamControl.Algorithms
         /// <summary>焊接速度查找表（焊缝宽度 -> 焊接速度）。</summary>
         public Dictionary<double, double> RobotSpeedDic { get; set; }
 
-        /// <summary>光斑宽度查找表（焊缝宽 -> 光斑宽 = 宽度 × W）。</summary>
+        /// <summary>光斑宽度查找表（焊缝宽 -> 光斑宽 = 宽度）。</summary>
         public Dictionary<double, double> SpotWidthDic { get; set; }
 
         /// <summary>摆幅宽度查找表（焊缝宽 -> 摆幅宽）。</summary>
-        /// <remarks>初值 = 光斑摆幅系数 × 焊缝宽，可手动修正。
-        /// 单一配置内光斑大小不变，靠摆动适配焊缝。</remarks>
         public Dictionary<double, double> SwingWidthDic { get; set; }
 
         /// <summary>摆幅频率查找表（焊缝宽 -> 频率 Hz）。</summary>
-        /// <remarks>初值按摆幅宽度反算，摆幅越大频率越低。
-        /// 可手动核对，最终输出用查表值。</remarks>
         public Dictionary<double, int> SwingFrequencyDic { get; set; }
 
         /// <summary>算法是否已就绪（查找表已生成）。</summary>
@@ -88,24 +73,13 @@ namespace AdaWeldSystem.WeldParamControl.Algorithms
             RobotSpeedDic.Add(seamWidthValue, robotSpeed);
             FeedSpeedDic.Add(seamWidthValue, feedSpeed);
             LaserPowerDic.Add(seamWidthValue, laserPower);
-            SpotWidthDic.Add(seamWidthValue, seamWidthValue * _spotWidthGain);
+            SpotWidthDic.Add(seamWidthValue, seamWidthValue);
             // 摆幅初值可手动修正，重建整表会覆盖
             double swingWidth = seamWidthValue * autoParam.SpotSwingGain;
             SwingWidthDic.Add(seamWidthValue, swingWidth);
             // 摆幅频率初值按摆幅宽度反算。
             // 摆幅越大频率越低，可手动核对。
             SwingFrequencyDic.Add(seamWidthValue, autoParam.CalSwingFrequency(swingWidth));
-        }
-
-        /// <summary>同步光斑宽度系数 W。</summary>
-        /// <remarks>须重建查找表方生效。</remarks>
-        /// <param name="gain">光斑宽度系数（须大于 0）</param>
-        public void SetSpotWidthGain(double gain)
-        {
-            if (gain > 0.0)
-            {
-                _spotWidthGain = gain;
-            }
         }
 
         #endregion
@@ -131,7 +105,7 @@ namespace AdaWeldSystem.WeldParamControl.Algorithms
         }
 
         /// <summary>生成参数查找表：按宽度范围与灵敏度。</summary>
-        /// <remarks>生成宽度到送丝/功率/速度的映射。</remarks>
+
         /// <param name="autoParam">自动参数配置</param>
         public void BuildLookupTable(AutoParam autoParam)
         {
@@ -177,25 +151,6 @@ namespace AdaWeldSystem.WeldParamControl.Algorithms
             }
 
             SeamWidthList.Sort();
-        }
-
-        /// <summary>按光斑宽度系数 W 重算光斑宽度列。</summary>
-        /// <remarks>
-        /// 只影响光斑宽度 = 焊缝宽 × W，其余三表不变。
-        /// 整表重建会覆盖分段手工修正，非常规路径。
-        /// </remarks>
-        public void RefreshSpotWidthDic()
-        {
-            if (SeamWidthList == null)
-            {
-                return;
-            }
-
-            SpotWidthDic = new Dictionary<double, double>();
-            foreach (double width in SeamWidthList)
-            {
-                SpotWidthDic[width] = width * _spotWidthGain;
-            }
         }
 
         /// <summary>按焊缝宽度在查找表中匹配最近的一档参数。</summary>
@@ -278,7 +233,7 @@ namespace AdaWeldSystem.WeldParamControl.Algorithms
             }
             else
             {
-                spotWidth = findSeamWidth * _spotWidthGain;
+                spotWidth = findSeamWidth;
             }
             return true;
         }
@@ -350,9 +305,7 @@ namespace AdaWeldSystem.WeldParamControl.Algorithms
             return SwingFrequencyDic.TryGetValue(findSeamWidth, out frequencyHz);
         }
 
-        /// <summary>
-        /// 送丝速度计算公式：FeedSpeed = 60 × KVar × SeamWidth × PlateThickness × RobotSpeed / (π/4 × WireDiameter²)
-        /// </summary>
+        /// <summary>送丝速度计算公式：FeedSpeed = 60 × KVar × SeamWidth × PlateThickness × RobotSpeed / (π/4 × WireDiameter²)</summary>
         /// <param name="autoParam">自动参数配置</param>
         /// <param name="robotSpeed">机器人焊接速度</param>
         /// <param name="seamWidth">焊缝宽度</param>
@@ -367,9 +320,7 @@ namespace AdaWeldSystem.WeldParamControl.Algorithms
             return 60 * autoParam.KVar * seamWidth * autoParam.Platethickness * robotSpeed / ((3.14 / 4) * autoParam.WireDiameter * autoParam.WireDiameter);
         }
 
-        /// <summary>
-        /// 激光功率计算公式：LaserPower = JVar × (π/4 × WireDiameter² × FeedSpeed/60) / MVar
-        /// </summary>
+        /// <summary>激光功率计算公式：LaserPower = JVar × (π/4 × WireDiameter² × FeedSpeed/60) / MVar</summary>
         /// <param name="autoParam">自动参数配置</param>
         /// <param name="feedSpeed">送丝速度</param>
         /// <returns>计算得到的激光功率</returns>

@@ -1,5 +1,5 @@
 // IO 表解析器：只解析文件格式，不内置 PDO 清单
-// 供应商每次更新 EtherCAT协议.xlsx，行数与列值均以表为准（ADR-079）。
+// 行数与列值以协议表为准
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -10,11 +10,6 @@ using System.Xml.Linq;
 namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
 {
     /// <summary>xlsx 只读解析器（BCL 实现）</summary>
-    /// <remarks>
-    /// 仅依赖 <c>System.IO.Compression</c> + <c>System.Xml.Linq</c>，不引入任何第三方库。
-    /// 支持 sharedStrings、inlineStr、数值单元格与 mergeCells（合并区按左上角值回填）。
-    /// 只读第一张表，足以覆盖焊接头 IO 表（单 sheet）。
-    /// </remarks>
     public static class XlsxSheetReader
     {
         #region 私有变量
@@ -359,3 +354,4 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
         #endregion
     }
 }
+

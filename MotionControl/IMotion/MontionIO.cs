@@ -1,7 +1,6 @@
 namespace AdaWeldSystem.MotionControl.IMotion
 {
     /// <summary>IO 抽象基类</summary>
-    /// <remarks>台达 IO 为 NPN 低电平有效，状态值 0 表示有效。</remarks>
     public abstract class MontionIO
     {
         #region 私有变量

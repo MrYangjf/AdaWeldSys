@@ -5,7 +5,6 @@ using AdaWeldSystem.Comm.SystemComm;
 namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
 {
     /// <summary>台达数字输出</summary>
-    /// <remarks>低电平有效，置位写 0、复位写 1，不可按直觉反转。</remarks>
     public class DeltaOutputIO : OutputIO
     {
         #region 私有变量

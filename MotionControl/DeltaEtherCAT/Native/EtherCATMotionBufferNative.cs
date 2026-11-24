@@ -3,8 +3,6 @@ using System.Runtime.InteropServices;
 namespace AdaWeldSystem.MotionControl.DeltaEtherCAT.Native
 {
     /// <summary>台达运动缓冲原生封装</summary>
-    /// <remarks>坐标系式运动队列：Set_Crd_Parameters 建系 → Line_MultiAxis2 写段 → Start 启动；
-    /// 缓冲段耗尽轴即停止，须重新写段后再 Start。全部参数为脉冲单位。</remarks>
     public static class EtherCATMotionBufferNative
     {
 #if X86
@@ -20,6 +18,14 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT.Native
             ref ushort AxisArray, ref ushort SlotArray,
             int SycMaxVel, int SycMaxAcc, ushort S_Curve_Time,
             ushort Max_IO_Advance_Time, ushort SetOriginFlag, ref int OriginPos);
+
+        /// <summary>向运动缓冲写入一段直线插补（9.7.3，按坐标系已注册轴顺序，不传轴数组）</summary>
+        /// <remarks>手册图 9.2.22.1 标准流程 Step3 指定的接口，参数少于 MultiAxis2、不依赖速度模式设置，
+        /// 兼容性最好。签名照官方 EtherCAT_DLL.cs L467。</remarks>
+        [DllImport(DllPath, EntryPoint = "_ECAT_Slave_CSP_Start_MotionBuffer_Line_MultiAxis")]
+        public static extern ushort CS_ECAT_Slave_CSP_Start_MotionBuffer_Line_MultiAxis(
+            ushort CardNo, ushort TableNo, ref int TargetPosition,
+            int SynTargetVel, int SynEndVel, int SynAcc, ushort AbsMode, ushort FifoNo);
 
         /// <summary>向运动缓冲写入一段多轴直线插补（AxesNum=1 即单轴段）</summary>
         [DllImport(DllPath, EntryPoint = "_ECAT_Slave_CSP_Start_MotionBuffer_Line_MultiAxis2")]

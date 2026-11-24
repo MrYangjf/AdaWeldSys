@@ -1,9 +1,6 @@
 ﻿namespace AdaWeldSystem.MonitorCam.IMonitorCam
 {
-    /// <summary>
-    /// 扫描（枚举）发现的监控相机设备信息（只读快照）。
-    /// 实现层扫描产出，管理器透出给界面。
-    /// </summary>
+    /// <summary>扫描（枚举）发现的监控相机设备信息</summary>
     public class MonitorCamDeviceInfo
     {
         /// <summary>相机 IP（GigE 相机有效；USB3 相机为空字符串）</summary>

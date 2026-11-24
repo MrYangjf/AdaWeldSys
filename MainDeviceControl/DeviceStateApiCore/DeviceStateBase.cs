@@ -4,8 +4,6 @@ using AdaWeldSystem.Comm.SystemComm;
 namespace AdaWeldSystem.MainDeviceControl.DeviceStateApiCore
 {
     /// <summary>模组物理设备状态（3 态）。</summary>
-    /// <remarks>与 <see cref="SubDeviceWeldStatus"/> 正交，本枚举是设备本体状况。
-    /// 例：保护镜超温两者都置，互不替代。</remarks>
     public enum SubDeviceState
     {
         /// <summary>未连接（设备离线 / 初始化前 / 运行期断开）。</summary>
@@ -14,7 +12,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceStateApiCore
         /// <summary>已连接且无故障。</summary>
         Connected = 1,
 
-        /// <summary>硬件故障报警（如保护镜超温、从站报故障）。仍可能保持物理连接，故不降为 Disconnected。</summary>
+        /// <summary>硬件故障报警</summary>
         Alarm = 2
     }
 
@@ -74,7 +72,6 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceStateApiCore
     }
 
     /// <summary>模组态基类（连接态 + 焊接过程态 + 设备安全）。</summary>
-    /// <remarks>主设备运行态 MainDeviceStatus 不在本类承载，由 DeviceControlWork 统一持有。</remarks>
     public abstract class DeviceStateBase
     {
         #region 私有变量
@@ -142,7 +139,6 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceStateApiCore
         public event EventHandler AlarmOccurred;
 
         /// <summary>连接尝试是否已出结果（成功或失败都置 true）。</summary>
-        /// <remarks>区分「已确认失败」与「尚未有反馈」：前者立即收敛。</remarks>
         public bool ConnectSettled
         {
             get { lock (_connectLock) { return _connectSettled; } }
@@ -172,7 +168,6 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceStateApiCore
         }
 
         /// <summary>发起一次连接尝试（连接动作开始前调用，复位上</summary>
-        /// <remarks>调用后 <see cref="ConnectSettled"/> 置 false，直到成功置 Connected 或调用 <see cref="MarkConnectFailed"/>。 次结果）。</remarks>
         public void BeginConnectAttempt()
         {
             lock (_connectLock)
@@ -183,7 +178,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceStateApiCore
         }
 
         /// <summary>标记连接尝试已失败并置 Disconnected。</summary>
-        /// <remarks>确定失败时调用，等待方不必等超时。</remarks>
+
         /// <param name="reason">失败原因（记入 <see cref="ConnectResult"/> 与状态切换原因）</param>
         public void MarkConnectFailed(string reason)
         {
@@ -193,7 +188,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceStateApiCore
         }
 
         /// <summary>切换焊接过程态（带原因），WeldStatus 唯一写入口。</summary>
-        /// <remarks>变更后执行步由调用方自行推进。</remarks>
+
         /// <param name="newStatus">目标焊接过程态</param>
         /// <param name="reason">切换原因（记入事件参数与日志）</param>
         protected void SetWeldStatus(SubDeviceWeldStatus newStatus, string reason)
@@ -203,7 +198,6 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceStateApiCore
         }
 
         /// <summary>设备安全：急停。</summary>
-        /// <remarks>默认置 IsAlarm=true 并记录日志；子类应重写以调用具体运动控制器/IO 急停。</remarks>
         public virtual void EmergencyStop()
         {
             IsAlarm = true;

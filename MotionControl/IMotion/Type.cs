@@ -114,7 +114,6 @@ namespace AdaWeldSystem.MotionControl.IMotion
     }
 
     /// <summary>凸轮曲线段插值方式</summary>
-    /// <remarks>语义 SDK 与手册均未记载，须现场实测确认。</remarks>
     public enum EcamCurveType
     {
         /// <summary>直线段</summary>

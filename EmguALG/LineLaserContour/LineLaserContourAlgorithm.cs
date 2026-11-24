@@ -6,11 +6,7 @@ using AdaWeldSystem.Comm.SystemComm;
 
 namespace AdaWeldSystem.EmguALG.LineLaserContour
 {
-    /// <summary>
-    /// 线激光轮廓 Mat 渲染算法实现（继承 Abstractions，输出 Mat 供 UI 显示）。
-    /// 线激光只做采集识别，本类负责渲染输出。
-    /// 画布一次性分配复用，每帧只清空重绘。
-    /// </summary>
+    /// <summary>线激光轮廓 Mat 渲染算法实现</summary>
     public class LineLaserContourAlgorithm : ILineLaserContourAlgorithm
     {
         #region 私有变量
@@ -82,6 +78,16 @@ namespace AdaWeldSystem.EmguALG.LineLaserContour
             return new PointF(x1 + ua * (x2 - x1), y1 + ua * (y2 - y1));
         }
 
+        /// <summary>毫米坐标转像素坐标</summary>
+        /// <param name="origin">毫米原点所在像素位置</param>
+        /// <param name="rate">每毫米像素数</param>
+        /// <param name="mm">毫米坐标</param>
+        /// <returns>像素坐标</returns>
+        private static PointF ToPixel(PointF origin, float rate, float[] mm)
+        {
+            return new PointF(origin.X + mm[0] * rate, origin.Y - mm[1] * rate);
+        }
+
         /// <summary>计算本帧视图几何</summary>
         /// <param name="calib">校准数据</param>
         /// <param name="hasCalib">校准数据是否可用</param>
@@ -94,7 +100,8 @@ namespace AdaWeldSystem.EmguALG.LineLaserContour
             ViewGeometry view = new ViewGeometry
             {
                 HasCalib = hasCalib,
-                Center = new PointF(CanvasW / 2f, CanvasH / 2f)
+                Center = new PointF(CanvasW / 2f, CanvasH / 2f),
+                Origin = new PointF(CanvasW / 2f, CanvasH / 2f)
             };
 
             // 校准几何只依赖 calib（角点与 mm 跨度），与轮廓点数无关：
@@ -102,23 +109,48 @@ namespace AdaWeldSystem.EmguALG.LineLaserContour
             // 则 Corners 与 Rate 均为零，校准框与刻度不画
             if (hasCalib)
             {
-                float cornerW = Math.Abs(calib.RightBottomCorner[0] - calib.LeftBottomCorner[0]);
-                float cornerH = Math.Abs(calib.LeftTopCorner[1] - calib.LeftBottomCorner[1]);
-                if (cornerW < 0.001f) cornerW = 1f;
-                if (cornerH < 0.001f) cornerH = 1f;
-                float fRate1 = (CanvasW - 2f * Margin) / cornerW;
-                float fRate2 = (CanvasH - 2f * Margin) / cornerH;
+                // 标定四角为绝对毫米坐标，与轮廓点同一坐标系；
+                // 比例取四角包围盒跨度，原点落在包围盒中心，校准框即完整可见且与轮廓严格对齐
+                float minX = Math.Min(Math.Min(calib.LeftTopCorner[0], calib.RightTopCorner[0]),
+                    Math.Min(calib.LeftBottomCorner[0], calib.RightBottomCorner[0]));
+                float maxX = Math.Max(Math.Max(calib.LeftTopCorner[0], calib.RightTopCorner[0]),
+                    Math.Max(calib.LeftBottomCorner[0], calib.RightBottomCorner[0]));
+                float minZ = Math.Min(Math.Min(calib.LeftTopCorner[1], calib.RightTopCorner[1]),
+                    Math.Min(calib.LeftBottomCorner[1], calib.RightBottomCorner[1]));
+                float maxZ = Math.Max(Math.Max(calib.LeftTopCorner[1], calib.RightTopCorner[1]),
+                    Math.Max(calib.LeftBottomCorner[1], calib.RightBottomCorner[1]));
+
+                float spanX = maxX - minX;
+                float spanZ = maxZ - minZ;
+                if (spanX < 0.001f) spanX = 1f;
+                if (spanZ < 0.001f) spanZ = 1f;
+                float fRate1 = (CanvasW - 2f * Margin) / spanX;
+                float fRate2 = (CanvasH - 2f * Margin) / spanZ;
                 view.Rate = (fRate1 > fRate2) ? fRate2 : fRate1;
 
-                // 中心直接取图像中心（英莱 demo 的 fPersent/dwOffset 公式会偏离中心）
-                PointF center = new PointF(CanvasW / 2f, CanvasH / 2f);
-                view.Center = center;
+                // 毫米原点落在画布上的位置：令标定区域包围盒居中
+                view.Origin = new PointF(
+                    CanvasW / 2f - (minX + maxX) / 2f * view.Rate,
+                    CanvasH / 2f + (minZ + maxZ) / 2f * view.Rate);
+
                 PointF[] corners = new PointF[4];
-                corners[0] = new PointF(center.X - Math.Abs(calib.LeftTopCorner[0] * view.Rate), center.Y - Math.Abs(calib.LeftTopCorner[1] * view.Rate));
-                corners[1] = new PointF(center.X - Math.Abs(calib.LeftBottomCorner[0] * view.Rate), center.Y + Math.Abs(calib.LeftBottomCorner[1] * view.Rate));
-                corners[2] = new PointF(center.X + Math.Abs(calib.RightBottomCorner[0] * view.Rate), center.Y + Math.Abs(calib.RightBottomCorner[1] * view.Rate));
-                corners[3] = new PointF(center.X + Math.Abs(calib.RightTopCorner[0] * view.Rate), center.Y - Math.Abs(calib.RightTopCorner[1] * view.Rate));
+                corners[0] = ToPixel(view.Origin, view.Rate, calib.LeftTopCorner);
+                corners[1] = ToPixel(view.Origin, view.Rate, calib.LeftBottomCorner);
+                corners[2] = ToPixel(view.Origin, view.Rate, calib.RightBottomCorner);
+                corners[3] = ToPixel(view.Origin, view.Rate, calib.RightTopCorner);
                 view.Corners = corners;
+
+                // 视图锚点取标定中心；落在标定区域之外时回退包围盒中心
+                PointF center = ToPixel(view.Origin, view.Rate, calib.Center);
+                float boxMinX = Math.Min(Math.Min(corners[0].X, corners[1].X), Math.Min(corners[2].X, corners[3].X));
+                float boxMaxX = Math.Max(Math.Max(corners[0].X, corners[1].X), Math.Max(corners[2].X, corners[3].X));
+                float boxMinY = Math.Min(Math.Min(corners[0].Y, corners[1].Y), Math.Min(corners[2].Y, corners[3].Y));
+                float boxMaxY = Math.Max(Math.Max(corners[0].Y, corners[1].Y), Math.Max(corners[2].Y, corners[3].Y));
+                if (center.X < boxMinX || center.X > boxMaxX || center.Y < boxMinY || center.Y > boxMaxY)
+                {
+                    center = new PointF((boxMinX + boxMaxX) / 2f, (boxMinY + boxMaxY) / 2f);
+                }
+                view.Center = center;
 
                 PointF lineH1 = new PointF(center.X, center.Y), lineH2 = new PointF(center.X + 100f, center.Y);
                 PointF lineV1 = new PointF(center.X, center.Y), lineV2 = new PointF(center.X, center.Y + 100f);
@@ -213,9 +245,9 @@ namespace AdaWeldSystem.EmguALG.LineLaserContour
         private static void DrawProfile(Graphics g, LineLaserProfileData pts, int count,
             ViewGeometry view, bool hasCalib, LineLaserSeamFeature result)
         {
-            // 校准模式按 center + 物理值×rate，回退按范围缩放
+            // 校准模式按原点 + 物理值×rate，与校准框共用同一变换；回退按范围缩放
             Func<float, float, PointF> trans = hasCalib
-                ? (Func<float, float, PointF>)((y, z) => new PointF(view.Center.X + y * view.Rate, view.Center.Y - z * view.Rate))
+                ? (Func<float, float, PointF>)((y, z) => new PointF(view.Origin.X + y * view.Rate, view.Origin.Y - z * view.Rate))
                 : (Func<float, float, PointF>)((y, z) => new PointF(Margin + (y - view.MinY) * view.FallbackScaleX,
                     CanvasH - Margin - (z - view.MinZ) * view.FallbackScaleY));
 
@@ -245,10 +277,11 @@ namespace AdaWeldSystem.EmguALG.LineLaserContour
         /// <param name="view">本帧视图几何</param>
         private static void DrawMillimeterGrid(Graphics g, ViewGeometry view)
         {
-            float mmYMin = -CanvasW / (2f * view.Rate);
-            float mmYMax = CanvasW / (2f * view.Rate);
-            float mmZMin = -CanvasH / (2f * view.Rate);
-            float mmZMax = CanvasH / (2f * view.Rate);
+            // 可见区域对应的毫米范围：以毫米原点落点为基准反算
+            float mmYMin = -view.Origin.X / view.Rate;
+            float mmYMax = (CanvasW - view.Origin.X) / view.Rate;
+            float mmZMin = (view.Origin.Y - CanvasH) / view.Rate;
+            float mmZMax = view.Origin.Y / view.Rate;
             float stepMm = Math.Max(1f, (float)Math.Round(40f / view.Rate));
 
             using (var penGridDash = new Pen(Color.FromArgb(80, 80, 80), 1f))
@@ -262,7 +295,7 @@ namespace AdaWeldSystem.EmguALG.LineLaserContour
                 for (int k = kStartY; k <= kEndY; k++)
                 {
                     float mmVal = k * stepMm;
-                    float sx = view.Center.X + mmVal * view.Rate;
+                    float sx = view.Origin.X + mmVal * view.Rate;
                     g.DrawLine(penGridDash, sx, 0f, sx, CanvasH);
                     string txt = string.Format("{0}", (int)Math.Round(mmVal));
                     g.DrawString(txt, fontGrid, brushGrid, sx + 2f, CanvasH - 4f - fontGrid.Height);
@@ -273,7 +306,7 @@ namespace AdaWeldSystem.EmguALG.LineLaserContour
                 for (int k = kStartZ; k <= kEndZ; k++)
                 {
                     float mmVal = k * stepMm;
-                    float sy = view.Center.Y - mmVal * view.Rate;
+                    float sy = view.Origin.Y - mmVal * view.Rate;
                     g.DrawLine(penGridDash, 0f, sy, CanvasW, sy);
                     string txt = string.Format("{0}", (int)Math.Round(mmVal));
                     g.DrawString(txt, fontGrid, brushGrid, 2f, sy + 1f);
@@ -304,9 +337,7 @@ namespace AdaWeldSystem.EmguALG.LineLaserContour
 
         #region 公共函数
 
-        /// <summary>
-        /// 把一帧轮廓渲染为 Mat
-        /// </summary>
+        /// <summary>把一帧轮廓渲染为 Mat</summary>
         /// <param name="profile">轮廓点集，为空时只清屏</param>
         /// <param name="calib">标定数据，HasData 为 false 时按轮廓范围自动缩放</param>
         /// <param name="result">焊缝特征点，有效时绘制特征点</param>
@@ -365,6 +396,7 @@ namespace AdaWeldSystem.EmguALG.LineLaserContour
             public bool HasCalib;
             public float Rate = 1f;
             public PointF Center = PointF.Empty;
+            public PointF Origin = PointF.Empty;
             public PointF[] Corners;
             public PointF CrossH1 = PointF.Empty;
             public PointF CrossH2 = PointF.Empty;

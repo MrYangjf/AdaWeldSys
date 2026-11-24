@@ -13,9 +13,7 @@ namespace AdaWeldSystem
         [DllImport("user32.dll")]
         public static extern bool SetProcessDPIAware();
 
-        /// <summary>
-        /// 应用程序的主入口点。
-        /// </summary>
+        /// <summary>应用程序的主入口点。</summary>
         [STAThread]
         static void Main()
         {

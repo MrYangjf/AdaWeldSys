@@ -3,7 +3,6 @@ using System.Runtime.InteropServices;
 namespace AdaWeldSystem.MotionControl.DeltaEtherCAT.Native
 {
     /// <summary>台达数字量 IO 原生封装</summary>
-    /// <remarks>IO 为 NPN 低电平有效，状态值 0 表示有效。</remarks>
     public static class EtherCATIONative
     {
 #if X86

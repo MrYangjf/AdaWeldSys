@@ -6,9 +6,7 @@ using Emgu.CV.CvEnum;
 
 namespace AdaWeldSystem.EmguALG.Core
 {   
-    /// <summary>
-    /// 阶段配置抽象基类：属性变更通知与算子参数
-    /// </summary>
+    /// <summary>阶段配置抽象基类：属性变更通知与算子参数</summary>
     public abstract class StageBase : INotifyPropertyChanged
     {
         private Dictionary<string, string> _parameters = new Dictionary<string, string>();
@@ -36,9 +34,7 @@ namespace AdaWeldSystem.EmguALG.Core
         }
     }
 
-    /// <summary>
-    /// 滤波阶段配置 - 管理滤波算子类型与参数
-    /// </summary>
+    /// <summary>滤波阶段配置 - 管理滤波算子类型与参数</summary>
     [TypeConverter(typeof(ExpandableObjectConverter))]
     public class FilterStage : StageBase
     {
@@ -106,9 +102,7 @@ namespace AdaWeldSystem.EmguALG.Core
         }
     }
 
-    /// <summary>
-    /// 形态学阶段配置 - 管理形态学算子类型与参数
-    /// </summary>
+    /// <summary>形态学阶段配置 - 管理形态学算子类型与参数</summary>
     [TypeConverter(typeof(ExpandableObjectConverter))]
     public class MorphologyStage : StageBase
     {
@@ -157,9 +151,7 @@ namespace AdaWeldSystem.EmguALG.Core
         }
     }
 
-    /// <summary>
-    /// 边缘检测阶段配置（算子与参数）
-    /// </summary>
+    /// <summary>边缘检测阶段配置（算子与参数）</summary>
     [TypeConverter(typeof(ExpandableObjectConverter))]
     public class EdgeDetectionStage : StageBase
     {
@@ -222,9 +214,7 @@ namespace AdaWeldSystem.EmguALG.Core
         }
     }
 
-    /// <summary>
-    /// 特征提取阶段配置（算子与近似算法）
-    /// </summary>
+    /// <summary>特征提取阶段配置（算子与近似算法）</summary>
     [TypeConverter(typeof(ExpandableObjectConverter))]
     public class FeatureExtractionStage : StageBase
     {
@@ -292,9 +282,7 @@ namespace AdaWeldSystem.EmguALG.Core
         }
     }
 
-    /// <summary>
-    /// 模板匹配阶段配置（算子与显示开关）
-    /// </summary>
+    /// <summary>模板匹配阶段配置（算子与显示开关）</summary>
     [TypeConverter(typeof(ExpandableObjectConverter))]
     public class TemplateMatchStage : StageBase
     {
@@ -343,9 +331,7 @@ namespace AdaWeldSystem.EmguALG.Core
         }
     }
 
-    /// <summary>
-    /// 流水线完整配置：聚合各阶段并支持深拷贝
-    /// </summary>
+    /// <summary>流水线完整配置：聚合各阶段并支持深拷贝</summary>
     [TypeConverter(typeof(ExpandableObjectConverter))]
     public class PipelineConfig
     {

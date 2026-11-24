@@ -1,13 +1,12 @@
 ﻿﻿using System;
 using System.Threading;
 using AdaWeldSystem.FileOperate;
+using AdaWeldSystem.ConfigFileControl.Implementations;
 using AdaWeldSystem.Comm.SystemComm;
 
 namespace AdaWeldSystem.MainDeviceControl.DeviceStateApiCore
 {
     /// <summary>流程运行模式：动作来源分类。</summary>
-    /// <remarks>自动＝初始化链与程序编排；手动＝界面按钮触发的单次动作。
-    /// 动作入口调用前置位，动作日志据此甄别。</remarks>
     public enum WorkflowRunMode
     {
         /// <summary>自动：初始化、编排、后台流程触发。</summary>
@@ -18,8 +17,6 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceStateApiCore
     }
 
     /// <summary>就绪分层：从断连到工作零位。</summary>
-    /// <remarks>数值只用于比较；日志显示 L 号。
-    /// 免回零轴使能后直接 L3。</remarks>
     public enum ReadinessStage
     {
         /// <summary>断连：L0~L4 全部失效。</summary>
@@ -42,7 +39,6 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceStateApiCore
     }
 
     /// <summary>模组流程基类。</summary>
-    /// <remarks>不自带线程（线程归 DeviceControlWork）；FlowProcess 各 case 内由 bool 判定推进，推进前必须调用 ResetWorkTime()。</remarks>
     public abstract class DeviceWorkflowBase : DeviceStateBase, IDisposable
     {
         #region 私有变量
@@ -68,7 +64,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceStateApiCore
         /// <summary>是否已释放。</summary>
         private bool _disposed;
 
-        /// <summary>流程运行模式（默认自动；由动作入口在调用前显式置位）。</summary>
+        /// <summary>流程运行模式</summary>
         private volatile WorkflowRunMode _runMode = WorkflowRunMode.Auto;
 
         #endregion
@@ -101,7 +97,6 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceStateApiCore
         }
 
         /// <summary>流程步控：驱动 FlowProcess() / ResetProcess() 的执行位置。</summary>
-        /// <remarks>推进步号前须调用 ResetWorkTime()，否则计时带入下一步。</remarks>
         public int RunStep
         {
             get { return _runStep; }
@@ -114,7 +109,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceStateApiCore
             get { return DateTime.Now - new DateTime(Interlocked.Read(ref _stepStartTicks)); }
         }
 
-        /// <summary>超时计时（秒）：单步停留超过该值即判超时；0 表示不启用超时。</summary>
+        /// <summary>超时计时（秒）</summary>
         public int TimeOutSeconds
         {
             get { return _timeOutSeconds; }
@@ -146,14 +141,20 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceStateApiCore
         /// <summary>模组配置文件名（不含扩展名）；默认取子类类型名。</summary>
         protected virtual string ConfigFileName { get { return GetType().Name; } }
 
-        /// <summary>模组配置相对目录（相对程序基目录，不含文件名）；各子流程重写到自身功能类别。</summary>
-        protected virtual string ConfigRelativeDir { get { return @"Config\MainDeviceControl\Workflow_XML"; } }
+        /// <summary>模组配置所属模块</summary>
+        protected virtual string ConfigModule { get { return "MainDeviceControl"; } }
 
-        /// <summary>模组配置读写器，首次访问时按 ConfigRelativeDir + ConfigFileName 惰性创建。</summary>
-        /// <remarks>非线程安全：仅在初始化/停机阶段调用，禁在 FlowProcess 内用。</remarks>
+        /// <summary>模组配置读写器，首次访问时按 ConfigModule + ConfigFileName 惰性创建。</summary>
         protected XdocumentReaderWriter Config
         {
-            get { return _config ?? (_config = new XdocumentReaderWriter(ConfigRelativeDir, ConfigFileName)); }
+            get
+            {
+                if (_config == null)
+                {
+                    _config = ConfigFileManager.Instance.GetModuleXml(ConfigModule, ConfigFileName).Raw;
+                }
+                return _config;
+            }
         }
 
         #endregion
@@ -186,7 +187,6 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceStateApiCore
         }
 
         /// <summary>释放资源并调用子类释放钩子。</summary>
-        /// <remarks>使用标准 IDisposable.Dispose()，禁止重写 Dispose(bool)。</remarks>
         public void Dispose()
         {
             if (_disposed) return;
@@ -196,7 +196,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceStateApiCore
         }
 
         /// <summary>整机下发模组焊接态迁移请求。</summary>
-        /// <remarks>SetWeldStatus 为 protected，本方法供编排层统一下发目标焊接态。</remarks>
+
         /// <param name="target">目标焊接过程态</param>
         /// <param name="reason">迁移原因</param>
         public void RequestWeldStatus(SubDeviceWeldStatus target, string reason)
@@ -219,7 +219,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceStateApiCore
             return mode == WorkflowRunMode.Manual ? "手动" : "自动";
         }
 
-        /// <summary>当前模式中文名（动作代码在本线程取用；起后台线程前须先捕获）。</summary>
+        /// <summary>当前模式中文名</summary>
         protected string ModeText
         {
             get { return ModeName(_runMode); }
@@ -235,7 +235,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceStateApiCore
         }
 
         /// <summary>推进执行步并同步刷新步骤计时。</summary>
-        /// <remarks>改步须同时刷新计时，漏刷新致误判超时。</remarks>
+
         /// <param name="step">目标执行步号</param>
         protected void AdvanceStep(int step)
         {
@@ -274,7 +274,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceStateApiCore
         }
 
         /// <summary>读取整型配置项（解析失败回退默认值，避免首次</summary>
-        /// <remarks>运行文件为空时抛异常）。</remarks>
+
         /// <param name="elementName">配置元素名</param>
         /// <param name="defaultValue">解析失败时的回退值</param>
         /// <returns>解析得到的整数</returns>
@@ -308,14 +308,12 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceStateApiCore
         public virtual bool IsEnabled { get { return false; } }
 
         /// <summary>本流程依赖轴是否已回零（L3 前提）。</summary>
-        /// <remarks>免回零轴以「位置可信」等价。</remarks>
         public virtual bool IsHomed { get { return false; } }
 
         /// <summary>本流程是否已到工作零位（L4 前提）。</summary>
         public virtual bool IsAtWorkZero { get { return false; } }
 
         /// <summary>依赖轴是否需要回零（轴级能力）。</summary>
-        /// <remarks>⛔ 禁按轴名写分支。</remarks>
         protected virtual bool NeedHoming { get { return false; } }
 
         /// <summary>依赖轴是否具备绝对编码器（免回零）。</summary>
@@ -393,10 +391,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceStateApiCore
         #endregion
 
         #region 抽象契约：常驻流程（设备主流程，10 项）
-        /// <remarks>本组为「常驻流程」：是否阻塞由消费方决定。
-        /// 非阻塞三层铁律：①流程常驻按拍执行、无阻塞循环；②等待层＝按拍轮询变量（大步 10/20/30、小步 +1），绝不是线程等待；③命令层下发即返回，流程内调阻塞命令即卡死。</remarks>
         /// <summary>流程处理：以 RunStep 驱动，每步由 bool 判定推进。</summary>
-        /// <remarks>红线：case 体内禁止 Thread.Sleep / while 轮询 / 无界同步等待；未完成时直接结束本次调用，下周期重试。</remarks>
         public abstract void FlowProcess();
 
         /// <summary>复位流程：线性阻塞链（if (!动作()) return false;），非步控。</summary>

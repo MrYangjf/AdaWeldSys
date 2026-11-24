@@ -3,10 +3,7 @@ using System;
 
 namespace AdaWeldSystem.MonitorCam.IMonitorCam
 {
-    /// <summary>
-    /// 监控相机健康监督状态变更事件参数。
-    /// 只描述相机状态，流程态不在此。
-    /// </summary>
+    /// <summary>监控相机健康监督状态变更事件参数。 只描述相</summary>
     public class MonitorSupervisionStatusChangedEventArgs : EventArgs
     {
         /// <summary>健康监督状态</summary>
@@ -31,10 +28,7 @@ namespace AdaWeldSystem.MonitorCam.IMonitorCam
         public DateTime Timestamp { get; set; }
     }
 
-    /// <summary>
-    /// 帧采集完成事件参数，供工作流订阅。
-    /// 2D 面阵相机，无模式，帧均单次触发。
-    /// </summary>
+    /// <summary>帧采集完成事件参数，供工作流订阅。 2D 面阵相机，无</summary>
     public class MonitorCameraFrameCompletedEventArgs : EventArgs
     {
         /// <summary>采集到的图像帧</summary>

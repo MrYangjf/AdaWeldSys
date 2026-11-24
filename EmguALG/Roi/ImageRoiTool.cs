@@ -2,17 +2,14 @@ using System;
 using System.Drawing;
 using System.IO;
 using AdaWeldSystem.FileOperate;
+using AdaWeldSystem.ConfigFileControl.Implementations;
 using Emgu.CV;
 using Emgu.CV.CvEnum;
 using Emgu.CV.Structure;
 
 namespace AdaWeldSystem.EmguALG.Roi
 {
-    /// <summary>
-    /// 通用 ROI 工具（算法层）：ROI 的持久化与区域运算（裁剪/掩膜）。
-    /// </summary>
-    /// <remarks>只处理数据与图像，不引用 WinForms 控件或事件。
-    /// 场景未定，当前不接任何算法；算法需要时按需调用，取用与否不影响其他算法。</remarks>
+    /// <summary>通用 ROI 工具（算法层）：ROI 的持久化与区域运算（裁剪/掩膜）。</summary>
     public static class ImageRoiTool
     {
         #region 常量
@@ -21,8 +18,11 @@ namespace AdaWeldSystem.EmguALG.Roi
         private const string Section = "ImageROI";
 
         /// <summary>默认配置文件路径</summary>
-        public static readonly string DefaultConfigPath = Path.Combine(
-            AppDomain.CurrentDomain.BaseDirectory, "Config", "EmguALG", "Algorithm_INI", "ImageRoi.ini");
+        public static readonly string DefaultConfigPath =
+            ConfigFileManager.ModuleAbsolutePath(ConfigModule, "ImageRoi.ini");
+
+        /// <summary>ROI 配置所属模块（全局配置目录下的模块层）。</summary>
+        private const string ConfigModule = "EmguALG";
 
         #endregion
 
@@ -35,7 +35,7 @@ namespace AdaWeldSystem.EmguALG.Roi
             ImageRoi roi = new ImageRoi();
             if (!File.Exists(DefaultConfigPath)) return roi;
 
-            INIFile ini = new INIFile(DefaultConfigPath);
+            INIFile ini = ConfigFileManager.Instance.GetModuleIni(ConfigModule, "ImageRoi.ini").Raw;
             roi.Enabled = ini.ReadBool(Section, "Enabled", false);
             roi.X = ini.ReadInt(Section, "X", 0);
             roi.Y = ini.ReadInt(Section, "Y", 0);
@@ -56,20 +56,21 @@ namespace AdaWeldSystem.EmguALG.Roi
                 Directory.CreateDirectory(directory);
             }
 
-            INIFile ini = new INIFile(DefaultConfigPath);
+            IniConfigFile file = ConfigFileManager.Instance.GetModuleIni(ConfigModule, "ImageRoi.ini");
+            INIFile ini = file.Raw;
             ini.WriteInt(Section, "X", roi.X);
             ini.WriteInt(Section, "Y", roi.Y);
             ini.WriteInt(Section, "Width", roi.Width);
             ini.WriteInt(Section, "Height", roi.Height);
             ini.WriteBool(Section, "Enabled", roi.Enabled);
-            ini.SaveToFile();
+            ConfigFileManager.SaveIni(file, "视觉感兴趣区", "配置变更");
         }
 
         #endregion
 
         #region 区域运算
 
-        /// <summary>把 ROI 裁剪到源图范围内；未启用或完全越界时返回 null（表示按整幅图执行）</summary>
+        /// <summary>把 ROI 裁剪到源图范围内；未启用或完全越界时返回 null</summary>
         /// <param name="source">源图</param>
         /// <param name="roi">ROI</param>
         /// <returns>可直接用于区域运算的 ROI，或 null</returns>

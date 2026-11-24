@@ -1,7 +1,6 @@
 namespace AdaWeldSystem.MotionControl.DeltaEtherCAT.Native
 {
     /// <summary>台达返回码常量</summary>
-    /// <remarks>取值取自 SDK 原档 EtherCAT_DLL_Err.cs；其余返回码可经 GetMessage 取原文描述。</remarks>
     public static class DeltaErrorCode
     {
         #region 通用

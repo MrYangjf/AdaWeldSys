@@ -1,17 +1,18 @@
-﻿using AdaWeldSystem.MainDeviceControl.DeviceWorkflow;
-using AdaWeldSystem.WeldParamControl;
+﻿using AdaWeldSystem.Comm.SystemComm;
 using AdaWeldSystem.LineLaserCam;
 using AdaWeldSystem.LineLaserCam.ILineLaser;
+using AdaWeldSystem.MainDeviceControl;
+using AdaWeldSystem.MainDeviceControl.DeviceStateApiCore;
+using AdaWeldSystem.MainDeviceControl.DeviceWorkflow;
 using AdaWeldSystem.PCLOperate.Models;
-using Emgu.CV;
+using AdaWeldSystem.WeldParamControl;
 using AntdUI;
+using Emgu.CV;
+using ScottPlot;
 using System;
 using System.Drawing;
 using System.Threading;
 using System.Windows.Forms;
-using AdaWeldSystem.Comm.SystemComm;
-using AdaWeldSystem.MainDeviceControl;
-using AdaWeldSystem.MainDeviceControl.DeviceStateApiCore;
 //using ScottPlot;
 
 namespace AdaWeldSystem.UIDesign.ControlPage
@@ -50,6 +51,7 @@ namespace AdaWeldSystem.UIDesign.ControlPage
         private Thread _profilePollThread;
         private volatile bool _profilePolling;
         private long _lastProfileVersion;
+        private volatile bool _contourHiddenByManual;
 
         // 工艺曲线轮询：同节拍，版本变化时增量拷点
         private long _lastParamVersion;
@@ -110,7 +112,6 @@ private const string NameSeamWidth = "接头宽";
         /// <summary>模组开关名称表（索引与开关常量同步）。</summary>
 private readonly string[] _deviceSwitchNames = { "线激光", "监控相机", "控制器", "机器人" };
         /// <summary>线激光开关索引（0）。</summary>
-        /// <remarks>被 OnDeviceSwitchClick 点击分发共用，改名称表须同步改本值。</remarks>
         private const int LineLaserSwitchIndex = 0;
         // 徽标配色：红=断开 / 绿=连接（Ant Design 语义色，BadgeBack 驱动 SVG 填色）
         private static readonly System.Drawing.Color DeviceBadgeRed = System.Drawing.Color.FromArgb(255, 77, 79);
@@ -133,7 +134,7 @@ private readonly string[] _deviceSwitchNames = { "线激光", "监控相机", "�
         public MainPage()
         {
             InitializeComponent();
-            KeepSeriesTogglesOnTop();
+
             // 字段在构造函数初始化，禁止声明处赋值
             SeamWidth = new ChartVar();
             robotSpeed = new ChartVar();
@@ -204,7 +205,6 @@ private readonly string[] _deviceSwitchNames = { "线激光", "监控相机", "�
 
         #region 私有函数
         /// <summary>焊接模式是否生效：整机 Running，含模拟测试。</summary>
-        /// <remarks>门控仅焊接流程开启才绘制的界面元素。</remarks>
         private bool IsWeldModeActive
         {
             get { return _currentStatus == MainDeviceStatus.Running; }
@@ -215,6 +215,31 @@ private readonly string[] _deviceSwitchNames = { "线激光", "监控相机", "�
             _weldFlowToolTip?.Dispose();
             _weldFlowToolTip = null;
             DisposeComponents();
+        }
+
+        /// <summary>手动模式隐藏主页轮廓，切到线激光调试页显示。</summary>
+        private void HideContourForManual()
+        {
+            if (_contourHiddenByManual) return;
+            _contourHiddenByManual = true;
+            if (IsDisposed || Disposing || !IsHandleCreated) return;
+            if (formsPlot1.InvokeRequired)
+            {
+                try { formsPlot1.BeginInvoke(new Action(HideContourOnUiThread)); }
+                catch { }
+                return;
+            }
+            HideContourOnUiThread();
+        }
+
+        /// <summary>UI 线程隐藏轮廓线与特征点。</summary>
+        private void HideContourOnUiThread()
+        {
+            if (IsDisposed || Disposing) return;
+            if (_contourSignalPlot != null) _contourSignalPlot.IsVisible = false;
+            if (_featurePointPlot != null) _featurePointPlot.IsVisible = false;
+            _lastProfileVersion = 0;
+            try { formsPlot1.Refresh(); } catch { }
         }
 
         /// <summary>启动轮廓轮询线程。</summary>
@@ -256,11 +281,23 @@ private readonly string[] _deviceSwitchNames = { "线激光", "监控相机", "�
             {
                 try
                 {
-                    ProfileSnapshot snap = LineLaserManager.Instance.Profile;
-                    if (snap != null && snap.Version != _lastProfileVersion)
+                    // 轮廓只在焊接自动流程或模拟流程显示；手动调试由线激光调试页承载
+                    // 模拟启动时线激光流程态被置 Manual，故不能用 RunMode 判据（会误挡模拟）
+                    DeviceControlWork dc = DeviceControlWork.Instance;
+                    bool contourAllowed = dc.IsAutoWeldingRunning || dc.IsSimulationEnabled;
+                    if (contourAllowed)
                     {
-                        _lastProfileVersion = snap.Version;
-                        ApplyProfileSnapshot(snap);
+                        _contourHiddenByManual = false;
+                        ProfileSnapshot snap = LineLaserManager.Instance.Profile;
+                        if (snap != null && snap.Version != _lastProfileVersion)
+                        {
+                            _lastProfileVersion = snap.Version;
+                            ApplyProfileSnapshot(snap);
+                        }
+                    }
+                    else if (!_contourHiddenByManual)
+                    {
+                        HideContourForManual();
                     }
                 }
                 catch
@@ -302,7 +339,7 @@ private readonly string[] _deviceSwitchNames = { "线激光", "监控相机", "�
         }
 
         /// <summary>增量拷贝新点到显示序列（只显示不加工）。</summary>
-        /// <remarks>算法复位清空缓存时同步清空显示序列。</remarks>
+
         /// <param name="source">算法侧原始点缓存（只读消费）</param>
         /// <param name="target">显示序列</param>
         /// <param name="lastIndex">上次已消费的点数（调用方持有，用于增量拷贝）</param>
@@ -336,12 +373,21 @@ private readonly string[] _deviceSwitchNames = { "线激光", "监控相机", "�
             int pointCount = Math.Min(snap.Count, ContourSignalMaxPoints);
             if (pointCount <= 0) return;
 
+            // SignalXY 要求 X 严格升序；新相机局部 Y 回退（如 14.51→14.47）会令 Refresh 抛异常。
+            // 剔除回退点：只在 X 递增时写入对应 Z，保住 X↔Z 一一对应；显示点数取实际写入数。
+            int written = 0;
+            double lastX = double.NegativeInfinity;
             for (int i = 0; i < pointCount; i++)
             {
-                _contourSignalData[i] = snap.Zs[i];
-                _contourSignalXs[i] = snap.Ys[i];   // X = 沿激光线物理坐标 Y（非等距，AddSignalXY 显式传入）
+                double x = snap.Ys[i];
+                if (x <= lastX) continue;
+                _contourSignalXs[written] = x;      // X = 沿激光线物理坐标 Y（非等距，AddSignalXY 显式传入）
+                _contourSignalData[written] = snap.Zs[i];
+                lastX = x;
+                written++;
             }
-            _snapPointCount = pointCount;
+            if (written <= 0) return;
+            _snapPointCount = written;
 
             _snapHasResult = snap.HasResult;
             if (snap.HasResult)
@@ -362,7 +408,6 @@ private readonly string[] _deviceSwitchNames = { "线激光", "监控相机", "�
         }
 
         /// <summary>首帧按校准框四角点锁定轴范围（仅一次）。</summary>
-        /// <remarks>SetAxisLimits 属 UI 操作，经 _pendingAxisLock 应用。</remarks>
         private void LockContourAxisOnce()
         {
             if (_contourAxisLocked) return;
@@ -440,7 +485,6 @@ private readonly string[] _deviceSwitchNames = { "线激光", "监控相机", "�
         }
 
         /// <summary>UI 线程重绑四条工艺曲线并刷新。</summary>
-        /// <remarks>轮询端增量拷点后的显示动作。</remarks>
         private void RefreshParamChartsUi()
         {
             try
@@ -454,11 +498,6 @@ private readonly string[] _deviceSwitchNames = { "线激光", "监控相机", "�
         }
 
         /// <summary>重绑工艺参数实时曲线（同图只画勾选项）。</summary>
-        /// <remarks>ScottPlot 4.1 无逐系列 Visible，清空后重建。
-        /// 单选互斥由 ApplySeriesSingleSelection 保证，失效只是多线同图。
-        /// ⚠️ `Plot.Clear()` 会连同标题与轴标签一起清掉。
-        /// 实测位图变小，标题参与渲染。
-        /// 重建后须重设标题与轴，否则首帧后标题消失。</remarks>
         private void RefreshParamCharts()
         {
             // 页面销毁后不再重建（排队回调可能仍在）
@@ -466,8 +505,8 @@ private readonly string[] _deviceSwitchNames = { "线激光", "监控相机", "�
 
             formsPlot2.Plot.Clear();
             // 标题与轴标签随 Clear 被清，须重建后重设
-            formsPlot2.Configuration.DpiStretch = false;
-            formsPlot2.Plot.Title("工艺参数实时曲线");
+            formsPlot2.Configuration.DpiStretch = true;
+            formsPlot2.Plot.Title("");
             formsPlot2.Plot.XLabel("机器人 X 轴");
             formsPlot2.Plot.YLabel("参数值");
             if (chkSeamWidth.Checked)
@@ -484,27 +523,9 @@ private readonly string[] _deviceSwitchNames = { "线激光", "监控相机", "�
             formsPlot2.Plot.AxisAuto();
             formsPlot2.Plot.Legend();
             formsPlot2.Refresh();
-            KeepSeriesTogglesOnTop();
+
         }
 
-        /// <summary>保证系列勾选框浮在图表之上。</summary>
-        /// <remarks>ScottPlot 只重绘自身位图，不改变同层 z 序；此处仅在序错时纠正，避免每帧 BringToFront 引发整块重绘。单个勾选框不在最上层即置顶。</remarks>
-        private void KeepSeriesTogglesOnTop()
-        {
-            EnsureOnTop(chkSeamWidth);
-            EnsureOnTop(chkWireZ);
-            EnsureOnTop(chkLaserPower);
-            EnsureOnTop(chkFeedSpeed);
-            EnsureOnTop(chkRobotSpeed);
-        }
-
-        /// <summary>勾选框不在图表之上时置顶。</summary>
-        /// <param name="toggle">目标勾选框</param>
-        private void EnsureOnTop(System.Windows.Forms.Control toggle)
-        {
-            if (panelChart2.Controls.GetChildIndex(toggle) > panelChart2.Controls.GetChildIndex(formsPlot2))
-                toggle.BringToFront();
-        }
 
         /// <summary>把坐标序列以折线加入图表（线色按系列区分）。</summary>
         /// <param name="chart">目标图表</param>
@@ -523,13 +544,7 @@ private readonly string[] _deviceSwitchNames = { "线激光", "监控相机", "�
         }
 
         /// <summary>把焊缝宽度上下限画成水平参考线（红色虚线）。</summary>
-        /// <remarks>限值取自 CurrentAutoParam 真实配置。
-        /// 上限≤下限（含默认 0/0 未配置）时不画。
-        /// 判据与 WeldParamLookupAlgorithm 一致，防拉低纵轴。
-        /// **仅焊接流程开启后绘制**：初始化期限值可能变化。
-        /// 此时画出会叠加图例条目。
-        /// 起焊后每次重绘按当前配置重画，Plot.Clear 已清前批。
-        /// 状态变更时记一条日志，便于现场排查。</remarks>
+
         /// <param name="chart">目标图表</param>
         private void AddSeamWidthLimitLines(ScottPlot.FormsPlot chart)
         {
@@ -584,28 +599,18 @@ private readonly string[] _deviceSwitchNames = { "线激光", "监控相机", "�
 
         void AfterInitializeUI()
         {
-            // 线激光轮廓图：plot1 已在 AddContourLineChart 建好，
-            // 此处不再重复设置标题/轴（会重复显示；重复建图例会叠加成两份条目）
-            // 四合一工艺参数图：四参数同图，复选框切换
-            // 标题/轴兜底一次，首帧后由 RefreshParamCharts 接管
             SetupMergedChart(formsPlot2);
             // 显示后按最终尺寸核算 2×2 设备区域
             LayoutDeviceSwitchAreas();
         }
 
         /// <summary>初始化四合一工艺参数图（多系列共用坐标轴）。</summary>
-        /// <remarks>⚠️ **不建图例、不设置标题/轴**。
-        /// plot2 图例与标题统一由 <see cref="RefreshParamCharts"/> 负责。
-        /// 该路径每次先 <c>Plot.Clear()</c> 再重建。
-        /// 而 <c>Clear()</c> 会连同标题/轴清掉，重建须一并重设。
-        /// 此路径若再建 Legend，会与刷新路径叠加成两个图例。
-        /// 同一份条目被渲染两遍，右下角出现重复记录。</remarks>
+
         /// <param name="chart">目标图表</param>
         private void SetupMergedChart(ScottPlot.FormsPlot chart)
         {
             // 仅兜底设一次标题/轴（空白期显示用）；图例不建（由刷新路径统一创建）
             chart.Configuration.DpiStretch = false;
-            chart.Plot.Title("工艺参数实时曲线");
             chart.Plot.XLabel("机器人 X 轴");
             chart.Plot.YLabel("参数值");
             chart.Refresh();
@@ -643,7 +648,7 @@ private readonly string[] _deviceSwitchNames = { "线激光", "监控相机", "�
 
         #region 整机状态标签（LabelStatus）
         /// <summary>构造报警/急停文本：前缀加首个具体原因。</summary>
-        /// <remarks>受宽度限制只取首个原因，完整清单见日志。</remarks>
+
         /// <param name="prefix">状态前缀（报警 / 急停）。</param>
         /// <returns>可直接显示的报警文本。</returns>
         private string BuildAlarmText(string prefix)
@@ -669,7 +674,7 @@ private readonly string[] _deviceSwitchNames = { "线激光", "监控相机", "�
             }
             catch (Exception ex)
             {
-                //⛔ 报警不得抛异常致状态栏崩，降级兜底并记日志
+                // 报警异常降级兜底并记日志
                 Log("读取报警信息失败 " + ex.Message, MessageLevel.Warning);
             }
 
@@ -691,8 +696,7 @@ private readonly string[] _deviceSwitchNames = { "线激光", "监控相机", "�
         }
 
         /// <summary>应用整机状态：报警文本 + 背景色映射。</summary>
-        /// <remarks>Running=绿/Reseting=黄/Alarm=橙/EStop=红闪(0.5s)/Stop=蓝/NoReset=灰；
-        /// 报警/急停追加原因，未知态给可读文案。</remarks>
+
         /// <param name="state">整机运行态</param>
         private void ApplyDeviceStatus(MainDeviceStatus state)
         {
@@ -771,7 +775,7 @@ private readonly string[] _deviceSwitchNames = { "线激光", "监控相机", "�
         }
 
         /// <summary>机器人指令接收处理。</summary>
-        /// <remarks>封送到 UI 线程后推进焊接流程状态机。</remarks>
+
         /// <param name="sender">发送方。</param>
         /// <param name="message">消息内容。</param>
         private void OnRobotCommandReceived(object sender, string message)
@@ -783,7 +787,6 @@ private readonly string[] _deviceSwitchNames = { "线激光", "监控相机", "�
 
         #region 焊接流程步骤条（steps1，安全位→焊前检查→起焊→焊接→结束）
         /// <summary>初始化步骤条并停在安全位。</summary>
-        /// <remarks>文案来自 WeldParamData.WeldFlowSteps。</remarks>
         private void InitWeldFlowSteps()
         {
             steps1.Items.Clear();
@@ -817,13 +820,11 @@ private readonly string[] _deviceSwitchNames = { "线激光", "监控相机", "�
         }
 
         /// <summary>读取 AntdUI 为每个步骤项算出的矩形（StepsItem.rect，内部属性）。</summary>
-        /// <remarks>Steps 无逐项命中接口，用其布局结果避免自算。</remarks>
         private static readonly System.Reflection.PropertyInfo WeldFlowStepRectProperty =
             typeof(AntdUI.StepsItem).GetProperty(
                 "rect", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
 
         /// <summary>步骤条悬停：切换到鼠标所在步骤的提示。</summary>
-        /// <remarks>提示按步骤项自身保存，不会与当前步错位。</remarks>
         private void OnWeldFlowStepsMouseMove(object sender, MouseEventArgs e)
         {
             int index = -1;
@@ -857,7 +858,7 @@ private readonly string[] _deviceSwitchNames = { "线激光", "监控相机", "�
         }
 
         /// <summary>设置当前步骤与状态（默认只前进）。</summary>
-        /// <remarks>防迟到事件把进度拉回。</remarks>
+
         /// <param name="step">目标步骤</param>
         /// <param name="state">步骤状态（Process/Finish/Error）</param>
         /// <param name="allowBack">是否允许回退（复位/重新开始用）</param>
@@ -878,7 +879,7 @@ private readonly string[] _deviceSwitchNames = { "线激光", "监控相机", "�
         }
 
         /// <summary>整机状态联动步骤条。</summary>
-        /// <remarks>Running 进入焊前检查 / 停止收口 / 复位回退 / 报警标红。</remarks>
+
         /// <param name="previous">切换前整机态</param>
         /// <param name="state">切换后整机态</param>
         private void ApplyWeldFlowDeviceStatus(MainDeviceStatus previous, MainDeviceStatus state)
@@ -928,7 +929,7 @@ private readonly string[] _deviceSwitchNames = { "线激光", "监控相机", "�
         }
 
         /// <summary>模组焊接过程态 → 步骤条联动（机器人指令为主，</summary>
-        /// <remarks>本方法为兜底）。</remarks>
+
         /// <param name="status">焊接过程态</param>
         private void ApplyWeldFlowWeldStatus(SubDeviceWeldStatus status)
         {
@@ -984,7 +985,6 @@ private readonly string[] _deviceSwitchNames = { "线激光", "监控相机", "�
 
         #region 硬件快捷开关（AntdUI ButtonShadow）
         /// <summary>初始化硬件快捷开关（常驻悬浮面板）：2×2 区域。</summary>
-        /// <remarks>每区方按钮 + 等高 Alert；徽标/文字色表示连接态。</remarks>
         private void InitDeviceSwitchButtons()
         {
             // Tooltip 保留：用户取消的是 ShowTips 按钮
@@ -1049,7 +1049,6 @@ private readonly string[] _deviceSwitchNames = { "线激光", "监控相机", "�
         }
 
         /// <summary>按 panelfloatbutton 实际客户区核算 2×2：按钮与 Alert 等高、区内间隔 1px、区间间</summary>
-        /// <remarks>隔 8px。</remarks>
         private void LayoutDeviceSwitchAreas()
         {
             if (_deviceButtons == null || _deviceAlerts == null) return;
@@ -1098,7 +1097,7 @@ private readonly string[] _deviceSwitchNames = { "线激光", "监控相机", "�
         }
 
         /// <summary>线激光是否已连接（徽标绿勾/红叉）。</summary>
-        /// <remarks>按 SubDeviceState.Connected 判定，不依据焊接过程态 PreWork/Working。</remarks>
+
         /// <returns>已连接返回 true</returns>
         private bool IsLineLaserRunning()
         {
@@ -1106,7 +1105,6 @@ private readonly string[] _deviceSwitchNames = { "线激光", "监控相机", "�
         }
 
         /// <summary>切换线激光连接态（只关心连接/断开）。</summary>
-        /// <remarks>经 LineLaserWorkflow 的 ConnectOn/ConnectOff 契约入口（后台线程非阻塞），不直驱子类 Start/Stop/Reset；报警态仅提示复位。</remarks>
         private void ToggleLineLaserConnection()
         {
             var wf = LineLaserWorkflow.Instance;
@@ -1136,10 +1134,6 @@ private readonly string[] _deviceSwitchNames = { "线激光", "监控相机", "�
         }
 
         /// <summary>按连接态刷新快捷开关徽标与背景。</summary>
-        /// <remarks>ButtonShadow 为常驻控件，仅改 BadgeSvg/BadgeBack/DefaultBack 属性即可。
-        /// 四个设备各自快照，仅刷新变化按钮。
-        /// 状态源同范式：三工作流取 SubDeviceState.Connected。
-        /// ConnectOn/InitializeOn 成功时置位，机器人取心跳 IsRobotOnline。</remarks>
         public void RefreshDeviceSwitchUi()
         {
             if (!this.IsHandleCreated) return;
@@ -1203,7 +1197,7 @@ private readonly string[] _deviceSwitchNames = { "线激光", "监控相机", "�
 
         #region 工艺参数实时曲线（单选互斥）
         /// <summary>五项曲线互斥单选：先互销其余项再重建。</summary>
-        /// <remarks>互销会连锁触发 CheckedChanged，用 _suppressSeriesEvent 防重入。</remarks>
+
         /// <param name="sender">事件源（复选框）</param>
         /// <param name="e">勾选事件参数</param>
         private void ChkSeries_CheckedChanged(object sender, AntdUI.BoolEventArgs e)
@@ -1260,7 +1254,6 @@ private readonly string[] _deviceSwitchNames = { "线激光", "监控相机", "�
         #region 公共函数
         /// <summary>把指定字符区间按颜色上色。</summary>
         /// <param name="start">起始位置。</param>
-        /// <remarks>SetStyle 区间开闭语义待实机确认（半开则 length 减 1）；隔离本方法以免吞掉整行日志。</remarks>
         private void ApplyLineColor(int start, int length, Color color)
         {
             try
@@ -1371,7 +1364,6 @@ private readonly string[] _deviceSwitchNames = { "线激光", "监控相机", "�
         /// <summary>追加日志并按级别着色。</summary>
         /// <param name="color">文本颜色（ShowLog 按 MessageLevel 映射，Error=红）</param>
         /// <param name="strMsg">日志内容</param>
-        /// <remarks>用 Input.SetStyle 按字符区间逐行着色；不用 Status 校验态（那会整框变红）。</remarks>
         public void LogAppend(Color color, string strMsg)
         {
             string line = null;
@@ -1404,17 +1396,6 @@ private readonly string[] _deviceSwitchNames = { "线激光", "监控相机", "�
             }
         }
 
-        /// <summary>绑定实时数据曲线（四合一工艺参数图）。</summary>
-        /// <remarks>⚠️ **初始化期不构图**：本方法不调用 <see cref="RefreshParamCharts"/>。
-        /// 构造期缓存无点，Clear+AddSeries 只画出空图。
-        /// 首帧到达又重建一次，同一张图被构建两遍。
-        /// 首帧数据到达时一次构图。
-        /// 标题/轴/图例由刷新路径负责，此处不设。</remarks>
-        public void AddNewDataLineChart()
-        {
-            // 无需在此构图：首帧数据触发 RefreshParamCharts
-        }
-
         /// <summary>初始化轮廓线图表。</summary>
         public void AddContourLineChart()
         {
@@ -1430,7 +1411,6 @@ private readonly string[] _deviceSwitchNames = { "线激光", "监控相机", "�
             formsPlot1.Configuration.MiddleClickDragZoom = false;
 
             formsPlot1.Plot.Clear();
-            formsPlot1.Plot.Title("焊缝轮廓（YZ）");
             formsPlot1.Plot.XLabel("Y 轴（沿激光线，mm）");
             formsPlot1.Plot.YLabel("Z 轴（高度 mm）");
 
@@ -1462,3 +1442,4 @@ private readonly string[] _deviceSwitchNames = { "线激光", "监控相机", "�
         #endregion
     }
 }
+

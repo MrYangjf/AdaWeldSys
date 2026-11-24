@@ -1,12 +1,6 @@
 ﻿namespace AdaWeldSystem.WeldParamControl.Abstractions
 {
-    /// <summary>
-    /// 焊接算法抽象基类：定义对外公共接口。
-    /// </summary>
-    /// <remarks>
-    /// 由 <see cref="WeldParamManager"/> 统一持有与协调，具体实现类不采用单例模式。
-    /// 实现：<see cref="Algorithms.WeldParamLookupAlgorithm"/> 参数查表；<see cref="Algorithms.WeldParamAdjustmentAlgorithm"/> 宽度驱动调整；<see cref="Algorithms.SeamTrackingAlgorithm"/> 几何轨迹跟踪。
-    /// </remarks>
+    /// <summary>焊接算法抽象基类：定义对外公共接口。</summary>
     public abstract class WeldAlgorithmBase
     {
         /// <summary>算法名称（日志与可观测性标识）。</summary>

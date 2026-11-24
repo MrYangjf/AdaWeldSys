@@ -11,12 +11,6 @@ using AdaWeldSystem.Comm.SystemComm;
 namespace AdaWeldSystem.FileOperate
 {
     /// <summary>配置自愈：缺键补默认值，缺文件生成模板</summary>
-    /// <remarks>统一入口，禁止各配置类自行复制补写代码。硬约束：
-    /// ①只增不改：已有键不动、不删、不重排；
-    /// ②幂等——无缺键时零写盘、零日志，二次启动不再写盘；
-    /// ③安全——写前备份到 Config\_backup\&lt;时间戳&gt;\，临时文件 + 原子替换，只读/占用只告警不阻断；
-    /// ④写后回读，缺键为 0 才算成功。失败只告警并保留默认。
-    /// 默认值由调用方提供，本类不内置业务字面量。</remarks>
     public static class ConfigSelfHeal
     {
         private const string Tag = "配置自愈";
@@ -358,7 +352,7 @@ namespace AdaWeldSystem.FileOperate
         }
 
         /// <summary>把缺失键插入原文本</summary>
-        /// <remarks>节内末尾追加，节缺失则文末追加；其余内容逐字保留</remarks>
+
         /// <returns>结果文本。</returns>
         private static string PatchIniText(string original, List<IniDefault> missing)
         {
@@ -445,7 +439,7 @@ namespace AdaWeldSystem.FileOperate
 
         /// <summary>求节内插入位置</summary>
         /// <param name="lines">文本行集合。</param>
-        /// <remarks>最后一个非空行之后，保留尾部空行与注释块</remarks>
+
         /// <returns>结果码。</returns>
         private static int FindSectionInsertIndex(List<string> lines, int sectionStart, int sectionEndExclusive)
         {
@@ -511,7 +505,6 @@ namespace AdaWeldSystem.FileOperate
         }
 
         /// <summary>按模板递归补子节点</summary>
-        /// <remarks>仅当同名节点不存在时追加到同级末尾</remarks>
         private static void EnsureChildren(XElement realParent, XElement templateParent, List<string> added)
         {
             foreach (XElement templateChild in templateParent.Elements())
@@ -532,7 +525,6 @@ namespace AdaWeldSystem.FileOperate
 
         /// <summary>在同级中按业务名匹配模板节点，避免索引错位</summary>
         /// <param name="parent">父节点。</param>
-        /// <remarks>导致重复节点</remarks>
         private static XElement FindMatch(XElement parent, XElement templateNode)
         {
             string name = templateNode.Name.LocalName;
@@ -562,7 +554,6 @@ namespace AdaWeldSystem.FileOperate
 
         /// <summary>把新节点追加到同级末尾，并沿用同级缩进与换</summary>
         /// <param name="parent">父节点。</param>
-        /// <remarks>行风格</remarks>
         private static void InsertAtTail(XElement parent, XElement child)
         {
             string newline = DetectNewline(parent.Document);
@@ -599,7 +590,7 @@ namespace AdaWeldSystem.FileOperate
 
         /// <summary>取父节点首个子节点的缩进；无子节点时按父缩</summary>
         /// <param name="parent">父节点。</param>
-        /// <remarks>进 + 4 空格</remarks>
+
         /// <returns>结果文本。</returns>
         private static string DetectChildIndent(XElement parent)
         {
@@ -629,7 +620,7 @@ namespace AdaWeldSystem.FileOperate
 
         /// <summary>日志展示用的节点路径</summary>
         /// <param name="node">配置节点。</param>
-        /// <remarks>同层按名称即可，异常场景由回读校验兜底</remarks>
+
         /// <returns>结果文本。</returns>
         private static string BuildDisplayName(XElement node)
         {
@@ -674,7 +665,6 @@ namespace AdaWeldSystem.FileOperate
         /// <param name="fileLabel">文件标签。</param>
         /// <param name="keys">键名集合。</param>
         /// <param name="source">数据来源。</param>
-        /// <remarks>单文件一条，逐键带默认值与来源，不刷屏</remarks>
         private static void LogBuildSummary(string fileLabel, IList<string> keys, string source)
         {
             LogBuildSummary(fileLabel, keys.ToList(), source);

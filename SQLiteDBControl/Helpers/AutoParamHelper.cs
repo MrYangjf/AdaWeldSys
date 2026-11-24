@@ -4,37 +4,25 @@ using AdaWeldSystem.SQLiteDBControl.ISQLiteHelper;
 
 namespace AdaWeldSystem.SQLiteDBControl.Helpers
 {
-    /// <summary>
-    /// 自动参数值 Helper，负责自动参数 JSON 序列化读写。
-    /// 每个 AutoParam 配置对应一张独立数据表。
-    /// 表名取 identityInfo 字段。
-    /// </summary>
+    /// <summary>自动参数值 Helper，负责自动参数 JSON 序列化读写。 每个 AutoParam 配置</summary>
     public class AutoParamHelper : DatabaseHelperBase
     {
         private readonly string[] _paramColumns = { "焊缝宽度", "送丝速度", "激光功率", "焊接速度", "光斑宽度", "振镜摆幅", "摆幅频率" };
         private string _currentTableName;
 
-        /// <summary>
-        /// 默认参数标识，与业务侧常量保持一致
-        /// </summary>
+        /// <summary>默认参数标识，与业务侧常量保持一致</summary>
         public const string DefaultIdentity = "DefaultParam";
 
-        /// <summary>
-        /// 当前选中的表名
-        /// </summary>
+        /// <summary>当前选中的表名</summary>
         public string CurrentTableName => _currentTableName;
 
-        /// <summary>
-        /// 构造函数，初始化自动参数值数据库
-        /// </summary>
+        /// <summary>构造函数，初始化自动参数值数据库</summary>
         public AutoParamHelper() : base("AutoParamValue.db")
         {
             _currentTableName = DefaultIdentity;
         }
 
-        /// <summary>
-        /// 创建参数值表（如果不存在）
-        /// </summary>
+        /// <summary>创建参数值表（如果不存在）</summary>
         /// <param name="tableName">表名</param>
         private void CreateTableIfNotExist(string tableName)
         {
@@ -51,7 +39,7 @@ namespace AdaWeldSystem.SQLiteDBControl.Helpers
         }
 
         /// <summary>补「振镜摆幅」列（第 6 列，历史表为 5 列，缺列时补列）：有实</summary>
-        /// <remarks>测值优先查表、无记录走「焊缝宽度 ×(1+k)」公式；旧行该列为空即未标定。</remarks>
+
         /// <param name="tableName">表名</param>
         private void EnsureGalvoAmplitudeColumn(string tableName)
         {
@@ -73,7 +61,7 @@ namespace AdaWeldSystem.SQLiteDBControl.Helpers
 
 
         /// <summary>补「摆幅频率」列（第 7 列，随宽度自适应）</summary>
-        /// <remarks>查表优先，公式初值入表后可手动核对。旧「振镜频率」列保留不删。</remarks>
+
         /// <param name="tableName">表名</param>
         private void EnsureSwingFrequencyColumn(string tableName)
         {
@@ -93,7 +81,7 @@ namespace AdaWeldSystem.SQLiteDBControl.Helpers
             }
         }
         /// <summary>补「光斑宽度」列（历史表为 4 列，缺列时补列）；旧行该列</summary>
-        /// <remarks>为空，读取侧按「焊缝宽度 × W」现算兜底。</remarks>
+
         /// <param name="tableName">表名</param>
         private void EnsureSpotWidthColumn(string tableName)
         {
@@ -114,7 +102,7 @@ namespace AdaWeldSystem.SQLiteDBControl.Helpers
         }
 
         /// <summary>读取摆幅频率列（焊缝宽度→摆幅频率 Hz）。</summary>
-        /// <remarks>缺列或异常时返回空串，由读取侧兜底。</remarks>
+
         /// <returns>摆幅频率 JSON（可能为空）</returns>
         private string GetSwingFrequencyColumnSafe()
         {
@@ -129,7 +117,7 @@ namespace AdaWeldSystem.SQLiteDBControl.Helpers
         }
 
         /// <summary>读取摆幅宽度列（焊缝宽度→摆幅宽度）。</summary>
-        /// <remarks>缺列或异常时返回空串，由读取侧兜底。</remarks>
+
         /// <returns>摆幅宽度 JSON（可能为空）</returns>
         private string GetSwingWidthColumnSafe()
         {
@@ -144,7 +132,7 @@ namespace AdaWeldSystem.SQLiteDBControl.Helpers
         }
 
         /// <summary>读取光斑宽度列（旧表缺列或读取异常时返回空</summary>
-        /// <remarks>串，由读取侧按公式兜底）。</remarks>
+
         /// <returns>光斑宽度 JSON（可能为空）</returns>
         private string GetSpotWidthColumnSafe()
         {
@@ -157,9 +145,7 @@ namespace AdaWeldSystem.SQLiteDBControl.Helpers
             }
         }
 
-        /// <summary>
-        /// 更新当前表中的参数值
-        /// </summary>
+        /// <summary>更新当前表中的参数值</summary>
         /// <param name="profile">分段参数数据</param>
         private void UpdateParamValues(WeldAutoParamProfile profile)
         {
@@ -178,9 +164,7 @@ namespace AdaWeldSystem.SQLiteDBControl.Helpers
             Database.Update(_currentTableName, columns, values);
         }
 
-        /// <summary>
-        /// 检查指定名称的参数值表是否存在
-        /// </summary>
+        /// <summary>检查指定名称的参数值表是否存在</summary>
         /// <param name="tableName">表名</param>
         /// <returns>存在返回true，不存在返回false</returns>
         public bool IsTableExist(string tableName)
@@ -193,9 +177,7 @@ namespace AdaWeldSystem.SQLiteDBControl.Helpers
             return Database.IsExistTable(tableName);
         }
 
-        /// <summary>
-        /// 删除指定名称的参数值表
-        /// </summary>
+        /// <summary>删除指定名称的参数值表</summary>
         /// <param name="tableName">表名</param>
         public void DeleteTable(string tableName)
         {
@@ -207,9 +189,7 @@ namespace AdaWeldSystem.SQLiteDBControl.Helpers
             Database.DropTable(tableName);
         }
 
-        /// <summary>
-        /// 选择并加载指定标识的参数值表
-        /// </summary>
+        /// <summary>选择并加载指定标识的参数值表</summary>
         /// <param name="identityInfo">自动参数标识</param>
         public void SelectTable(string identityInfo)
         {
@@ -232,9 +212,7 @@ namespace AdaWeldSystem.SQLiteDBControl.Helpers
             }
         }
 
-        /// <summary>
-        /// 加载指定标识的分段参数数据
-        /// </summary>
+        /// <summary>加载指定标识的分段参数数据</summary>
         /// <param name="identityInfo">自动参数标识</param>
         /// <returns>分段参数数据对象</returns>
         public WeldAutoParamProfile LoadProfile(string identityInfo)
@@ -253,9 +231,7 @@ namespace AdaWeldSystem.SQLiteDBControl.Helpers
             };
         }
 
-        /// <summary>
-        /// 保存分段参数数据到指定标识的表
-        /// </summary>
+        /// <summary>保存分段参数数据到指定标识的表</summary>
         /// <param name="identityInfo">自动参数标识</param>
         /// <param name="profile">分段参数数据</param>
         public void SaveProfile(string identityInfo, WeldAutoParamProfile profile)
@@ -278,9 +254,7 @@ namespace AdaWeldSystem.SQLiteDBControl.Helpers
                 profile.SwingFrequencyJson);
         }
 
-        /// <summary>
-        /// 更新指定标识的表中的分段参数数据
-        /// </summary>
+        /// <summary>更新指定标识的表中的分段参数数据</summary>
         /// <param name="identityInfo">自动参数标识</param>
         /// <param name="profile">分段参数数据</param>
         public void UpdateProfile(string identityInfo, WeldAutoParamProfile profile)
@@ -311,9 +285,7 @@ namespace AdaWeldSystem.SQLiteDBControl.Helpers
             UpdateParamValues(profile);
         }
 
-        /// <summary>
-        /// 查询指定表的数据行数
-        /// </summary>
+        /// <summary>查询指定表的数据行数</summary>
         /// <param name="tableName">表名</param>
         /// <returns>数据行数；查询失败返回 0</returns>
         public int GetRowCount(string tableName)
@@ -328,9 +300,7 @@ namespace AdaWeldSystem.SQLiteDBControl.Helpers
             return int.TryParse(value, out int count) ? count : 0;
         }
 
-        /// <summary>
-        /// 添加参数值记录
-        /// </summary>
+        /// <summary>添加参数值记录</summary>
         /// <param name="width">焊缝宽度JSON</param>
         /// <param name="feedSpeed">送丝速度JSON</param>
         /// <param name="laserPower">激光功率JSON</param>
@@ -354,9 +324,7 @@ namespace AdaWeldSystem.SQLiteDBControl.Helpers
             Database.Insert(_currentTableName, _paramColumns, values);
         }
 
-        /// <summary>
-        /// 获取指定列的参数值（JSON字符串）
-        /// </summary>
+        /// <summary>获取指定列的参数值（JSON字符串）</summary>
         /// <param name="columnName">列名</param>
         /// <returns>JSON字符串</returns>
         public string GetParamValue(string columnName)
@@ -370,7 +338,7 @@ namespace AdaWeldSystem.SQLiteDBControl.Helpers
         }
 
         /// <summary>安全读取指定列（缺列或异常时返回空串）</summary>
-        /// <remarks>补列前调用会抛 SQL 异常，统一在此吞掉。</remarks>
+
         /// <param name="columnName">列名</param>
         /// <returns>列值 JSON（缺列或异常时为空串）</returns>
         public string GetParamValueSafe(string columnName)
@@ -386,53 +354,31 @@ namespace AdaWeldSystem.SQLiteDBControl.Helpers
         }
     }
 
-    /// <summary>
-    /// 焊接自动参数分段数据中性传输对象。
-    /// 在 DB 层与业务层之间传递自动参数 JSON。
-    /// 避免 DB 层反向依赖业务类型。
-    /// </summary>
+    /// <summary>焊接自动参数分段数据中性传输对象。 在 DB 层与业</summary>
     public class WeldAutoParamProfile
     {
-        /// <summary>
-        /// 焊缝宽度列表 JSON
-        /// </summary>
+        /// <summary>焊缝宽度列表 JSON</summary>
         public string SeamWidthJson { get; set; }
 
-        /// <summary>
-        /// 送丝速度字典 JSON
-        /// </summary>
+        /// <summary>送丝速度字典 JSON</summary>
         public string FeedSpeedJson { get; set; }
 
-        /// <summary>
-        /// 激光功率字典 JSON
-        /// </summary>
+        /// <summary>激光功率字典 JSON</summary>
         public string LaserPowerJson { get; set; }
 
-        /// <summary>
-        /// 焊接速度字典 JSON
-        /// </summary>
+        /// <summary>焊接速度字典 JSON</summary>
         public string RobotSpeedJson { get; set; }
 
-        /// <summary>
-        /// 光斑宽度字典 JSON（= 焊缝宽度 × 系数 W）
-        /// </summary>
+        /// <summary>光斑宽度字典 JSON（= 焊缝宽度 × 系数 W）</summary>
         public string SpotWidthJson { get; set; }
 
-        /// <summary>
-        /// 摆幅宽度字典 JSON（公式初值，可手动修正）
-        /// </summary>
+        /// <summary>摆幅宽度字典 JSON（公式初值，可手动修正）</summary>
         public string SwingWidthJson { get; set; }
 
-        /// <summary>
-        /// 摆幅频率字典 JSON（公式初值由摆幅宽度反算）
-        /// </summary>
+        /// <summary>摆幅频率字典 JSON（公式初值由摆幅宽度反算）</summary>
         public string SwingFrequencyJson { get; set; }
 
-        /// <summary>
-        /// 是否有任意一项承载实质数据
-        /// </summary>
-        /// <remarks>判据应为「承载实质数据」，不是字符串非空。
-        /// 空表 `[]`/`{}` 亦属非空，会覆盖现有查找表。</remarks>
+        /// <summary>是否有任意一项承载实质数据</summary>
         public bool HasAnyValue
         {
             get
@@ -447,9 +393,7 @@ namespace AdaWeldSystem.SQLiteDBControl.Helpers
             }
         }
 
-        /// <summary>
-        /// 判断 JSON 串是否承载实质数据
-        /// </summary>
+        /// <summary>判断 JSON 串是否承载实质数据</summary>
         /// <param name="json">待判定的 JSON 串</param>
         /// <returns>承载实质数据返回 true；空白串、空数组 [] 、空对象 {} 返回 false</returns>
         public static bool IsMeaningfulJson(string json)

@@ -10,18 +10,6 @@ using AdaWeldSystem.FileOperate;
 namespace AdaWeldSystem.WeldParamControl.Algorithms
 {
     /// <summary>线激光焊缝几何轨迹跟踪算法实现（非单例）。</summary>
-    /// <remarks>
-    /// 把线激光结果、坐标与时间戳搓合为 <see cref="SeamGuideSample"/>。
-    /// 换算为 Y 轴运动目标并输出为 <see cref="PVTPoint"/> 集合。
-    /// ① 无值容差：无有效结果时偏差记 0，超限报警。
-    /// ② 超限剔除：相邻跳变超阈值的点不入轨迹。
-    /// ③ 单调约束：窗口内轨迹只朝一个方向移动。
-    /// 抑制线激光来回跳动的微小回调。
-    /// 转换模型：偏差 = (特征Y − 示教中心Y) × 比例 × 方向。
-    /// 运动目标 = 轴当前值 + 偏差。
-    /// 本算法只负责计算轨迹点，不直接写入控制器。
-    /// 点集由运控工作流批量下发。
-    /// </remarks>
     public class SeamTrackingAlgorithm : WeldAlgorithmBase
     {
         #region 常量
@@ -35,7 +23,7 @@ namespace AdaWeldSystem.WeldParamControl.Algorithms
         private readonly object _lock = new object();
         private readonly List<PVTPoint> _pending;
 
-        private WeldAlgorithmsConfig _config;
+        private WeldParamConfig _config;
 
         // 位置一阶差分求速度
         private double _lastPos;
@@ -78,7 +66,7 @@ namespace AdaWeldSystem.WeldParamControl.Algorithms
         public override bool IsReady { get { lock (_lock) { return _config != null; } } }
 
         /// <summary>当前配置（只读引用，运行期不再改动）。</summary>
-        public WeldAlgorithmsConfig Config { get { lock (_lock) { return _config; } } }
+        public WeldParamConfig Config { get { lock (_lock) { return _config; } } }
 
         /// <summary>是否已触发报警（无有效结果超限）。</summary>
         public bool HasFault { get { lock (_lock) { return _hasFault; } } }
@@ -99,7 +87,7 @@ namespace AdaWeldSystem.WeldParamControl.Algorithms
         /// <summary>构造函数。</summary>
         public SeamTrackingAlgorithm()
         {
-            _config = new WeldAlgorithmsConfig();
+            _config = new WeldParamConfig();
             _pending = new List<PVTPoint>(64);
             _faultReason = "";
             _lastOutputTime = DateTime.Now;
@@ -149,7 +137,7 @@ namespace AdaWeldSystem.WeldParamControl.Algorithms
         }
 
         /// <summary>单调约束：窗口内只朝一个方向移动，抑制反向微</summary>
-        /// <remarks>小回调。</remarks>
+
         /// <param name="rawDev">原始偏差</param>
         /// <param name="robotX">机器人当前 X 坐标</param>
         /// <returns>约束后的偏差</returns>
@@ -202,8 +190,8 @@ namespace AdaWeldSystem.WeldParamControl.Algorithms
             _pending.Add(new PVTPoint(pos, time, vel));
         }
 
-        /// <summary>处理一帧引导样本：无值容差 → 超限剔除 → 单调约束 → </summary>
-        /// <remarks>标定转换 → 攒批。</remarks>
+        /// <summary>处理一帧引导样本：无值容差 → 超限剔除 → 单调约束 →</summary>
+
         /// <param name="sample">引导样本</param>
         private void ProcessSample(SeamGuideSample sample)
         {
@@ -277,7 +265,7 @@ namespace AdaWeldSystem.WeldParamControl.Algorithms
 
         /// <summary>更新配置，配置重新加载后调用。</summary>
         /// <param name="config">线激光引导配置</param>
-        public void SetConfig(WeldAlgorithmsConfig config)
+        public void SetConfig(WeldParamConfig config)
         {
             if (config == null) return;
             lock (_lock)
@@ -287,10 +275,10 @@ namespace AdaWeldSystem.WeldParamControl.Algorithms
         }
 
         /// <summary>载入线激光引导配置。</summary>
-        /// <param name="config">配置对象，应为 <see cref="WeldAlgorithmsConfig"/></param>
+        /// <param name="config">配置对象，应为 <see cref="WeldParamConfig"/></param>
         public override void LoadConfig(object config)
         {
-            SetConfig(config as WeldAlgorithmsConfig);
+            SetConfig(config as WeldParamConfig);
         }
 
         /// <summary>喂入一帧线激光结果，返回当前应下发的 PVT 点集合。</summary>

@@ -1,4 +1,4 @@
-﻿﻿using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -78,7 +78,6 @@ namespace AdaWeldSystem.MainDeviceControl
     }
 
     /// <summary>整机状态统一快照（只读聚合）。</summary>
-    /// <remarks>不持有状态，只一次读出。</remarks>
     public class MachineStatusSnapshot
     {
         /// <summary>当前设备态。</summary>
@@ -134,7 +133,6 @@ namespace AdaWeldSystem.MainDeviceControl
     }
 
     /// <summary>主设备运行管控（单例，整机编排与机器人/PLC 交互）。</summary>
-    /// <remarks>不继承流程基类（原档 R013），状态链由 MainDeviceStatus 表达；7 条常驻线程驱动 5 个子流程，协议见 CommandCore。</remarks>
     public class DeviceControlWork : IDisposable
     {
         #region 常量
@@ -248,11 +246,14 @@ namespace AdaWeldSystem.MainDeviceControl
         private volatile bool IsWorking;
         private volatile bool IsCloseWork;
 
+        // 阶段应答态：阶段完成后置位供机器人判下一步
+        private volatile bool _resetAckPending;
+        private volatile bool _preWorkAckPending;
+        private volatile bool _weldStartAckPending;
+
         private volatile bool _isAlarmstop;
         private volatile bool _initializing;
-        // 初始化命令已受理（InitializeMachine 置位）但链未必已开始的窗口标志。
-        // 用于 IOWork 在 IO_INIT 发出瞬间即旁路互锁/状态变更，消除首拍竞态；
-        // 与 _initializing（DoInitializeMachine 的重复受理守卫）分离，避免提前置位导致链被判重复而拒绝。
+        // 初始化受理未开始的窗口标志
         private volatile bool _initAccepted;
 
         /// <summary>界面未就绪日志已记，避免逐拍刷屏。</summary>
@@ -274,7 +275,6 @@ namespace AdaWeldSystem.MainDeviceControl
         private volatile bool _disposed;
 
         /// <summary>上一拍上行指令码（0=无指令），用于变化沿去重。</summary>
-        /// <remarks>机器人按契约保持 RxCmd ≥3 个 IPO 周期，逐包入队会重复执行。</remarks>
         private volatile int _lastRxCmdCode;
 
         private Thread thLaserHeadWork;
@@ -285,8 +285,7 @@ namespace AdaWeldSystem.MainDeviceControl
         private Thread thHeartInspectWork;
         private Thread thCommCommandWork;
 
-        /// <summary>线程登记表：名称/句柄/超时/状态。关闭与诊断共用一份清单。</summary>
-        /// <remarks>阶段 0 只登记不改变线程启停行为；外部线程（如 thAction）经 <see cref="RegisterWorkThread"/> 纳入。</remarks>
+        /// <summary>线程登记表</summary>
         private readonly Dictionary<string, WorkThreadEntry> _workThreads =
             new Dictionary<string, WorkThreadEntry>();
         private readonly object _workThreadLock = new object();
@@ -298,7 +297,6 @@ namespace AdaWeldSystem.MainDeviceControl
         // ---- 虚拟 IO 层（三种触发源统一收敛）----
 
         /// <summary>虚拟 IO 置位表：硬件/机器人/UI 三源统一置位。</summary>
-        /// <remarks>由 thIOWork（Running+Alarm）与 thEMGWork（急停）轮询消费。</remarks>
         private readonly HashSet<string> _virtualIoSet = new HashSet<string>();
         private readonly object _virtualIoLock = new object();
 
@@ -342,6 +340,11 @@ namespace AdaWeldSystem.MainDeviceControl
         private readonly object _robotXLock = new object();
         private readonly Random _simRand = new Random();
         private const double SimDefaultSpeedMmPerS = 60.0; // 内部默认模拟速度（不再由 UI 设定）
+        // 模拟命令注入重试节流（毫秒）：上一动作未结束时候派会被丢弃，需重发
+        private const int SimInjectRetryIntervalMs = 1000;
+        // 等阶段应答的动态重发：超过等待门限才重发，之后按长间隔重发
+        private const int SimAckTimeoutSec = 5;
+        private const int SimReinjectIntervalMs = 3000;
 
         // 模拟是否运行中（单一开关，取代原 SimTestMode A/B/C）
         private volatile bool _simulationRunning;
@@ -351,6 +354,12 @@ namespace AdaWeldSystem.MainDeviceControl
 
         // 共享模拟位姿：线程单入口喂入，流程自 Manager 读
         private bool _robotXSimEnabled;
+        // 模拟机器人是否推进：PreWork 段移向寻位起点，焊接段沿焊缝前进
+        private bool _simRobotXMoving;
+        // 模拟 PreWork 段目标 X（毫米）：到达后停下 X 前进
+        private double _simPreWorkTargetX;
+        // 模拟 PreWork 段是否已到达
+        private bool _simPreWorkArrived;
         private double _simStartX;
         private double _simSpeed;
         private double _simRobotX;
@@ -386,7 +395,6 @@ namespace AdaWeldSystem.MainDeviceControl
         private List<DeviceInitOutcomeItem> _lastInitOutcomes = new List<DeviceInitOutcomeItem>();
 
         /// <summary>初始化节点：声明依赖位置与发起方式。</summary>
-        /// <remarks>父级关系由对象归属决定，不另建配置清单。</remarks>
         private sealed class InitNode
         {
             /// <summary>节点键。</summary>
@@ -410,7 +418,7 @@ namespace AdaWeldSystem.MainDeviceControl
             /// <summary>对应模组状态对象；顶层通讯类节点为空。</summary>
             public DeviceStateBase Device;
 
-            /// <summary>发起连接；同步节点返回真实结果，异步节点返回是否受理。</summary>
+            /// <summary>发起连接；同步节点返回真实结果，异步节点返回</summary>
             public Func<bool> Start;
 
             /// <summary>启动前判跳过；返回非空串即跳过并写明原因。</summary>
@@ -426,7 +434,7 @@ namespace AdaWeldSystem.MainDeviceControl
         private double _weldStartX;
         private double _weldTargetMm;
 
-        /// <summary>线激光收工行程（毫米）= 焊缝终止行程 − 前置距离；行程到此即让线激光停止工作。</summary>
+        /// <summary>线激光收工行程</summary>
         private double _laserStopStrokeMm;
 
         /// <summary>线激光是否已停（一次性，防重复下发）。</summary>
@@ -437,21 +445,34 @@ namespace AdaWeldSystem.MainDeviceControl
         // 机器人焊接停止位，行程收口以此为准
         private double _robotStopPoseX;
         private bool _hasRobotStopPose;
+        // 机器人焊前位 X（毫米）：焊前寻位的 X 到位判据（由 RX_PRE_WELD_POSE 报文记录）
+        private double _robotPreWeldPoseX;
+        private bool _hasRobotPreWeldPose;
 
         // 模拟参数（UI 设置，持久化）——线激光数据频率（30/60/80/120Hz）
         private int _simLaserFrequencyHz = 30;
+        // 模拟参数（UI 设置，持久化）——焊接前寻位起点 X（毫米）
+        private double _simPreWorkStartXmm = SimulationConfig.DefaultPreWorkStartXmm;
 
         // 模拟测试线程（随模拟启停，不在 §7.2 的 7 条常驻线程内）
         private Thread thSimTestWork;
         private volatile bool _simWorkClosing;
 
+        // 模拟命令注入的重试节流：上一动作未结束时派发会被丢弃（单动作锁），
+        // 故未收到阶段应答时按节流周期重发同一条命令（命令幂等）
+        private DateTime _simInjectLastTime = DateTime.MinValue;
+
+        // 等阶段应答的计时起点：超过 SimAckTimeoutSec 仍无应答才重发
+        private DateTime _simAckWaitStart = DateTime.MinValue;
+
         // 模拟参数配置：文件路径与 INI 读写由 SimulationConfig 独占
-        private readonly SimulationConfig _simConfig = new SimulationConfig(
-            Path.Combine(Application.StartupPath, "Config", "MainDeviceControl", "Simulation_INI", "SimulationController.ini"));
+        private readonly SimulationConfig _simConfig = new SimulationConfig(SimulationConfig.DefaultFilePath);
 
         /// <summary>模拟停驱的模组使能态，关闭模拟时恢复。</summary>
         private bool _simSavedWeldHeadEnabled;
         private bool _simSavedMonitorCamEnabled;
+        // 真机使能是否已挂起：二次点击不得用当前已禁用的使能覆盖首次快照
+        private bool _simHardwareSuspended;
 
         #endregion
 
@@ -461,7 +482,6 @@ namespace AdaWeldSystem.MainDeviceControl
         public static DeviceControlWork Instance { get { return _lazyInstance.Value; } }
 
         /// <summary>对中偏差数据中枢（原档 §7.4.5 只读）。</summary>
-        /// <remarks>OffsetX/Y 供控制器驱动振镜，WireStickoutDeviation 供机器人调送丝；产出方持有，消费方取用。</remarks>
         public MonitorResult AlignDatum
         {
             get { return _monitorCam.LastResult; }
@@ -476,7 +496,7 @@ namespace AdaWeldSystem.MainDeviceControl
         /// <summary>模拟停止事件（各停止路径统一触发，供 UI 复位）。</summary>
         public event EventHandler<SimulationStoppedEventArgs> SimulationStopped;
 
-        /// <summary>初始化链结束事件（成功或失败均触发；参数=是否全部模组就绪）。UI 据此关闭初始化等待提示。</summary>
+        /// <summary>初始化链结束事件</summary>
         public event Action<bool> InitializationCompleted;
 
         /// <summary>初始化汇总事件（成功/失败/跳过分开计数）。</summary>
@@ -501,11 +521,6 @@ namespace AdaWeldSystem.MainDeviceControl
         }
 
         /// <summary>自动焊接流程是否在运行中（焊接过程态 ∈ PreWork / Working / Stopping）。</summary>
-        /// <remarks>2026-11-17 新增：<b>UI 手动操作的唯一禁入判据</b>——通过界面发起的动作一律是手动模式，
-        /// 自动焊接流程一旦启动到结束，这些动作必须拒绝（与生产流程互斥）。
-        /// ⛔ 不复用 <see cref="IsWelding"/>：后者是「整机 Running 且已投入工作」，覆盖整段开机期，
-        /// 过宽会把正常调试（机器已启动但没在焊）也一并禁掉。
-        /// 焊接主流程 = 线激光流程（焊缝跟踪 + 焊接），其焊接过程态是权威来源。</remarks>
         public bool IsAutoWeldingRunning
         {
             get
@@ -540,7 +555,6 @@ namespace AdaWeldSystem.MainDeviceControl
         }
 
         /// <summary>当前产品码（SN），为空时以 TEST 占位。</summary>
-        /// <remarks>todo 产品码待协议细化后在指令分发处写入。</remarks>
         public string CurrentProductSn
         {
             get { return _currentProductSn; }
@@ -548,9 +562,6 @@ namespace AdaWeldSystem.MainDeviceControl
         }
 
         /// <summary>是否使用虚拟调试相机（模拟且未连接时）。</summary>
-        /// <remarks>取代 A/B/C 模式：已连接复用真实相机，否则用虚拟。
-        /// 模拟结束后 State 仍为 Connected，须按相机种类判断。
-        /// 否则第二轮误选真实相机，无数据致工作步卡死。</remarks>
         public bool ShouldUseVirtualCamera
         {
             get
@@ -562,7 +573,6 @@ namespace AdaWeldSystem.MainDeviceControl
         }
 
         /// <summary>运控是否向运动轴输出实际位移指令。</summary>
-        /// <remarks>生产恒写轴；模拟仅运控已连接才写轴，否则只记轨迹。</remarks>
         public bool ShouldMoveAxis
         {
             get
@@ -577,6 +587,77 @@ namespace AdaWeldSystem.MainDeviceControl
         {
             get { lock (_robotXLock) { return _simLaserFrequencyHz; } }
             set { lock (_robotXLock) { _simLaserFrequencyHz = value; } }
+        }
+
+        /// <summary>焊接前寻位起点 X（毫米，UI 设置）：模拟机器人 PreWork 段移动到该点后停。</summary>
+        public double SimPreWorkStartXmm
+        {
+            get { lock (_robotXLock) { return _simPreWorkStartXmm; } }
+            set { lock (_robotXLock) { _simPreWorkStartXmm = value < 0.0 ? SimulationConfig.DefaultPreWorkStartXmm : value; } }
+        }
+
+        /// <summary>模拟机器人是否已到焊接前寻位起点 X（PreWork 寻位的 X 到位判据）。</summary>
+        public bool IsSimPreWorkXArrived
+        {
+            get { lock (_robotXLock) { return _simPreWorkArrived; } }
+        }
+
+        /// <summary>焊前寻位的 X 到位判据：模拟看是否已到设定点，真实看机器人是否到焊前位。</summary>
+        public bool IsPreWorkXArrived
+        {
+            get
+            {
+                if (IsSimulationEnabled) return IsSimPreWorkXArrived;
+                lock (_weldMonLock)
+                {
+                    if (!_hasRobotPreWeldPose) return false;
+                    // 机器人当前 X 接近焊前位 X 即视为到位（容差同运动到位判定量级）
+                    double currentX = WeldParamManager.Instance.CurrentRobotX;
+                    return Math.Abs(currentX - _robotPreWeldPoseX) <= PreWorkXArrivedToleranceMm;
+                }
+            }
+        }
+
+        /// <summary>焊前寻位的 X 到位容差（毫米）。</summary>
+        public const double PreWorkXArrivedToleranceMm = 5.0;
+
+        /// <summary>复位阶段应答：设备复位完成，机器人可给下一步指令。</summary>
+        public bool IsResetCompleted
+        {
+            get { return _resetAckPending; }
+        }
+
+        /// <summary>焊前阶段应答：焊前寻位完成（Y 已到焊缝焊接点），机器人可给焊接指令。</summary>
+        public bool IsPreWorkCompleted
+        {
+            get { return _preWorkAckPending; }
+        }
+
+        /// <summary>焊接阶段应答：焊接启动已下发。</summary>
+        public bool IsWeldStartAcknowledged
+        {
+            get { return _weldStartAckPending; }
+        }
+
+        /// <summary>置复位阶段应答并记日志。</summary>
+        private void AckResetCompleted()
+        {
+            _resetAckPending = true;
+            Log("阶段应答 设备复位完成 待机器人给下一步指令");
+        }
+
+        /// <summary>置焊前阶段应答并记日志。</summary>
+        private void AckPreWorkCompleted()
+        {
+            _preWorkAckPending = true;
+            Log("阶段应答 焊前准备完成 Y 已到焊缝焊接点 待机器人给焊接指令");
+        }
+
+        /// <summary>置焊接阶段应答并记日志。</summary>
+        private void AckWeldStart()
+        {
+            _weldStartAckPending = true;
+            Log("阶段应答 焊接启动已下发 出光与送丝实际点由机器人控制");
         }
 
         #endregion
@@ -619,7 +700,7 @@ namespace AdaWeldSystem.MainDeviceControl
         }
 
         /// <summary>设备状态合法控制接口：校验状态迁移是否合法（§7.3）。</summary>
-        /// <remarks>非法迁移只记日志，保证急停/复位链路不被旁路。</remarks>
+
         /// <param name="target">目标运行态</param>
         /// <returns>允许迁移返回 true</returns>
         private bool MachineStatusTrans(MainDeviceStatus target)
@@ -639,7 +720,7 @@ namespace AdaWeldSystem.MainDeviceControl
         }
 
         /// <summary>切换主设备运行态（单控制源，校验后触发事件）。</summary>
-        /// <remarks>非法迁移拒绝并记 Warning，不触发事件。</remarks>
+
         /// <param name="newStatus">目标运行态</param>
         /// <param name="reason">切换原因</param>
         private void SetStatus(MainDeviceStatus newStatus, string reason)
@@ -683,7 +764,6 @@ namespace AdaWeldSystem.MainDeviceControl
         }
 
         /// <summary>驱动 5 个子流程各自执行焊接工作态迁移。</summary>
-        /// <remarks>子流程 WeldStatus 写入口是 protected，整机层统一委托各子流程的 WeldStatusTrans()。</remarks>
         private void WeldStatusTrans()
         {
             var flows = new DeviceWorkflowBase[] { _weldHead, _lineLaser, _monitorCam, _motion, _weldParam };
@@ -714,7 +794,7 @@ namespace AdaWeldSystem.MainDeviceControl
         }
 
         /// <summary>登记线程：名称/句柄/超时/状态。同名重复覆盖旧项。</summary>
-        /// <remarks>只维护登记表，不启动、不停止线程；供本类与 DeviceStatusWork 的临时动作线程共用。</remarks>
+
         /// <param name="thread">待登记线程（已创建，启动前后均可）</param>
         /// <param name="timeoutMs">退出等待上限（毫秒，≤0 取默认值）</param>
         internal void RegisterWorkThread(Thread thread, int timeoutMs)
@@ -735,7 +815,7 @@ namespace AdaWeldSystem.MainDeviceControl
         }
 
         /// <summary>线程登记表快照。名称=运行中/已退出/超时。</summary>
-        /// <remarks>只读快照。供关闭汇总与现场核对。</remarks>
+
         /// <returns>以空格分隔的登记摘要；表为空返回「无线程登记」</returns>
         public string GetWorkThreadSnapshot()
         {
@@ -757,8 +837,7 @@ namespace AdaWeldSystem.MainDeviceControl
         }
 
         /// <summary>模组工作线程公共体（五段式）。</summary>
-        /// <remarks>非运行态慢节拍空转，运行态每拍驱动一步；单拍异常只记日志不退出。
-        /// 仅从 Running 跌出才记停止驱动，启动态不记。</remarks>
+
         /// <param name="flow">子流程</param>
         /// <param name="name">模组中文名（日志用）</param>
         private void SubDeviceWork(DeviceWorkflowBase flow, string name)
@@ -794,8 +873,6 @@ namespace AdaWeldSystem.MainDeviceControl
         }
 
         /// <summary>整机停止驱动提醒：从 Running 跌出时记一次。</summary>
-        /// <remarks>只记日志不改状态，状态由 IO 动作链专门管理。
-        /// 启动从未 Running 时不进入本方法。</remarks>
         private void LogDriveStopped()
         {
             if (Interlocked.CompareExchange(ref _driveStopped, 1, 0) != 0) return;
@@ -818,8 +895,6 @@ namespace AdaWeldSystem.MainDeviceControl
         private void WeldParamControlWork() { SubDeviceWork(_weldParam, "焊接工艺"); }
 
         /// <summary>心跳只检测分级 不负责重连。</summary>
-        /// <remarks>只做检测分级 重连归通讯层。
-        /// 界面在线显示始终按收包刷新，NeedHeartbeat=false 只停分级日志。</remarks>
         private void HeartInspectWork()
         {
             RobotHeartbeatLevel last = RobotHeartbeatLevel.H4;
@@ -865,7 +940,7 @@ namespace AdaWeldSystem.MainDeviceControl
         /// <returns>超阈值返回 true</returns>
         private static bool IsNoValueOverLimit()
         {
-            WeldAlgorithmsConfig config = WeldParamManager.Instance.AlgorithmsConfig;
+            WeldParamConfig config = WeldParamManager.Instance.AlgorithmsConfig;
             if (config == null || config.NoValueToleranceMm <= 0.0) return false;
             return WeldParamManager.Instance.NoValueDistanceMm >= config.NoValueToleranceMm;
         }
@@ -890,7 +965,6 @@ namespace AdaWeldSystem.MainDeviceControl
         }
 
         /// <summary>机器人指令交互线程（常驻循环判断，§7.2）。</summary>
-        /// <remarks>队列空时 Sleep(100)（比模组线程的 10 ms 更长），避免空转。</remarks>
         private void CommCommandWork()
         {
             while (!_commCloseWork)
@@ -939,6 +1013,14 @@ namespace AdaWeldSystem.MainDeviceControl
 
                     SetVirtualIo(ioName);
                     Log(string.Format("机器人指令 {0} 已转换为虚拟 IO {1}", command, ioName));
+
+                    // 请求进入焊前时同置焊前准备 IO，趁 X 移动中建图
+                    if (command == CommandCore.RxPreWeldRequest)
+                    {
+                        SetVirtualIo(IoSubPrework);
+                        Log("机器人指令 RX_PRE_WELD_REQUEST 已转换为虚拟 IO " + IoSubPrework
+                            + " 焊前准备在机器人移向焊前位期间启动");
+                    }
                     // todo 指令闭环反馈机器人执行结果待补齐
                 }
                 catch (Exception ex)
@@ -959,7 +1041,7 @@ namespace AdaWeldSystem.MainDeviceControl
         }
 
         /// <summary>机器人指令 → 虚拟 IO 映射（原档 §2.3）。</summary>
-        /// <remarks>坐标类仅记录，动作类写 IO，统一由扫描器消费。</remarks>
+
         /// <param name="command">已规整的指令常量</param>
         /// <returns>映射到的虚拟 IO 名；坐标上报类等无对应动作时返回 null</returns>
         private string MapCommandToIo(string command)
@@ -971,19 +1053,30 @@ namespace AdaWeldSystem.MainDeviceControl
                     EstopMachine("机器人主动急停指令");
                     return null;
 
-                // 动作类：机器人请求进入焊前 → 启动 IO
+                // 请求进入焊前 → 整机启动 IO；焊前准备由线激光态触发
                 case CommandCore.RxPreWeldRequest:
                     return IoStart;
 
-                // 动作类：归零位 / 安全停止位 → 停止 IO
+                // 动作类：机器人到归零位 → 触发设备复位（TA/Y/焊接头回零位）
+                // 复位完成后主控置复位应答态，机器人据此给下一步指令
                 case CommandCore.RxHomePose:
+                    return IoReset;
+
+                // 动作类：机器人到安全停止位 → 停止 IO
                 case CommandCore.RxStopSafePose:
                     return IoStop;
 
+                // 坐标类：仅记录焊前位 X，不映射阶段 IO
+                case CommandCore.RxPreWeldPose:
+                    return null;
+
+                // 动作类：机器人完成「从焊前位移动到焊接起始位」→ 触发焊接启动
+                // 真正工作自 PreWork 起，Working 是正式出光闭环
+                case CommandCore.RxWeldStartPose:
+                    return IoSubWork;
+
                 // 坐标类：解析后仅记录，不驱动状态转换
                 case CommandCore.RxStartSafePose:
-                case CommandCore.RxPreWeldPose:
-                case CommandCore.RxWeldStartPose:
                 case CommandCore.RxPreStopPose:
                 case CommandCore.RxWeldStopPose:
                     return null;
@@ -994,8 +1087,7 @@ namespace AdaWeldSystem.MainDeviceControl
         }
 
         /// <summary>机器人指令前置条件问询（按目标 IO 校验）。</summary>
-        /// <remarks>启动类要求整机 Stop 且无模组报警。
-        /// 停止类要求整机 Running，与动作链同口径。</remarks>
+
         /// <param name="command">已规整的指令常量（日志用）</param>
         /// <param name="ioName">映射到的虚拟 IO 名</param>
         /// <returns>前置条件满足返回 true</returns>
@@ -1003,9 +1095,12 @@ namespace AdaWeldSystem.MainDeviceControl
         {
             if (ioName == IoStart)
             {
-                if (Current != MainDeviceStatus.Stop)
+                // 整机已 Running 时放行：RX_PRE_WELD_REQUEST 的语义是「请求进入焊前」，
+                // 整机启动只是其前置（真实流程里整机可能已启动）。
+                // DoStartMachine 已幂等（Running 态直接返回 true），重复置位无害。
+                if (Current != MainDeviceStatus.Stop && Current != MainDeviceStatus.Running)
                 {
-                    Log(string.Format("机器人指令 {0} 拒收 整机非 Stop 态 当前 {1}", command, Current), MessageLevel.Warning);
+                    Log(string.Format("机器人指令 {0} 拒收 整机非 Stop/Running 态 当前 {1}", command, Current), MessageLevel.Warning);
                     return false;
                 }
                 foreach (var pair in GetAllSubDeviceStatus())
@@ -1021,6 +1116,13 @@ namespace AdaWeldSystem.MainDeviceControl
             {
                 Log(string.Format("机器人指令 {0} 拒收 整机非 Running 态 当前 {1}", command, Current), MessageLevel.Warning);
                 return false;
+            }
+
+            // 焊前/焊接 IO 不拒收，运行态由扫描线程保留重试
+            if ((ioName == IoSubPrework || ioName == IoSubWork) && Current != MainDeviceStatus.Running)
+            {
+                Log(string.Format("机器人指令 {0} 当前非 Running 态 {1} 命令已置位 待运行态就绪后派发",
+                    command, Current), MessageLevel.Info);
             }
             return true;
         }
@@ -1050,13 +1152,59 @@ namespace AdaWeldSystem.MainDeviceControl
                 ApplyRobotStopPose(stopPoseX);
             }
 
+            // 焊前位报文：首个数即机器人焊前位 X（焊前寻位的 X 到位判据）
+            if (command == CommandCore.RxPreWeldPose
+                && TryParseFirstDouble(payload, out double preWeldPoseX))
+            {
+                ApplyRobotPreWeldPose(preWeldPoseX);
+            }
+
             lock (_commLock) { _commCommandQueue.Enqueue(command); }
         }
 
+        /// <summary>模拟注入机器人命令：仿真器扮演机器人角色，与真实指令同队列同处理链。</summary>
+        /// <param name="command">机器人指令常量（CommandCore.Rx*）</param>
+        /// <param name="payloadX">可选坐标载荷（毫米），会按坐标类指令解析记录</param>
+        public void InjectSimRobotCommand(string command, double? payloadX = null)
+        {
+            if (string.IsNullOrEmpty(command)) return;
+            string normalized = CommandCore.Normalize(command);
+            if (!CommandCore.IsKnownCommand(normalized))
+            {
+                Log("模拟注入机器人指令失败 未知指令 " + normalized, MessageLevel.Warning);
+                return;
+            }
+
+            if (payloadX.HasValue)
+            {
+                if (normalized == CommandCore.RxPreWeldPose)
+                {
+                    ApplyRobotPreWeldPose(payloadX.Value);
+                }
+                else if (normalized == CommandCore.RxWeldStopPose)
+                {
+                    ApplyRobotStopPose(payloadX.Value);
+                }
+            }
+
+            lock (_commLock) { _commCommandQueue.Enqueue(normalized); }
+            Log("模拟注入机器人指令 " + normalized, MessageLevel.Info);
+        }
+
+        /// <summary>记录机器人焊前位 X（焊前寻位到位判据用）。</summary>
+        /// <param name="preWeldX">机器人焊前位 X（毫米）</param>
+        private void ApplyRobotPreWeldPose(double preWeldX)
+        {
+            lock (_weldMonLock)
+            {
+                _robotPreWeldPoseX = preWeldX;
+                _hasRobotPreWeldPose = true;
+            }
+            Log(string.Format("机器人焊前位 X {0:F1}mm 记录 焊前寻位以此为到位判据", preWeldX));
+        }
+
         /// <summary>记录机器人停止位 X，并即时更新行程监视目标。</summary>
-        /// <remarks>焊缝终止 X 即机器人停止位。
-        /// 收工行程＝|终止X − 起点X| − 前置量，下限 0。
-        /// 未激活时只缓存，锚定时优先采用。</remarks>
+
         /// <param name="stopX">机器人停止位 X（毫米，焊缝终止 X）</param>
         private void ApplyRobotStopPose(double stopX)
         {
@@ -1101,7 +1249,7 @@ namespace AdaWeldSystem.MainDeviceControl
         }
 
         /// <summary>机器人数据接收回调（RSI 数值化协议：按 RxCmd 数值码解码</summary>
-        /// <remarks>上行指令只走数值码承载，无文本通道。RxCmd=0 表示无指令，静默忽略。 入队）。</remarks>
+
         /// <param name="sender">事件源（机器人通讯层）</param>
         /// <param name="e">机器人上报数据事件参数</param>
         private void OnRobotDataReceived(object sender, KUKADataReceivedEventArgs e)
@@ -1125,8 +1273,7 @@ namespace AdaWeldSystem.MainDeviceControl
         }
 
         /// <summary>通讯开启（返回监听是否真正启动成功）。</summary>
-        /// <remarks>连接能力由 Comm 提供。成功判据以 <c>ConnectRobot</c> 真实返回值为准。
-        /// 通道就绪不代表监听已启动。未启用机器人通讯记跳过，不计成功。</remarks>
+
         /// <returns>监听真正启动返回 true</returns>
         private bool CommWork()
         {
@@ -1168,8 +1315,7 @@ namespace AdaWeldSystem.MainDeviceControl
         }
 
         /// <summary>下发机器人指令（经顶层 Comm，连接本身由 Comm 管控）。</summary>
-        /// <remarks>发送成功后同步广播，供 <see cref="GlobalCommData.CommunicationCommandReceived"/> 显示下发指令；
-        /// 接收侧 OnCommRecived 对 Tx 指令只入队不驱动业务（DispatchCommand 命中 default 返回 null）。</remarks>
+
         /// <param name="command">指令常量（CommandCore.Tx*）</param>
         private void SendRobotCommand(string command)
         {
@@ -1197,7 +1343,6 @@ namespace AdaWeldSystem.MainDeviceControl
         }
 
         /// <summary>清除已锁存的机器人下行指令（报警解除时停发 TX_NG）。</summary>
-        /// <remarks>只清指令标志，不触碰焊参载荷与 RSI 收发周期。</remarks>
         private void ClearRobotCommand()
         {
             try
@@ -1234,7 +1379,7 @@ namespace AdaWeldSystem.MainDeviceControl
         }
 
         /// <summary>级联模组断开：受理 + 等待 + 超时。</summary>
-        /// <remarks>逐台等状态落到 Disconnected，单台上限 5s；超时只记不算失败，不中断后续设备。</remarks>
+
         /// <returns>确认断开的设备台数（0~4）</returns>
         private int CascadeDisconnectWithWait()
         {
@@ -1275,9 +1420,7 @@ namespace AdaWeldSystem.MainDeviceControl
         }
 
         /// <summary>聚合判定初始化结果。</summary>
-        /// <remarks>只算不报，明细由各模组行承载。
-        /// 只有真发起连接且失败才计入失败，跳过不计。
-        /// 汇总在本链最后打印，此处只落三态计数。</remarks>
+
         /// <returns>无强制失败返回 true（跳过不算失败）</returns>
         private bool EvaluateInitializationResult()
         {
@@ -1319,7 +1462,7 @@ namespace AdaWeldSystem.MainDeviceControl
         }
 
         /// <summary>初始化完成后按配置统一使能轴（一次性）。</summary>
-        /// <remarks>不做轮询重试：存在失败轴即返回 false。</remarks>
+
         /// <returns>全部轴使能成功（无失败轴）返回 true</returns>
         private bool EnableAxesAfterInit()
         {
@@ -1347,8 +1490,6 @@ namespace AdaWeldSystem.MainDeviceControl
         }
 
         /// <summary>初始化是否在途（供互锁门控旁路）。</summary>
-        /// <remarks>包含「IO_INIT 已发出但 DoInitializeMachine 尚未受理」的竞态窗口（_initAccepted），
-        /// 保证 IOWork 从首拍起就旁路状态变更，不会在设备未连时先报 Alarm。</remarks>
         public bool IsInitializing
         {
             get { return _initializing || _initAccepted; }
@@ -1361,7 +1502,7 @@ namespace AdaWeldSystem.MainDeviceControl
         }
 
         /// <summary>初始化目标是否已全部连接（补连判据）。</summary>
-        /// <remarks>全部已连不重跑连接链。</remarks>
+
         /// <returns>全部已连接返回 true</returns>
         private bool AllInitTargetsConnected()
         {
@@ -1381,8 +1522,7 @@ namespace AdaWeldSystem.MainDeviceControl
         }
 
         /// <summary>长动作链中止判定：运行态被抢占即中止。</summary>
-        /// <remarks>每步前置问询运行态，被抢占即中止本链。
-        /// 不再覆盖被抢占后的新状态。</remarks>
+
         /// <param name="expected">本链要求的运行态</param>
         /// <param name="action">动作名（日志用）</param>
         /// <returns>已中止返回 true</returns>
@@ -1403,9 +1543,7 @@ namespace AdaWeldSystem.MainDeviceControl
         }
 
         /// <summary>级联子流程复位。</summary>
-        /// <remarks>单流程失败只记日志，不中断后续。
-        /// 每步前置问询 Reseting，被抢占立即中止。
-        /// 各子流程复位落到各自管理器，主控只编排。</remarks>
+
         /// <returns>全部受理返回 true；中途被抢占返回 false</returns>
         private bool CascadeResetProcess()
         {
@@ -1447,8 +1585,6 @@ namespace AdaWeldSystem.MainDeviceControl
         }
 
         /// <summary>运动控制器 + CAMBOX 跟踪工作流初始化。</summary>
-        /// <remarks>控制器初始化与 CAMBOX 配置已下沉至 <c>MotionControlWorkflow.InitializeOn()</c>（原档 R011）。
-        /// 结果行由调用方统一打印，本方法不重复报。</remarks>
         private void InitializeMotionControl()
         {
             try
@@ -1497,7 +1633,6 @@ namespace AdaWeldSystem.MainDeviceControl
         }
 
         /// <summary>关闭模拟测试线程：置标志并等待退出。</summary>
-        /// <remarks>超时记 Warning 并保留句柄，供现场复查。</remarks>
         private void SimTestWorkClose()
         {
             if (thSimTestWork == null && !_simWorkClosing) return;
@@ -1514,8 +1649,7 @@ namespace AdaWeldSystem.MainDeviceControl
             GlobalCommData.ShowLog(_simTag, "模拟测试线程已关闭", MessageLevel.Info);
         }
 
-        /// <summary>模拟测试线程主体：按节拍推进模拟 robotX 时钟与仿真</summary>
-        /// <remarks>器调度状态机。</remarks>
+        /// <summary>模拟线程主体：按拍推进位姿时钟与仿真调度。</summary>
         private void SimTestWork()
         {
             while (!_simWorkClosing)
@@ -1534,23 +1668,34 @@ namespace AdaWeldSystem.MainDeviceControl
         }
 
         /// <summary>模拟单拍：推进模拟位姿时钟并单入口喂入。</summary>
-        /// <remarks>模拟位姿统一虚拟 XYZ（X 推进，Y/Z 恒 0）。
-        /// 经 UpdateRobotPose 单入口喂入，不直接写 CurrentRobotX。</remarks>
         private void SimTick()
         {
             lock (_robotXLock)
             {
                 if (!_robotXSimEnabled) return;
-                double elapsed = (DateTime.Now - _simStartTime).TotalSeconds;
-                _simRobotX = _simStartX + _simSpeed * elapsed;
+                if (_simRobotXMoving)
+                {
+                    double elapsed = (DateTime.Now - _simStartTime).TotalSeconds;
+                    double next = _simStartX + _simSpeed * elapsed;
+                    // 到寻位起点即停，不越位
+                    if (!_simPreWorkArrived && _simPreWorkTargetX > 0.0 && next >= _simPreWorkTargetX)
+                    {
+                        next = _simPreWorkTargetX;
+                        _simPreWorkArrived = true;
+                        _simRobotXMoving = false;
+                        GlobalCommData.ShowLog(_simTag,
+                            string.Format("模拟机器人已到焊接前寻位起点 X {0:F1}mm X 停止前进", _simPreWorkTargetX),
+                            MessageLevel.Info);
+                    }
+                    _simRobotX = next;
+                }
             }
             // 模拟位姿单入口喂入，数据生成收口在本类
             WeldParamManager.Instance.UpdateRobotPose(_simRobotX, 0.0, 0.0);
         }
 
         /// <summary>动作入口双闸门：设备态 × 就绪层。</summary>
-        /// <remarks>模拟中放行，沿用既有旁路口径。
-        /// 就绪拒绝日志由工作流层记录。</remarks>
+
         /// <param name="action">动作名</param>
         /// <param name="required">要求就绪等级</param>
         /// <param name="flow">就绪主体（可空）</param>
@@ -1576,25 +1721,64 @@ namespace AdaWeldSystem.MainDeviceControl
         }
 
         /// <summary>模组焊前检查命令（S2 → S3）。</summary>
-        /// <remarks>起焊前须已有功率与送丝，否则有事故风险。
-        /// 会话清空在播种前执行，起焊沿只清跟踪。
-        /// 窗口内不清参数，避免产生变动观测。</remarks>
         private void DoSubPrework()
         {
             if (!CheckActionGate("焊前检查", ReadinessStage.Connected, _lineLaser, out _)) return;
+            // 幂等守卫：以运控焊前态为准
+            if (_motion.WeldStatus == SubDeviceWeldStatus.PreWork)
+            {
+                Log("焊前检查已在本会话下发 重复派发忽略");
+                return;
+            }
             try { WeldParamManager.Instance.ResetSeamTracking("焊前检查会话复位"); }
             catch (Exception ex) { Log("焊前检查会话复位异常 " + ex.Message, MessageLevel.Warning); }
             CascadeWeldStatus(SubDeviceWeldStatus.PreWork, "模组焊前检查");
             try { WeldParamControlWorkflow.Instance.PreWork(); }
             catch (Exception ex) { Log("焊前预置工艺参数异常 " + ex.Message, MessageLevel.Warning); }
+            // 焊前工作模式：TA/LA/振镜进工作位与摆动，Y 由运控焊前寻位步跟随到焊缝焊接点
+            EnterPreWorkWorkingModes();
+        }
+
+        /// <summary>焊前阶段工作模式：TA 自动压紧、LA 自动随动、振镜按自适应基准值开启摆动。</summary>
+        private void EnterPreWorkWorkingModes()
+        {
+            try
+            {
+                if (!_motion.TaExecuteAuto())
+                {
+                    Log("焊前 TA 自动模式未就绪 后续按现场状态判定", MessageLevel.Warning);
+                }
+            }
+            catch (Exception ex) { Log("焊前 TA 自动模式异常 " + ex.Message, MessageLevel.Warning); }
+
+            // 焊接头从站未装载（节点号撞号等配置缺硬件）属已知状态：
+            // 直接跳过 LA/振镜下发，只记一条提示，避免把「缺硬件」记成流程 Error
+            if (!_weldHead.IsSlaveReady)
+            {
+                Log("焊前 LA 与振镜跳过 焊接头从站未装载 后续按现场状态判定", MessageLevel.Warning);
+                return;
+            }
+
+            try
+            {
+                if (!_weldHead.LaAutoAuto())
+                {
+                    Log("焊前 LA 自动模式未就绪 后续按现场状态判定", MessageLevel.Warning);
+                }
+            }
+            catch (Exception ex) { Log("焊前 LA 自动模式异常 " + ex.Message, MessageLevel.Warning); }
+
+            try
+            {
+                if (!_weldHead.GalvoWeaveStartAuto())
+                {
+                    Log("焊前 振镜摆动启动未成功 后续按现场状态判定", MessageLevel.Warning);
+                }
+            }
+            catch (Exception ex) { Log("焊前 振镜摆动启动异常 " + ex.Message, MessageLevel.Warning); }
         }
 
         /// <summary>模组焊接启动命令（原档 §10.3 序号 10：S3 → S4）。</summary>
-        /// <remarks>起焊即开生产会话，缓存产品码与记录状态。
-        /// 同时锚定焊缝行程监视，行程判断归主控。
-        /// 运控未回标定位时挂起受理（置 _subWorkPending）。
-        /// 后补执行，等待靠按拍轮询变量而非线程等待。
-        /// 运控未启动或已就绪立即放行，不阻塞。</remarks>
         private void DoSubWork()
         {
             // 未复位或未到工作零位即拒绝并给原因
@@ -1607,24 +1791,40 @@ namespace AdaWeldSystem.MainDeviceControl
             }
             _subWorkPending = false;
             CascadeWeldStatus(SubDeviceWeldStatus.Working, "模组焊接启动");
+            // 模拟机器人此刻起步（等效收到主控 PreWork 完成反馈）。
+            // 时钟已在 PreWork 启动，此处只开移动：必须在 BeginWeldMonitor 前，
+            // 它读 GetEffectiveRobotX 作为行程起点。
+            if (IsSimulationEnabled) StartRobotXMoving();
             BeginWeldMonitor();
             try { ProductFileRecordManager.Instance.BeginProductSession(CurrentProductSn, IsSimulationEnabled); }
             catch (Exception ex) { Log("开启生产会话异常 " + ex.Message, MessageLevel.Warning); }
+            // 焊接阶段应答：出光与送丝实际点由机器人控制
+            AckWeldStart();
         }
 
-        /// <summary>焊接启动门控开闭判定（标定位未就绪时关门）。</summary>
-        /// <remarks>运控未启动或已回标定即放行，不阻塞。</remarks>
+        /// <summary>焊接启动门控开闭判定（焊前寻位未完成时关门）。</summary>
+
         /// <returns>允许立即下发 Working 返回 true</returns>
         private bool IsSubWorkGateOpen()
         {
-            return !(_motion.WeldStatus == SubDeviceWeldStatus.PreWork && !_motion.IsCalibrationYReady);
+            // 寻位未完成时关门
+            return !(_motion.WeldStatus == SubDeviceWeldStatus.PreWork && !_motion.IsPreWorkSeekReady);
+        }
+
+        /// <summary>焊前阶段完成按拍问询：运控焊前寻位完成即置应答，机器人据此给焊接指令。</summary>
+        private void CheckPreWorkCompleted()
+        {
+            if (_preWorkAckPending) return;
+            if (_motion == null) return;
+            if (_motion.WeldStatus != SubDeviceWeldStatus.PreWork) return;
+            if (!_motion.IsPreWorkSeekReady) return;
+            AckPreWorkCompleted();
         }
 
         /// <summary>焊接启动挂起按拍问询（门开补执行/失败弃单）。</summary>
-        /// <remarks>5 条模组线程每拍调用，锁内幂等。
-        /// 非阻塞轮询变量，不 Sleep。</remarks>
         private void CheckSubWorkPending()
         {
+            CheckPreWorkCompleted();
             if (!_subWorkPending) return;
             lock (_subWorkGateLock)
             {
@@ -1656,7 +1856,7 @@ namespace AdaWeldSystem.MainDeviceControl
         {
             if ((DateTime.Now - _subWorkPendingLogTs).TotalSeconds < 2) return;
             _subWorkPendingLogTs = DateTime.Now;
-            Log("焊接启动等待运控标定位回归（IsCalibrationYReady 未就绪）", MessageLevel.Warning);
+            Log("焊接启动等待焊前寻位完成（Y 未到达焊缝焊接点）", MessageLevel.Warning);
         }
 
         /// <summary>模组停止流程命令（原档 §10.3 序号 11：S4 → S5）。</summary>
@@ -1690,9 +1890,6 @@ namespace AdaWeldSystem.MainDeviceControl
         }
 
         /// <summary>锚定焊缝行程监视（起点取当前等效机器人 X）。</summary>
-        /// <remarks>前置距离处收工，机器人仍须走到终止 X。
-        /// 终止位优先取机器人上报停止位 X。
-        /// 占位空缺时不做收工判断，只按兜底行程监视。</remarks>
         private void BeginWeldMonitor()
         {
             double lead = WeldParamManager.Instance.AlgorithmsConfig.LeadDistanceMm;
@@ -1727,9 +1924,6 @@ namespace AdaWeldSystem.MainDeviceControl
         }
 
         /// <summary>焊缝行程判断（唯一归属主控）。</summary>
-        /// <remarks>线程每拍问询，锁内幂等只触发一次动作。
-        /// 行程到收工行程即停线激光（关外设与入图）。
-        /// 行程到终止行程才下发完成，走完末端焊缝。</remarks>
         private void CheckWeldProgress()
         {
             if (!_weldMonActive) return;
@@ -1778,9 +1972,7 @@ namespace AdaWeldSystem.MainDeviceControl
         }
 
         /// <summary>线激光分析 Job 切换回调（切换属调整的一种）。</summary>
-        /// <remarks>仅焊接中的切换入档，避免调试期污染记录。
-        /// 只写工艺控制记录（.pDat），不写轮廓记录。
-        /// todo 指令表暂无 Job 切换常量，待协议细化后接入。</remarks>
+
         /// <param name="sender">事件源（线激光管理器）</param>
         /// <param name="jobId">切换到的 Job 编号</param>
         private void OnLineLaserJobChanged(object sender, int jobId)
@@ -1795,18 +1987,9 @@ namespace AdaWeldSystem.MainDeviceControl
         }
 
         /// <summary>模拟仿真器调度（由模拟线程每拍驱动）。</summary>
-        /// <remarks>步号范式：大步 10/20/30、小步 +1。
-        /// 下发焊前检查并等 PreWork 完成反馈。
-        /// 门控：运控回标定才放行，与真实同门。
-        /// 门开先下发焊前检查与参数预置。
-        /// 下发启动，等待到程由行程监视收口。
-        /// 仿真器不越权直驱子流程步骤，等待均为轮询。</remarks>
         private void SimScheduleTick()
         {
-            // 参与设备异常或整机急停即终止模拟，
-            // 避免空转累积记录与内存。
-            // 不判 Current==Alarm：初始化部分失败（如监控相机缺失）会残留 Alarm 态，
-            // 启动窗口期会误杀，模拟不判真实硬件态
+            // 参与设备异常或急停即终止；不判 Alarm，模拟不依赖真实硬件态
             if (_simulationRunning && (Current == MainDeviceStatus.EStop
                 || _motion.WeldStatus == SubDeviceWeldStatus.ErrorAborted
                 || _lineLaser.WeldStatus == SubDeviceWeldStatus.ErrorAborted
@@ -1820,55 +2003,148 @@ namespace AdaWeldSystem.MainDeviceControl
                 return;
             }
 
+            // 复位在途不推进大步
+            if (!SimResetGateTick()) return;
+
             switch (_simSchedStep)
             {
-                case 10:
-                    // 大步 10：等线激光进入焊前检查（UI 侧 StartSimulationLineLaser 完成自动连接与 Start）
-                    if (_lineLaser.WeldStatus == SubDeviceWeldStatus.PreWork)
+                case 5:
+                    // 到归零位：注入 Home，主控据此复位
+                    InjectSimRobotCommand(CommandCore.RxHomePose);
+                    Log("模拟仿真器 注入机器人指令 RX_HOME_POSE 等主控完成设备复位");
+                    _simSchedStep = 6;
+                    break;
+
+                case 6:
+                    // 等复位应答，完成后起位姿时钟与子流程
+                    if (!IsResetCompleted) break;
+                    Log("模拟仿真器 主控复位阶段完成 等下一步指令");
+                    // 整机启动由 RX_PRE_WELD_REQUEST 触发，此处不自启
+                    if (IsSimulationEnabled) StartRobotXSimulation();
+                    StartSimulationSubflowsAfterReset();
+                    _simSchedStep = 7;
+                    break;
+
+                case 7:
+                    // 请求进入焊前：发出才推进，拒发则原地重试
+                    if (TryInjectSimCommand(CommandCore.RxPreWeldRequest))
                     {
-                        Log("模拟仿真器 线激光已进入焊前检查 等待完成反馈");
+                        StartRobotXSeeking();
+                        Log("模拟仿真器 注入机器人指令 RX_PRE_WELD_REQUEST 等主控下发焊前准备");
+                        _simSchedStep = 8;
+                    }
+                    break;
+
+                case 8:
+                    // 等整机运行且线激光进焊前
+                    if (Current == MainDeviceStatus.Running
+                        && _lineLaser.WeldStatus == SubDeviceWeldStatus.PreWork)
+                    {
+                        Log("模拟仿真器 整机已运行 线激光已进入焊前检查 等待完成反馈");
                         _simSchedStep = 20;
                     }
                     break;
 
                 case 20:
-                    // 大步 20：等 PreWork 完成反馈（变量变 true 推进）
+                    // 等焊前完成反馈
                     if (_lineLaser.IsPreWorkFeedbackDone) _simSchedStep = 21;
                     break;
 
                 case 21:
-                    // 小步 21：启动门控，未回标定位则等，2s 限频告警
-                    // 门开先下发焊前检查与参数预置（播种）
-                    if (!IsSubWorkGateOpen())
+                    // 到焊前位：记录焊前位 X，发出才推进
+                    if (TryInjectSimCommand(CommandCore.RxPreWeldPose, GetSimPreWorkTargetX()))
                     {
-                        LogPendingGateOnce();
-                        break;
+                        Log("模拟仿真器 注入机器人指令 RX_PRE_WELD_POSE 记录焊前位 X");
+                        _simAckWaitStart = DateTime.Now;
+                        _simSchedStep = 23;
                     }
-                    DoSubPrework();
-                    Log("模拟仿真器 焊接启动门开 下发焊前检查与参数预置 等效预焊接点");
-                    _simSchedStep = 22;
                     break;
 
-                case 22:
-                    // 小步 22：已播种，下发焊接启动
-                    DoSubWork();
-                    Log("模拟仿真器 参数已播种 下发焊接启动 等效机器人 Start 指令");
-                    // 启动：切连续采集 + 开录像，失败只告警
-                    SimMonitorCamStartWeld();
-                    _simSchedStep = 30;
+                case 23:
+                    // 等焊前应答，超时重发请求
+                    if (IsPreWorkCompleted)
+                    {
+                        Log("模拟仿真器 主控焊前阶段完成 模拟机器人从焊前位移动到焊接起始位");
+                        _simSchedStep = 24;
+                        break;
+                    }
+                    if (TryReinjectOnAckTimeout(CommandCore.RxPreWeldRequest))
+                    {
+                        Log("模拟仿真器 焊前阶段应答超时 重发 RX_PRE_WELD_REQUEST");
+                    }
+                    break;
+
+                case 24:
+                    // 到焊接起始位：注入焊接启动命令
+                    if (TryInjectSimCommand(CommandCore.RxWeldStartPose, GetSimPreWorkTargetX()))
+                    {
+                        Log("模拟仿真器 注入机器人指令 RX_WELD_START_POSE 等主控下发焊接启动");
+                        _simAckWaitStart = DateTime.Now;
+                        _simSchedStep = 25;
+                    }
+                    break;
+
+                case 25:
+                    // 等焊接启动应答，超时重发
+                    if (IsWeldStartAcknowledged)
+                    {
+                        Log("模拟仿真器 主控焊接启动已下发 出光与送丝实际点由机器人控制");
+                        SimMonitorCamStartWeld();
+                        _simSchedStep = 30;
+                        break;
+                    }
+                    if (TryReinjectOnAckTimeout(CommandCore.RxWeldStartPose, GetSimPreWorkTargetX()))
+                    {
+                        Log("模拟仿真器 焊接启动应答超时 重发 RX_WELD_START_POSE");
+                    }
                     break;
 
                 case 30:
-                    // 大步 30：等待，到程由行程监视收口并停模拟
+                    // 等待到程收口
                     break;
             }
         }
 
+        /// <summary>限频注入模拟机器人命令（命令幂等）。</summary>
+        /// <param name="command">机器人指令常量</param>
+        /// <param name="payloadX">可选坐标载荷</param>
+        /// <returns>本次发出返回 true；节流窗口内返回 false</returns>
+        private bool TryInjectSimCommand(string command, double? payloadX = null)
+        {
+            DateTime now = DateTime.Now;
+            if ((now - _simInjectLastTime).TotalMilliseconds < SimInjectRetryIntervalMs) return false;
+            return FireSimCommand(command, payloadX, now);
+        }
+
+        /// <summary>应答超时后重发同一命令。</summary>
+        /// <param name="command">机器人指令常量</param>
+        /// <param name="payloadX">可选坐标载荷</param>
+        /// <returns>本次重发返回 true；未超时或未到间隔返回 false</returns>
+        private bool TryReinjectOnAckTimeout(string command, double? payloadX = null)
+        {
+            DateTime now = DateTime.Now;
+            if ((now - _simAckWaitStart).TotalSeconds < SimAckTimeoutSec) return false;
+            if ((now - _simInjectLastTime).TotalMilliseconds < SimReinjectIntervalMs) return false;
+            return FireSimCommand(command, payloadX, now);
+        }
+
+        /// <summary>注入并记录节流时刻。</summary>
+        private bool FireSimCommand(string command, double? payloadX, DateTime now)
+        {
+            _simInjectLastTime = now;
+            InjectSimRobotCommand(command, payloadX);
+            return true;
+        }
+
+        /// <summary>取模拟焊前位 X（机器人到位坐标注入用）。</summary>
+        /// <returns>配置的焊接前寻位起点 X（毫米）</returns>
+        private double GetSimPreWorkTargetX()
+        {
+            lock (_robotXLock) { return _simPreWorkTargetX; }
+        }
+
         /// <summary>向 5 个模组统一下发焊接态迁移请求。</summary>
-        /// <remarks>虚拟设备 WeldParamControl 一并参与（4 实体 + 1 虚拟）。
-        /// 级联写入后立即调用 WeldStatusTrans() 委托子流程迁移。
-        /// 这是停焊沿 / Stopping 的确定性触发点。
-        /// 历史缺陷：调用方曾在 DispatchCommand 移除时丢失。</remarks>
+
         /// <param name="target">目标焊接过程态</param>
         /// <param name="reason">迁移原因</param>
         private void CascadeWeldStatus(SubDeviceWeldStatus target, string reason)
@@ -1885,7 +2161,6 @@ namespace AdaWeldSystem.MainDeviceControl
         #region 模拟测试焊接相机（自动运行模式，预览走监控相机调试页）
 
         /// <summary>模拟 Ready 检查焊接相机：扫描确认配置 IP 在线后打开设</summary>
-        /// <remarks>PreWork 阶段相机无动作（光丝对中未做，跳过）；采集与录像在焊接启动时开启。 备；不在线或打开失败只告警，不阻断模拟。</remarks>
         private void PrepareSimulationMonitorCam()
         {
             var cam = MonitorCamManager.Instance;
@@ -1919,9 +2194,6 @@ namespace AdaWeldSystem.MainDeviceControl
         }
 
         /// <summary>焊接启动（等效机器人 Start）：开采集与录像。</summary>
-        /// <remarks>逐帧分发独立副本，监控调试页据此出图。
-        /// 主页面预览经工作流 30Hz 节流转交。
-        /// 失败只告警不阻断焊接。</remarks>
         private void SimMonitorCamStartWeld()
         {
             var cam = MonitorCamManager.Instance;
@@ -1939,7 +2211,6 @@ namespace AdaWeldSystem.MainDeviceControl
         }
 
         /// <summary>焊接结束收口焊接相机：先关录像再停采集</summary>
-        /// <remarks>按实际状态动作，重复调用零害。</remarks>
         private void SimMonitorCamStopWeld()
         {
             // 预览先退订，采集已停时同样收口
@@ -1964,8 +2235,7 @@ namespace AdaWeldSystem.MainDeviceControl
         #endregion
 
         /// <summary>处理上行指令数值码（解码入队 + 停止位载荷）。</summary>
-        /// <remarks>真实链路：机器人置 RxCmd，下帧解析后调用。
-        /// 本地注入：调试面板直调，无真机亦可验证。</remarks>
+
         /// <param name="rxCmd">上行指令数值码（1~9）</param>
         /// <param name="rxPayload">上行指令载荷（当前仅 RX_WELD_STOP_POSE 使用：停止位 X / mm）</param>
         public void HandleRxCommand(int rxCmd, double rxPayload)
@@ -1991,8 +2261,7 @@ namespace AdaWeldSystem.MainDeviceControl
         #region 公共函数
 
         /// <summary>虚拟 IO 置位（三种触发源统一入口）。</summary>
-        /// <remarks>硬件/机器人/UI 三路径都调用本方法置位。
-        /// 由 IOWork 与 EMGWork 统一扫描，扫描器不区分触发源。</remarks>
+
         /// <param name="ioName">虚拟 IO 常量（<c>IoInit</c> / <c>IoReset</c> / <c>IoStart</c> 等）</param>
         public void SetVirtualIo(string ioName)
         {
@@ -2009,7 +2278,7 @@ namespace AdaWeldSystem.MainDeviceControl
         }
 
         /// <summary>查询虚拟 IO 是否置位（电平型查询，不清位）。</summary>
-        /// <remarks>急停等电平型信号用本方法持续监控；脉冲型命令请用 <see cref="TakeVirtualIo"/>。</remarks>
+
         /// <param name="ioName">虚拟 IO 常量</param>
         /// <returns>已置位返回 true</returns>
         public bool IsVirtualIoSet(string ioName)
@@ -2019,7 +2288,7 @@ namespace AdaWeldSystem.MainDeviceControl
         }
 
         /// <summary>取走虚拟 IO 并清位（脉冲型命令，保证每条命令只执</summary>
-        /// <remarks>行一次）。</remarks>
+
         /// <param name="ioName">虚拟 IO 常量</param>
         /// <returns>命中并已清位返回 true；未置位返回 false</returns>
         public bool TakeVirtualIo(string ioName)
@@ -2047,10 +2316,7 @@ namespace AdaWeldSystem.MainDeviceControl
         }
 
         /// <summary>虚拟 IO 执行分派（由 thIOWork / thEMGWork 扫描命中后调用）。</summary>
-        /// <remarks>扫描器唯一执行入口：只负责命中 IO。
-        /// 不关心 IO 由谁置位、该执行什么。
-        /// 调用方须先取走 IO，动作前即消除，不会重复触发。
-        /// 除急停外应交给独立动作线程，不占用扫描线程。</remarks>
+
         /// <param name="ioName">已命中的虚拟 IO 常量</param>
         /// <returns>已分派执行返回 true；IO 名未登记返回 false</returns>
         public bool ExecuteIo(string ioName)
@@ -2112,8 +2378,6 @@ namespace AdaWeldSystem.MainDeviceControl
         }
 
         /// <summary>预检失败收敛（原档 §9：M4 → M3、S3 → S2，不报警可重新发起）。</summary>
-        /// <remarks>未进 Working 却有模组退回待机，整机回落 Stop。
-        /// 由 IOWork 逐拍调用。</remarks>
         public void CheckPreworkFailed()
         {
             if (Current != MainDeviceStatus.Running) return;
@@ -2139,9 +2403,6 @@ namespace AdaWeldSystem.MainDeviceControl
         }
 
         /// <summary>状态一致性与子流程报警巡检。</summary>
-        /// <remarks>内部 1 s 节流，只纠偏不推进业务。
-        /// 模拟与初始化阶段不参与。
-        /// 子流程报警只升不降。</remarks>
         public void ConsistencyTick()
         {
             long now = DateTime.Now.Ticks;
@@ -2167,7 +2428,6 @@ namespace AdaWeldSystem.MainDeviceControl
         }
 
         /// <summary>纠正三类非法状态组合。</summary>
-        /// <remarks>每类一条 Warning，纠正走既有级联。</remarks>
         private void CorrectIllegalCombination()
         {
             if (Current == MainDeviceStatus.Stop && HasFlowStatus(SubDeviceWeldStatus.Working))
@@ -2260,8 +2520,7 @@ namespace AdaWeldSystem.MainDeviceControl
         public double WireFeedCompensation { get { return _wireFeedCompensation; } }
 
         /// <summary>剪丝请求（RSI 具名元素 CutWire 通道，机器人侧执行剪丝程序）。</summary>
-        /// <remarks>剪丝走具名元素 CutWire（输出端 3），
-        /// 不再占 Tech T13 内部编号；TxCmd=10 为备用，TxCutWire 指令码不在映射表内。</remarks>
+
         /// <param name="on">true=请求剪丝，false=复位</param>
         private void SendCutWireRequest(bool on)
         {
@@ -2274,11 +2533,6 @@ namespace AdaWeldSystem.MainDeviceControl
         }
 
         /// <summary>光丝对中消费与剪丝回检（IOWork 每拍调用）。</summary>
-        /// <remarks>Y 向偏差只报警不自动调整，X 向偏差换算送丝补偿。
-        /// 补偿后送丝速度钳不小于 0。
-        /// 识别失败/粘连即报警并置 RSI Tech T13 剪丝。
-        /// 超时复位重检，超上限则降级报警转人工。
-        /// case 内禁 Sleep/while，无回执靠超时兜底。</remarks>
         public void MonitorAlignTick()
         {
             // 报警停焊 停止对中与剪丝回检
@@ -2382,7 +2636,7 @@ namespace AdaWeldSystem.MainDeviceControl
         }
 
         /// <summary>组装送丝速度：工艺送丝 + X 向补偿，钳不小于 0（送丝机</summary>
-        /// <remarks>只前进）。</remarks>
+
         /// <param name="algoFeedSpeed">工艺算法给出的送丝速度</param>
         /// <returns>补偿后的送丝速度</returns>
         public double ComposeWireFeedSpeed(double algoFeedSpeed)
@@ -2392,12 +2646,9 @@ namespace AdaWeldSystem.MainDeviceControl
         }
 
         /// <summary>光丝对中偏差驱动振镜中心微调（默认关闭）。</summary>
-        /// <remarks>开关 GALVO_AUTO_CENTER_COMP（默认 false ⇒ 仅状态监控）。
-        /// 打开后按对中偏差算中心值，交单写口下发。
-        /// ⚠️ 像素→振镜中心的符号方向现场标定（增益可负）。</remarks>
         public void ApplySpotAlignCompensation()
         {
-            WeldAlgorithmsConfig cfg = WeldParamManager.Instance.AlgorithmsConfig;
+            WeldParamConfig cfg = WeldParamManager.Instance.AlgorithmsConfig;
             if (cfg == null || !cfg.GalvoAutoCenterComp) return;
             MonitorResult snap = AlignDatum;
             if (snap == null) return;
@@ -2413,7 +2664,7 @@ namespace AdaWeldSystem.MainDeviceControl
         #region 查询与参数命令
 
         /// <summary>查询主设备当前运行态（原档 §10.4 序号 14，只读，不触发状</summary>
-        /// <remarks>态转换）。</remarks>
+
         /// <returns>当前 MainDeviceStatus</returns>
         public MainDeviceStatus GetMainDeviceStatus()
         {
@@ -2435,7 +2686,7 @@ namespace AdaWeldSystem.MainDeviceControl
         }
 
         /// <summary>查询全部 5 个模组焊接状态（原档 §10.4 序号 16，只读）。</summary>
-        /// <remarks>5 个模组 = 4 个实体 + 1 个虚拟（WeldParamControl）。</remarks>
+
         /// <returns>模组标识到焊接态的映射</returns>
         public Dictionary<string, SubDeviceWeldStatus> GetAllSubDeviceStatus()
         {
@@ -2492,8 +2743,7 @@ namespace AdaWeldSystem.MainDeviceControl
         }
 
         /// <summary>设置焊接工艺参数（原档 §10.5 序号 19）。</summary>
-        /// <remarks>前置条件：M3 停止 / S2 Stanby，运行中禁止修改。
-        /// 违反则拒绝并返回 false。</remarks>
+
         /// <param name="param">目标工艺参数</param>
         /// <returns>写入成功返回 true；运行中或参数为空返回 false</returns>
         public bool SetWeldParam(WeldParamAdaptControl param)
@@ -2517,7 +2767,7 @@ namespace AdaWeldSystem.MainDeviceControl
         }
 
         /// <summary>设置机器人坐标偏移与寄存位参数（原档 §10.5 序号 21）。</summary>
-        /// <remarks>前置条件同 <see cref="SetWeldParam"/>：M3 停止，运行中禁止修改。</remarks>
+
         /// <param name="offsetX">X 向坐标偏移</param>
         /// <param name="offsetY">Y 向坐标偏移</param>
         /// <param name="offsetZ">Z 向坐标偏移</param>
@@ -2562,9 +2812,7 @@ namespace AdaWeldSystem.MainDeviceControl
         #endregion
 
         /// <summary>按拍等待模组连接出结果。</summary>
-        /// <remarks>非阻塞轮询替代 Sleep 循环：失败与成功同样立即推进。
-        /// 无反馈才等满超时，避免失败却仍空等。
-        /// 结果行由 RecordInitOutcome 统一打印，本方法不复述。</remarks>
+
         /// <param name="child">模组状态对象</param>
         /// <returns>出结果（成功 / 失败 / 超时）返回 true 可推进；仍在等待返回 false</returns>
         private bool WaitChildConnectedTick(DeviceStateBase child)
@@ -2574,7 +2822,6 @@ namespace AdaWeldSystem.MainDeviceControl
         }
 
         /// <summary>推进到下一个初始化节点。</summary>
-        /// <remarks>同时刷新计时，每节点超时从进入时刻起算。</remarks>
         private void AdvanceInitNode()
         {
             _initNodeIndex++;
@@ -2598,18 +2845,42 @@ namespace AdaWeldSystem.MainDeviceControl
         /// <summary>模拟态停驱真实硬件并记住原使能</summary>
         private void SuspendRealHardwareForSimulation()
         {
-            _simSavedWeldHeadEnabled = _weldHead.IsEnable;
-            _simSavedMonitorCamEnabled = _monitorCam.IsEnable;
+            // 仅首次挂起存快照，防二次点击覆盖
+            if (!_simHardwareSuspended)
+            {
+                _simSavedWeldHeadEnabled = _weldHead.IsEnable;
+                _simSavedMonitorCamEnabled = _monitorCam.IsEnable;
+                _simHardwareSuspended = true;
+            }
             _weldHead.IsEnable = false;
             _monitorCam.IsEnable = false;
         }
 
-        /// <summary>模拟启动前清残留报警并确保进入 Running</summary>
+        /// <summary>清残留报警并回未复位态。</summary>
         private void EnsureRunningForSimulation()
         {
-            // Running 门禁对 Alarm/EStop 不放开，不清理则模拟永远起不来
             if (Current == MainDeviceStatus.Alarm) DoClearAlarm();
-            if (Current != MainDeviceStatus.Running) DoStartMachine();
+
+            if (Current == MainDeviceStatus.EStop)
+            {
+                Log("急停态不可启动模拟 请先解除急停", MessageLevel.Warning);
+                return;
+            }
+
+            // 停机后清到未复位态，复位交给 Home 命令触发
+            if (Current == MainDeviceStatus.Running)
+            {
+                DoStopMachine();
+            }
+            if (Current != MainDeviceStatus.NoReset) ClearMachine();
+        }
+
+        /// <summary>复位在途返回 false。</summary>
+        /// <returns>复位未在途返回 true</returns>
+        private bool SimResetGateTick()
+        {
+            if (IsReseting || Current == MainDeviceStatus.Reseting) return false;
+            return true;
         }
 
         /// <summary>记录模拟启动日志</summary>
@@ -2623,14 +2894,6 @@ namespace AdaWeldSystem.MainDeviceControl
         }
 
         /// <summary>释放托管资源（非 UI 类走 Dispose + DisposeComponents，不得重写 Dispose(bool)）。</summary>
-        /// <remarks>关闭顺序固定为 线程 → 设备 → 主站。
-        /// 先通知常驻线程并显式等待退出。
-        /// 线程退净后再级联断开设备。
-        /// 线程还在跑就关设备会触发多余急停。
-        /// 置位型虚拟 IO 靠扫描线程消费。
-        /// 线程先退会丢信号，故级联断开在此同步执行。
-        /// ⛔ 不走 DoStopMachine：状态迁移会向正在销毁的窗体派发事件。
-        /// 详见 [[lessons/StartupInitializationOrderGates]] 坑 6。</remarks>
         private void DisposeComponents()
         {
             if (_disposed) return;
@@ -2718,7 +2981,7 @@ namespace AdaWeldSystem.MainDeviceControl
         }
 
         /// <summary>统计 11 条常驻线程的退出情况。</summary>
-        /// <remarks>状态三线程不在登记表内，按运行标志判定；未启动视为已退出。</remarks>
+
         /// <param name="exited">已确认退出的线程数</param>
         /// <param name="total">常驻线程总数（11）</param>
         private void GetWorkThreadExitSummary(out int exited, out int total)
@@ -2763,7 +3026,7 @@ namespace AdaWeldSystem.MainDeviceControl
         #endregion
 
         /// <summary>阶段二：TA 轴配置加载</summary>
-        /// <remarks>读-比对-写），失败即降级 TA，不阻断其它轴</remarks>
+
         /// <returns>TA 配置加载成功返回 true</returns>
         private bool LoadTaAxisConfigForInit()
         {
@@ -2928,19 +3191,13 @@ namespace AdaWeldSystem.MainDeviceControl
         }
 
         /// <summary>系统初始化命令（原档 §10.2 序号 1，映射 Init_IO）。</summary>
-        /// <remarks>只拉起 IO 扫描线程并置位 IoInit，连接链在 DoInitializeMachine；IO 线程必须先就绪，否则 Init_IO 无人消费。
-        /// ⛔ 以下线程**不在此启动**，统一延后到 <see cref="FinishInitialization"/>（初始化链拿到结果）之后：
-        /// · 5 条模组工作线程（MachineFlowWorkOpen）——初始化期空转，且会提前驱动工作流改状态；
-        /// · 机器人指令交互线程（thCommCommandWork，含通讯层自动重连）——期间启动会与初始化链并发写 RSI XML（文件占用），
-        ///   且违反「初始化结束拿到结果后才允许重连」的强制要求。
-        /// ⚠️ 置位 IoInit **之前**先同步置 _initializing：IOWork 拿到 CPU 即可从首拍起旁路互锁/状态变更，
-        /// 消除「IO_INIT 已置位、DoInitializeMachine 尚未置 _initializing」窗口内设备未连被判 Alarm 的竞态。</remarks>
+
         /// <returns>IO 线程已拉起且 IO 置位成功返回 true</returns>
         public bool InitializeMachine()
         {
             // 受理标志先于 IO_INIT 置位：封堵 IOWork 首拍竞态（未连设备先报 Alarm）。
             // ⚠️ 用独立 _initAccepted 而非 _initializing：后者是 DoInitializeMachine 的重复受理守卫，
-            //    若在此提前置位会让真正的初始化链被当作"重复 Init_IO"拒绝。
+            //    提前置位会使初始化链被误判重复
             _initAccepted = true;
             DeviceStatusWork.Instance.MachineIOWorkOpen();
 
@@ -2949,24 +3206,22 @@ namespace AdaWeldSystem.MainDeviceControl
             return true;
         }
 
-        /// <summary>初始化未进入推进链即结束的收尾：清受理标志并开启模组线程。</summary>
-        /// <remarks>用于 DoInitializeMachine 的拒绝/跳过出口——这些路径不会走 FinishInitialization，
-        /// 若不在此开模组线程，线程将永不启动；若不清理 _initAccepted，UI 门控与 IOWork 互锁旁路将永久生效。</remarks>
+        /// <summary>初始化未进入推进链即结束的收尾</summary>
+
         /// <param name="message">收尾日志</param>
         /// <param name="level">日志级别</param>
         private void EndInitWithoutChain(string message, MessageLevel level = MessageLevel.Info)
         {
             _initAccepted = false;
             // 与 FinishInitialization 的收尾对齐：初始化已出结果（拒绝/跳过），
-            // 模组线程与指令线程在此统一开启，避免线程永不启动（ADR-107 跳过路径此前遗漏）。
+            // 统一开启模组与指令线程
             MachineFlowWorkOpen();
             EnsureCommandWorkStarted();
             Log(message, level);
         }
 
         /// <summary>执行初始化链（由 thIOWork 扫描到 Init_IO 后调用，不对外直接调用）。</summary>
-        /// <remarks>按依赖层级推进：父级未就绪则子级记跳过。
-        /// 本方法只受理并复位进度即返回，后续每拍推进。</remarks>
+
         /// <returns>受理返回 true；已在初始化中返回 false</returns>
         public bool DoInitializeMachine()
         {
@@ -3019,8 +3274,6 @@ namespace AdaWeldSystem.MainDeviceControl
         #region 初始化层级驱动
 
         /// <summary>初始化层级节点表：顺序即执行顺序，父在前。</summary>
-        /// <remarks>父子关系取自对象归属，不另建设备清单。
-        /// 新增轴由运控内部聚合，无需改本表。</remarks>
         private List<InitNode> BuildInitPlan()
         {
             return new List<InitNode>
@@ -3056,7 +3309,7 @@ namespace AdaWeldSystem.MainDeviceControl
         }
 
         /// <summary>焊接头跳过原因：未配置 / 未启用 / 空串</summary>
-        /// <remarks>只读配置，不查总线；总线在失败预判里查。</remarks>
+
         /// <returns>跳过原因；继续判定返回空串</returns>
         private static string GetWeldHeadSkipReason()
         {
@@ -3068,7 +3321,7 @@ namespace AdaWeldSystem.MainDeviceControl
         }
 
         /// <summary>配置启用但主站扫描结果无该节点</summary>
-        /// <remarks>配了没连上属真失败，不按跳过处理。</remarks>
+
         /// <returns>启用且未扫到返回 true</returns>
         private static bool IsWeldHeadConfiguredButOffline()
         {
@@ -3080,7 +3333,6 @@ namespace AdaWeldSystem.MainDeviceControl
         }
 
         /// <summary>由节点表生成初始化顺序文案。</summary>
-        /// <remarks>只作 Debug 明细，用于核对层级顺序；面向业主的权威行只报 [n/5] 模组结果。</remarks>
         private string BuildInitOrderText()
         {
             List<string> parts = new List<string>();
@@ -3100,7 +3352,6 @@ namespace AdaWeldSystem.MainDeviceControl
         }
 
         /// <summary>机器人通讯节点开启监听。</summary>
-        /// <remarks>成功判据以监听真正启动为准；失败只报通讯层，不阻塞其它独立模组。</remarks>
         private bool StartRobotCommNode()
         {
             return InitializeRobotComm();
@@ -3117,7 +3368,6 @@ namespace AdaWeldSystem.MainDeviceControl
         }
 
         /// <summary>焊接头节点：连接从站。</summary>
-        /// <remarks>从站随运控装载，父级未就绪时不会进入本节点。</remarks>
         private bool StartWeldHeadNode()
         {
             try
@@ -3207,7 +3457,6 @@ namespace AdaWeldSystem.MainDeviceControl
         }
 
         /// <summary>发布初始化三态汇总。</summary>
-        /// <remarks>成功 / 失败 / 跳过分开计数，供界面三态表达；跳过不计入失败。</remarks>
         private void RaiseInitSummary()
         {
             EventHandler<DeviceInitSummaryEventArgs> handler = InitializationSummaryReady;
@@ -3227,13 +3476,11 @@ namespace AdaWeldSystem.MainDeviceControl
         }
 
         /// <summary>初始化链收尾与判定。</summary>
-        /// <remarks>逐模组已落日志，本方法只做使能与汇总。
-        /// 保证汇总恒为初始化序列最后一条。</remarks>
         private void FinishInitialization()
         {
             _initializing = false;
             _initAccepted = false;
-            // 初始化链已出结果：5 条模组工作线程此时才启，避免初始化期空转并提前驱动工作流改状态
+            // 初始化出结果后启动模组线程
             MachineFlowWorkOpen();
             bool allReady = EvaluateInitializationResult();
             bool enableOk = false;
@@ -3267,6 +3514,10 @@ namespace AdaWeldSystem.MainDeviceControl
             RaiseInitSummary();
             // 事件先发、汇总后打，保证汇总最后
             InitializationCompleted?.Invoke(initSucceeded);
+            // 接入焊接头后 LA 就位到默认焦平面（LA 默认工作位）
+            // LA 回零指返回工作位
+            // 非阻塞下发，失败仅记日志
+            _weldHead.MoveToDefaultFocus();
             Log(initSucceeded
                     ? "初始化结束 已连接 已使能 未回零 无运动 待复位"
                     : "初始化结束 未全部就绪 已连接设备保留 未连设备可再次初始化补连",
@@ -3275,16 +3526,13 @@ namespace AdaWeldSystem.MainDeviceControl
                 _initOkCount, _initFailCount, _initSkipCount),
                 initSucceeded ? MessageLevel.Info : MessageLevel.Error);
 
-            // 初始化链已出结果：此时才开启机器人指令交互线程（含通讯层自动重连）。
-            // ⛔ 初始化期间开启会与初始化链并发写机器人端 RSI XML 导致文件占用，
-            //    且违反「初始化动作结束拿到结果后才允许重连」的强制要求。
+            // 初始化出结果后开启指令线程
+            // 初始化完成后才开启，避免文件占用
+            //    确保重连在初始化结束后进行
             EnsureCommandWorkStarted();
         }
 
-        /// <summary>开启机器人指令交互线程（幂等；初始化链结束的唯一出口）</summary>
-        /// <remarks>初始化动作结束、拿到结果后才允许开启：本线程含通讯层自动重连，
-        /// 初始化期间开启会与初始化链并发写机器人端 RSI XML 导致「文件正由另一进程使用」。
-        /// 正常结束走 FinishInitialization，中止走 InitializeMachineTick 的抢占分支，两处都要调。</remarks>
+        /// <summary>开启机器人指令交互线程</summary>
         private void EnsureCommandWorkStarted()
         {
             MachineCommandWorkOpen();
@@ -3293,10 +3541,6 @@ namespace AdaWeldSystem.MainDeviceControl
         #endregion
 
         /// <summary>初始化节点驱动：按层级表每拍推进。</summary>
-        /// <remarks>父级非成功则子级记跳过，不发起连接。
-        /// 机器人通讯需界面就绪，按拍重试不 Sleep。
-        /// 每拍问询运行态，被抢占即中止。
-        /// 连接按拍轮询，超时收敛为 Alarm。</remarks>
         public void InitializeMachineTick()
         {
             if (!_initializing) return;
@@ -3307,7 +3551,7 @@ namespace AdaWeldSystem.MainDeviceControl
                 _initializing = false;
                 _initAccepted = false;
                 Log("初始化链被中止 运行态已变更为 " + Current, MessageLevel.Warning);
-                // 中止也是初始化链结束：同样在此开启模组线程与指令线程，避免线程永不启动
+                // 中止路径同样开启工作线程
                 MachineFlowWorkOpen();
                 EnsureCommandWorkStarted();
                 return;
@@ -3429,7 +3673,6 @@ namespace AdaWeldSystem.MainDeviceControl
         }
 
         /// <summary>执行所有模组 ClearStatus 并强制设备状态 NoReset（§7.5）。</summary>
-        /// <remarks>初始化默认加载、复位前强制加载。</remarks>
         public void ClearMachine()
         {
             _subWorkPending = false;
@@ -3441,7 +3684,7 @@ namespace AdaWeldSystem.MainDeviceControl
         }
 
         /// <summary>设备复位命令（映射 Reset_IO）。</summary>
-        /// <remarks>按原档 §2.3② 只置位不执行，执行体见 <see cref="DoResetMachine"/>。</remarks>
+
         /// <returns>受理返回 true；运行中或复位中返回 false</returns>
         public bool ResetMachine()
         {
@@ -3458,15 +3701,21 @@ namespace AdaWeldSystem.MainDeviceControl
         }
 
         /// <summary>执行复位链（由 thIOWork 扫描到 Reset_IO 后调用）。</summary>
-        /// <remarks>一次性 Task + 每步前置问询状态，急停态直接拒绝复位。
-        /// 清状态后校验为 NoReset，每步校验为 Reseting。
-        /// 任一步被抢占即中止，不覆盖新状态。</remarks>
+
         /// <returns>受理返回 true；急停态或机器人在位检测不通过返回 false</returns>
         public bool DoResetMachine()
         {
             if (Current == MainDeviceStatus.EStop)
             {
                 Log("急停态禁止复位 请先解除急停", MessageLevel.Warning);
+                return false;
+            }
+
+            // 运行中禁止复位：ClearMachine 的 Running→NoReset 迁移会被状态机拒绝，
+            // 造成「子流程已清、整机态未变」的不一致。须先停机再复位。
+            if (Current == MainDeviceStatus.Running)
+            {
+                Log("运行中不可复位 请先停止设备", MessageLevel.Warning);
                 return false;
             }
 
@@ -3497,6 +3746,8 @@ namespace AdaWeldSystem.MainDeviceControl
 
                     SetStatus(accepted ? MainDeviceStatus.Stop : MainDeviceStatus.Alarm,
                         accepted ? "流程复位完成" : "子流程复位失败");
+                    // 复位阶段应答：完成即置位，机器人据此给下一步指令
+                    if (accepted) AckResetCompleted();
                 }
                 catch (Exception ex)
                 {
@@ -3511,7 +3762,7 @@ namespace AdaWeldSystem.MainDeviceControl
         }
 
         /// <summary>设备启动命令（映射 Start_IO）。</summary>
-        /// <remarks>按原档 §2.3② 只置位不执行，执行体见 <see cref="DoStartMachine"/>。</remarks>
+
         /// <returns>受理返回 true；当前态非 Stop 返回 false</returns>
         public bool StartMachine()
         {
@@ -3529,8 +3780,7 @@ namespace AdaWeldSystem.MainDeviceControl
         }
 
         /// <summary>执行启动链（thIOWork 扫描到 Start_IO 后调用）。</summary>
-        /// <remarks>执行由常驻子线程轮询，本方法只切状态并拉起。
-        /// 置 Running 后再问询一次，被抢占则中止。</remarks>
+
         /// <returns>状态切换成功返回 true</returns>
         public bool DoStartMachine()
         {
@@ -3557,12 +3807,22 @@ namespace AdaWeldSystem.MainDeviceControl
             MachineCommandWorkOpen();
             DeviceStatusWork.Instance.MachineIOWorkOpen();
 
+            // 启动运控步机：使能 → 回归标定位 → 焊前寻位 → 就绪
+            // 主控统一启动运控步机
+            try
+            {
+                if (!_motion.Start())
+                {
+                    Log("运控步机启动失败 焊前寻位不可用", MessageLevel.Warning);
+                }
+            }
+            catch (Exception ex) { Log("运控步机启动异常 " + ex.Message, MessageLevel.Warning); }
+
             Log("主设备运行管控启动，常驻线程已就绪");
             return true;
         }
 
         /// <summary>设备停止命令（映射 Stop_IO）。</summary>
-        /// <remarks>按原档 §2.3② 只置位不执行，执行体见 <see cref="DoStopMachine"/>。</remarks>
         public void StopMachine()
         {
             SetVirtualIo(IoStop);
@@ -3570,7 +3830,6 @@ namespace AdaWeldSystem.MainDeviceControl
         }
 
         /// <summary>执行停止链（thIOWork 扫描到 Stop_IO 后调用）。</summary>
-        /// <remarks>不关 thIOWork：停机后仍需接收命令，Dispose 时关。</remarks>
         public void DoStopMachine()
         {
             IsWorking = false;
@@ -3586,7 +3845,7 @@ namespace AdaWeldSystem.MainDeviceControl
         }
 
         /// <summary>消除报警命令（映射 ClearAlarm_IO）。</summary>
-        /// <remarks>按原档 §2.3② 只置位不执行，执行体见 <see cref="DoClearAlarm"/>。</remarks>
+
         /// <returns>受理返回 true；当前非报警态返回 false</returns>
         public bool ClearAlarm()
         {
@@ -3599,7 +3858,7 @@ namespace AdaWeldSystem.MainDeviceControl
         }
 
         /// <summary>执行消除报警（thIOWork 扫描到 ClearAlarm_IO 后调用）。</summary>
-        /// <remarks>消除报警一律回 NoReset，只有复位流程成功才到 Stop。</remarks>
+
         /// <returns>已清除返回 true；当前非报警态返回 false</returns>
         public bool DoClearAlarm()
         {
@@ -3613,8 +3872,6 @@ namespace AdaWeldSystem.MainDeviceControl
         }
 
         /// <summary>执行运控总线故障报警（thIOWork 上升沿调用）。</summary>
-        /// <remarks>纯状态迁移，与急停同属同步例外。
-        /// 报警不被忙丢弃机制拒绝，根因 Error 已由检测点记录。</remarks>
         public void DoMotionBusFault()
         {
             // 焊接中总线故障：先通知机器人停止动作（TX_NG）
@@ -3623,8 +3880,7 @@ namespace AdaWeldSystem.MainDeviceControl
         }
 
         /// <summary>急停命令（无虚拟 IO，直接同步执行）。</summary>
-        /// <remarks>急停只有物理 IO，触发源直接同步执行。
-        /// 不走虚拟 IO 扫描，必须立即生效。</remarks>
+
         /// <param name="reason">急停原因</param>
         public void EstopMachine(string reason)
         {
@@ -3633,8 +3889,6 @@ namespace AdaWeldSystem.MainDeviceControl
         }
 
         /// <summary>执行急停（由 EstopMachine 直通调用，触发源为 EMGWork 物理信号边沿 / 机</summary>
-        /// <remarks>器人 RxAbort 指令）。顺序固定：停运动 → 置 EStop → 停线程 → 置失能。
-        /// ⛔ 不断开设备：解除后仍需读状态与复位，T09~T11 保持运行。</remarks>
         public void DoEstopMachine()
         {
             string reason = string.IsNullOrEmpty(_emgReason) ? "急停信号触发" : _emgReason;
@@ -3669,7 +3923,6 @@ namespace AdaWeldSystem.MainDeviceControl
         }
 
         /// <summary>设备安全：急停（下发机器人中止指令 + 运控轴急停）。</summary>
-        /// <remarks>机器人中止指令经 CommandCore.TxAbort 下发；运控急停走 DeviceStateBase.EmergencyStop 链。</remarks>
         public void EmergencyStop()
         {
             SendRobotCommand(CommandCore.TxAbort);
@@ -3719,73 +3972,96 @@ namespace AdaWeldSystem.MainDeviceControl
 
         // ---- 模拟测试（主链按设备连接态自动判断） ----
 
+        /// <summary>模拟会话变量复位：启停两端都调，保证任意次点击都从零开始。</summary>
+        /// <param name="reason">复位原因（仅日志）</param>
+        /// <param name="restartFromHome">true = 调度指向 Home 起步步；false = 停在无效步，防停止中的线程再注入复位命令</param>
+        private void ResetSimulationSessionState(string reason, bool restartFromHome)
+        {
+            _resetAckPending = false;
+            _preWorkAckPending = false;
+            _weldStartAckPending = false;
+            _subWorkPending = false;
+            _subWorkPendingLogTs = DateTime.MinValue;
+
+            _simSchedStep = restartFromHome ? 5 : 0;
+            _simInjectLastTime = DateTime.MinValue;
+            _simAckWaitStart = DateTime.MinValue;
+
+            lock (_robotXLock)
+            {
+                _robotXSimEnabled = false;
+                _simRobotXMoving = false;
+                _simPreWorkArrived = false;
+                _simRobotX = 0.0;
+                _simStartX = 0.0;
+                _simStartTime = DateTime.Now;
+                _simPreWorkTargetX = SimPreWorkStartXmm;
+            }
+
+            lock (_weldMonLock)
+            {
+                _hasRobotPreWeldPose = false;
+                _robotPreWeldPoseX = 0.0;
+            }
+
+            GlobalCommData.ShowLog(_simTag, "模拟会话变量复位 原因 " + reason, MessageLevel.Info);
+        }
+
         /// <summary>开启模拟测试。</summary>
-        /// <remarks>单一开关，不再区分 A/B/C 模式。
-        /// 线激光未连则用虚拟相机，已连复用真实相机。
-        /// 运控未连接则只记录轨迹与工艺调整、不写轴。
-        /// 起点 X 随机 0~20，最后启动时钟与模拟线程。</remarks>
         public void StartSimulation()
         {
-            if (_simulationRunning) return; // 已在运行则忽略
+            if (_simulationRunning)
+            {
+                GlobalCommData.ShowLog(_simTag, "模拟测试已在运行 忽略重复开启", MessageLevel.Warning);
+                return;
+            }
             _simulationRunning = true;
 
-            // 启动侧兜底清残留，否则首拍即被异常守卫终止。
-            // 异常退出未必走 DisableSimulation，开启侧再清一次。
             _motion.ClearSeamAlarm();
             if (_motion.WeldStatus == SubDeviceWeldStatus.ErrorAborted) _motion.ResetProcess();
 
             PrepareSimulationCamera();
 
-            // 检查焊接相机在线并打开，预览走监控调试页
             PrepareSimulationMonitorCam();
 
-            // 启动共享模拟 robotX 时钟（起点随机 0~20；线激光/运控统一读取）
-            StartRobotXSimulation();
-
-            // 模拟只跑线激光与运控，只做轮廓与轨迹记录
+            // 复位早于线程拉起，避免残留步号影响首拍
+            ResetSimulationSessionState("模拟开启", true);
+            // 开启即清跟踪与缺值，防上一轮残留跨会话
+            try { WeldParamManager.Instance.ResetSeamTracking("模拟会话开启复位"); }
+            catch (Exception ex) { Log("模拟开启复位焊缝跟踪异常 " + ex.Message, MessageLevel.Warning); }
             SuspendRealHardwareForSimulation();
-
-            // 模拟不初始化、不判连接态，清残留后进运行
             EnsureRunningForSimulation();
-
-            // 模拟线程须在清警后拉起，否则首拍被误杀
             SimTestWorkOpen();
-
-            // 仿真器从零起步：等进焊前检查后按命令链驱动
-            _simSchedStep = 10;
 
             SaveSimulation();
             LogSimulationStarted();
         }
 
         /// <summary>关闭模拟测试：复位运行标志、停止共享模拟 robotX 时钟</summary>
-        /// <remarks>与模拟测试线程，并落盘本次模拟记录。</remarks>
+
         /// <param name="reason">停止原因（人话描述）</param>
         /// <param name="hasError">是否因错误/报警停止</param>
         /// <param name="isAuto">是否为自动停止</param>
         public void DisableSimulation(string reason = "用户手动停止", bool hasError = false, bool isAuto = false)
         {
-            bool wasEnabled = _simulationRunning;
-            if (!wasEnabled) return; // 幂等：已关闭则不重复停止/记录，消除「模拟关闭」重复日志
+            if (!_simulationRunning) return;
             _simulationRunning = false;
+            ResetSimulationSessionState("模拟关闭", false);
 
-            // 线激光反订阅、关采集并归位，避免污染真实启动
             try { _lineLaser.SimReset(); }
             catch (Exception ex) { Log("模拟复位线激光异常 " + ex.Message, MessageLevel.Error); }
 
-            // 焊参回待机，清理级联残留的 Working 态
+            try { WeldParamManager.Instance.ResetSeamTracking("模拟结束复位"); }
+            catch (Exception ex) { Log("模拟复位焊缝跟踪异常 " + ex.Message, MessageLevel.Error); }
+
             try { _weldParam.RequestWeldStatus(SubDeviceWeldStatus.Standby, "模拟结束复位"); }
             catch (Exception ex) { Log("模拟复位工艺参数控制异常 " + ex.Message, MessageLevel.Error); }
 
-            // 焊接相机收口兜底，异常路径未经停止命令
             SimMonitorCamStopWeld();
 
-            // 监控相机对称回待机，停止须对称复位
             try { _monitorCam.RequestWeldStatus(SubDeviceWeldStatus.Standby, "模拟结束复位"); }
             catch (Exception ex) { Log("模拟复位监控相机异常 " + ex.Message, MessageLevel.Error); }
 
-            // 运控对称复位，停止须与 5 模组级联对称。
-            // 残留 ErrorAborted 会让下次模拟启动即被终止
             try
             {
                 _motion.Stop();
@@ -3794,28 +4070,22 @@ namespace AdaWeldSystem.MainDeviceControl
             }
             catch (Exception ex) { Log("模拟复位运控异常 " + ex.Message, MessageLevel.Error); }
 
-            // 焊接头对称复位，缺一即残留 Working/Stopping
             try { _weldHead.RequestWeldStatus(SubDeviceWeldStatus.Standby, "模拟结束复位"); }
             catch (Exception ex) { Log("模拟复位焊接头异常 " + ex.Message, MessageLevel.Error); }
 
-            // 恢复被暂停的模组使能态
             _weldHead.IsEnable = _simSavedWeldHeadEnabled;
             _monitorCam.IsEnable = _simSavedMonitorCamEnabled;
-            // 仅回落 Stop 让线程空转，避免永久杀线程。
-            // 模拟态模组未连接，无线程断开动作。
+            _simHardwareSuspended = false;
             if (Current == MainDeviceStatus.Running)
                 SetStatus(MainDeviceStatus.Stop, "模拟测试关闭 退出运行");
             StopRobotXSimulation();
             SimTestWorkClose();
-            // 模拟终止：记录落库（pass）+ 轨迹缓存落盘 + 三份归档。
-            // 归档可达秒级，移后台线程避免冻结 UI；
-            // 代价：关闭时归档未完成可能截断，模拟可接受
+            // 归档移后台，避免冻结 UI
             System.Threading.ThreadPool.QueueUserWorkItem(delegate
             {
                 try { EndProductSessionSafely("pass", string.Empty); }
                 catch (Exception ex) { Log("模拟归档后台落盘异常 " + ex.Message, MessageLevel.Error); }
             });
-            // 统一触发停止事件，UI 订阅后复位按钮
             try
             {
                 SimulationStopped?.Invoke(this, new SimulationStoppedEventArgs(reason, hasError, isAuto));
@@ -3825,26 +4095,64 @@ namespace AdaWeldSystem.MainDeviceControl
             GlobalCommData.ShowLog(_simTag, string.Format("模拟测试关闭 原因 {0}", reason), MessageLevel.Info);
         }
 
-        /// <summary>启动共享模拟位姿时钟（起点 0~20，目标 1500~2000mm）。</summary>
-        /// <remarks>robotX = 起点 + 默认速度 × 流逝时间，Y/Z 恒 0。
-        /// 开启后即时喂入初值，避免沿用残留位姿。</remarks>
+        /// <summary>启动模拟位姿时钟：只喂位姿，X 暂不推进。</summary>
         public void StartRobotXSimulation()
         {
             lock (_robotXLock)
             {
-                _simStartX = _simRand.Next(0, 20);        // 焊接起点随机 0~20
-                _simSpeed = SimDefaultSpeedMmPerS;        // 内部默认速度，不再由 UI 设定
-                _simWeldLengthMm = _simRand.Next(1500, 2001); // 模拟行程目标随机 1500~2000mm（60mm/s 单程 25~33 秒）
+                _simStartX = 0.0;
+                _simSpeed = SimDefaultSpeedMmPerS;
+                _simWeldLengthMm = _simRand.Next(1500, 2001);
                 _simRobotX = _simStartX;
                 _simStartTime = DateTime.Now;
                 _robotXSimEnabled = true;
+                _simPreWorkTargetX = SimPreWorkStartXmm;
+                _simPreWorkArrived = false;
+                _simRobotXMoving = false;
             }
-            // 喂新起点前须复位跟踪：上会话已走到行程末端。
-            // 不复位则首帧被判折返疑似复焊。
-            // 参数管控尚未开始，复位在窗口外不产生观测。
-            // 显示 0 正确，播种后才变 1.2
-            WeldParamManager.Instance.ResetSeamTracking("模拟启动重置");
+            // 复位跟踪：防上会话行程末端被判折返
+            WeldParamManager.Instance.ResetTrackingForWeldStart("模拟起点重置");
             WeldParamManager.Instance.UpdateRobotPose(_simStartX, 0.0, 0.0);
+            GlobalCommData.ShowLog(_simTag,
+                string.Format("模拟机器人复位完成 停在 X {0:F1}mm 待焊前准备下发后移向寻位起点 X {1:F1}mm",
+                    _simStartX, _simPreWorkTargetX),
+                MessageLevel.Info);
+        }
+
+        /// <summary>模拟机器人开始寻位段移动：自当前 X 移向配置的寻位起点 X，到达即停。</summary>
+        public void StartRobotXSeeking()
+        {
+            lock (_robotXLock)
+            {
+                if (!_robotXSimEnabled) return;
+                if (_simPreWorkArrived) return;
+                if (_simPreWorkTargetX <= 0.0) return;
+                _simStartX = _simRobotX;
+                _simStartTime = DateTime.Now;
+                _simRobotXMoving = true;
+            }
+            GlobalCommData.ShowLog(_simTag,
+                string.Format("模拟机器人自 X {0:F1}mm 移向焊接前寻位起点 X {1:F1}mm 边走边建图寻位",
+                    _simStartX, _simPreWorkTargetX),
+                MessageLevel.Info);
+        }
+
+        /// <summary>模拟机器人沿焊缝继续前进（等效收到主控 PreWork 完成反馈后起步）。</summary>
+        public void StartRobotXMoving()
+        {
+            lock (_robotXLock)
+            {
+                if (!_robotXSimEnabled) return;
+                if (_simPreWorkArrived)
+                {
+                    // 寻位段已到达：X 从当前点继续沿焊缝前进，计时基准重置
+                    _simStartX = _simRobotX;
+                    _simStartTime = DateTime.Now;
+                    _simRobotXMoving = true;
+                }
+            }
+            GlobalCommData.ShowLog(_simTag,
+                string.Format("模拟机器人沿焊缝继续前进 当前 X {0:F1}mm", _simRobotX), MessageLevel.Info);
         }
 
         /// <summary>停止共享模拟 robotX 时钟</summary>
@@ -3856,10 +4164,16 @@ namespace AdaWeldSystem.MainDeviceControl
             }
         }
 
+        /// <summary>复位完成后启动模拟参与子流程（线激光 + 运控）。</summary>
+        private void StartSimulationSubflowsAfterReset()
+        {
+            try { StartSimulationLineLaser(); }
+            catch (Exception ex) { Log("模拟复位后线激光启动异常 " + ex.Message, MessageLevel.Error); }
+            // 运控步机由 DoStartMachine 统一启动（真实与模拟同一条路径），
+            // 此处不再重复调 Start()——Start 非幂等，重复调会重置步机到 StepServoOn
+        }
+
         /// <summary>启动模拟用线激光流程。</summary>
-        /// <remarks>线激光为级联模组，模拟流程由本类编排。
-        /// UI 仅调用本方法，结果经 StateSwitched 消费。
-        /// UI 不得越权直驱线激光。</remarks>
         public void StartSimulationLineLaser()
         {
             if (_lineLaser.State != SubDeviceState.Connected)
@@ -3888,9 +4202,7 @@ namespace AdaWeldSystem.MainDeviceControl
         }
 
         /// <summary>获取当前有效机器人 X（模拟开时为模拟值）。</summary>
-        /// <remarks>位姿统一落在 WeldParamManager.CurrentRobotX。
-        /// 故统一从此读取，消除多源写入问题。
-        /// 模拟关闭时返回 0.0，沿用原行为。</remarks>
+
         /// <returns>当前有效机器人 X 坐标</returns>
         public double GetEffectiveRobotX()
         {
@@ -3899,13 +4211,13 @@ namespace AdaWeldSystem.MainDeviceControl
             return sim ? WeldParamManager.Instance.CurrentRobotX : 0.0;
         }
 
-        /// <summary>从配置文件加载模拟参数（线激光数据频率）。</summary>
-        /// <remarks>须在应用启动、创建任何页面之前调用。文件不存在或读取失败时保留默认值。</remarks>
+        /// <summary>从配置文件加载模拟参数（线激光数据频率、焊接前寻位起点 X）。</summary>
         public void LoadSimulation()
         {
             try
             {
                 SimLaserFrequencyHz = _simConfig.LoadLaserFrequencyHz(SimLaserFrequencyHz);
+                SimPreWorkStartXmm = _simConfig.LoadPreWorkStartXmm(SimPreWorkStartXmm);
             }
             catch
             {
@@ -3914,12 +4226,12 @@ namespace AdaWeldSystem.MainDeviceControl
         }
 
         /// <summary>保存模拟参数（线激光数据频率）到配置文件。</summary>
-        /// <remarks>用户通过界面「保存模拟参数」时调用。</remarks>
         public void SaveSimulation()
         {
             try
             {
                 _simConfig.SaveLaserFrequencyHz(SimLaserFrequencyHz);
+                _simConfig.SavePreWorkStartXmm(SimPreWorkStartXmm);
             }
             catch
             {
@@ -3935,7 +4247,6 @@ namespace AdaWeldSystem.MainDeviceControl
         }
 
         /// <summary>线程登记项。含名称/句柄/超时/等待结果。</summary>
-        /// <remarks>阶段 0 只用于登记与核对，不参与线程启停判定。</remarks>
         private sealed class WorkThreadEntry
         {
             /// <summary>线程名（与 Thread.Name 一致，登记表主键）</summary>
@@ -3958,3 +4269,5 @@ namespace AdaWeldSystem.MainDeviceControl
         }
     }
 }
+
+

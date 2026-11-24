@@ -16,11 +16,9 @@ using AdaWeldSystem.UIDesign.SubDialog.MonitorCamDialog;
 namespace AdaWeldSystem.UIDesign.TabPage
 {
     /// <summary>监控相机页：焊接相机设置与焊接回放两个页签。</summary>
-    /// <remarks>事件处理均检查 InvokeRequired，跨线程安全刷新。</remarks>
     public partial class MonitorCamPage : UserControl
     {
         /// <summary>回放行 = 一个录像文件</summary>
-        /// <remarks>层级只有根目录 → 日期文件夹 → 文件；表格只渲染文件行，日期由「修改时间」列体现。</remarks>
         public class PlaybackRow
         {
             /// <summary>录像文件名（列表显示）</summary>
@@ -35,7 +33,7 @@ namespace AdaWeldSystem.UIDesign.TabPage
             /// <summary>文件大小（MB，一位小数）</summary>
             public string Size { get; set; }
 
-            /// <summary>预览缩略图（后台线程解码首帧后回填；null 表示仍在加载）</summary>
+            /// <summary>预览缩略图</summary>
             public Bitmap Thumbnail { get; set; }
 
             /// <summary>预览列：缩略图未就绪显示加载占位</summary>
@@ -199,7 +197,6 @@ namespace AdaWeldSystem.UIDesign.TabPage
         }
 
         /// <summary>初始化回放列表列：Columns 须在代码后置设置，不可在 Designer 内</summary>
-        /// <remarks>赋值。</remarks>
         private void InitPlaybackTable()
         {
             _playRows = new AntdUI.AntList<PlaybackRow>();
@@ -219,7 +216,6 @@ namespace AdaWeldSystem.UIDesign.TabPage
         #region 相机连接（IP 扫描 / 保存 / 连接）
 
         /// <summary>初始化顶栏连接区：显示本地配置保存的 IP，订阅按</summary>
-        /// <remarks>钮并同步一次连接态</remarks>
         private void InitializeConnectionBar()
         {
             var cfg = MonitorCamManager.Instance.Config;
@@ -232,7 +228,6 @@ namespace AdaWeldSystem.UIDesign.TabPage
         }
 
         /// <summary>统一刷新顶栏连接态（状态标签 / 连接按钮 / IP 与扫描</summary>
-        /// <remarks>可用性）</remarks>
         private void UpdateConnectionUi()
         {
             if (IsDisposed || Disposing) return;
@@ -280,7 +275,6 @@ namespace AdaWeldSystem.UIDesign.TabPage
         /// <summary>连接/断开监控相机（连接 IP 先落盘，再连接；连接成功</summary>
         /// <param name="sender">发送方。</param>
         /// <param name="e">事件参数。</param>
-        /// <remarks>后读取当前曝光/增益回填）</remarks>
         private void btnConnect_Click(object sender, EventArgs e)
         {
             var mgr = MonitorCamManager.Instance;
@@ -324,7 +318,6 @@ namespace AdaWeldSystem.UIDesign.TabPage
         }
 
         /// <summary>连接成功后读取相机当前曝光/增益回填输入框（</summary>
-        /// <remarks>读取失败保持原值）</remarks>
         private void LoadCameraParams()
         {
             float exposure = MonitorCamManager.Instance.GetExposureTime();
@@ -340,7 +333,6 @@ namespace AdaWeldSystem.UIDesign.TabPage
         /// <summary>开始采集：连续模式开启取流，帧经预览事件刷新</summary>
         /// <param name="sender">发送方。</param>
         /// <param name="e">事件参数。</param>
-        /// <remarks>画面</remarks>
         private void btnStartCapture_Click(object sender, EventArgs e)
         {
             var mgr = MonitorCamManager.Instance;
@@ -436,7 +428,6 @@ namespace AdaWeldSystem.UIDesign.TabPage
         /// <summary>应用曝光/增益：解析失败回退原值；写入结果按按</summary>
         /// <param name="sender">发送方。</param>
         /// <param name="e">事件参数。</param>
-        /// <remarks>钮外提示</remarks>
         private void btnApplyParam_Click(object sender, EventArgs e)
         {
             var mgr = MonitorCamManager.Instance;
@@ -494,7 +485,6 @@ namespace AdaWeldSystem.UIDesign.TabPage
         /// <summary>送丝距离测试：向 Manager 要一张软触发成品帧并显示；</summary>
         /// <param name="sender">发送方。</param>
         /// <param name="e">事件参数。</param>
-        /// <remarks>失败文案由 Manager 给出</remarks>
         private void btnFeedTest_Click(object sender, EventArgs e)
         {
             if (!MonitorCamManager.Instance.TryAcquireCalibFrame(out Mat frame, out string failure))
@@ -511,7 +501,6 @@ namespace AdaWeldSystem.UIDesign.TabPage
         #region 焊接回放（日期区间文件汇总 + 缩略图后台加载 + 双层播放控件栏）
 
         /// <summary>初始化回放控件：提示、事件接线、默认日期区间</summary>
-        /// <remarks>今天~今天</remarks>
         private void InitPlaybackUi()
         {
             _playTooltip = new AntdUI.TooltipComponent();
@@ -553,7 +542,6 @@ namespace AdaWeldSystem.UIDesign.TabPage
         /// <summary>首次切到焊接回放页签时按当前日期区间汇总</summary>
         /// <param name="sender">发送方。</param>
         /// <param name="e">事件参数。</param>
-        /// <remarks>该区间内全部录像文件</remarks>
         private void tabsMonitor_SelectedIndexChanged(object sender, AntdUI.IntEventArgs e)
         {
             if (e.Value != 1)
@@ -572,7 +560,6 @@ namespace AdaWeldSystem.UIDesign.TabPage
         /// <summary>刷新回放列表</summary>
         /// <param name="sender">发送方。</param>
         /// <param name="e">事件参数。</param>
-        /// <remarks>按当前区间重新汇总录像文件</remarks>
         private void btnRefreshPlay_Click(object sender, EventArgs e)
         {
             GetPlayRange(out DateTime start, out DateTime end);
@@ -582,7 +569,6 @@ namespace AdaWeldSystem.UIDesign.TabPage
         /// <summary>日期区间变化</summary>
         /// <param name="sender">发送方。</param>
         /// <param name="e">事件参数。</param>
-        /// <remarks>按新区间重新汇总录像文件</remarks>
         private void uiPlayDateRange_ValueChanged(object sender, EventArgs e)
         {
             GetPlayRange(out DateTime start, out DateTime end);
@@ -592,7 +578,6 @@ namespace AdaWeldSystem.UIDesign.TabPage
         /// <summary>取当前日期区间</summary>
         /// <param name="start">起始值。</param>
         /// <param name="end">结束值。</param>
-        /// <remarks>闭区间；空值回退今天，起止倒置自动交换</remarks>
         private void GetPlayRange(out DateTime start, out DateTime end)
         {
             DateTime[] range = uiPlayDateRange.Value;
@@ -769,7 +754,6 @@ namespace AdaWeldSystem.UIDesign.TabPage
         /// <summary>按区间汇总录像文件，本页只传区间</summary>
         /// <param name="start">起始值。</param>
         /// <param name="end">结束值。</param>
-        /// <remarks>区间即文件夹选择器，选完直接出文件</remarks>
         private void LoadPlaybackRange(DateTime start, DateTime end)
         {
             _playback.LoadRange(start, end);
@@ -783,7 +767,7 @@ namespace AdaWeldSystem.UIDesign.TabPage
             label1.Text = text ?? string.Empty;
         }
 
-        /// <summary>清空列表并释放缩略图；在跑的后台解码线程由流程层代数自行退出</summary>
+        /// <summary>清空列表并释放缩略图；在跑的后台解码线程由</summary>
         private void ClearPlaybackRows()
         {
             for (int i = 0; i < _playRows.Count; i++)
@@ -795,7 +779,7 @@ namespace AdaWeldSystem.UIDesign.TabPage
         }
 
         /// <summary>列表点击：录像文件右键弹出「回放」上下文菜单</summary>
-        /// <remarks>区间汇总后表格只含文件行，无下钻</remarks>
+
         /// <param name="sender">发送方。</param>
         /// <param name="e">事件参数。</param>
         private void playTable_CellClick(object sender, AntdUI.TableClickEventArgs e)
@@ -846,7 +830,6 @@ namespace AdaWeldSystem.UIDesign.TabPage
         /// <summary>慢放：按 0.8→0.5→0.3→0.1→1.0 循环切换</summary>
         /// <param name="sender">发送方。</param>
         /// <param name="e">事件参数。</param>
-        /// <remarks>以当前位置为新锚点，播放位置不重置</remarks>
         private void btnSlowPlay_Click(object sender, EventArgs e)
         {
             _playback.CycleSlow();
@@ -855,7 +838,6 @@ namespace AdaWeldSystem.UIDesign.TabPage
         /// <summary>快放：按 1.5→2.0→2.5→3.0→1.0 循环切换</summary>
         /// <param name="sender">发送方。</param>
         /// <param name="e">事件参数。</param>
-        /// <remarks>以当前位置为新锚点，播放位置不重置</remarks>
         private void btnFastPlay_Click(object sender, EventArgs e)
         {
             _playback.CycleFast();
@@ -911,7 +893,6 @@ namespace AdaWeldSystem.UIDesign.TabPage
         /// <summary>鼠标在画面底部热区显示播放控件栏</summary>
         /// <param name="sender">发送方。</param>
         /// <param name="e">事件参数。</param>
-        /// <remarks>其余区域隐藏</remarks>
         private void imageBoxPlay_MouseMove(object sender, MouseEventArgs e)
         {
             SetPlayBarVisible(e.Y >= imageBoxPlay.ClientSize.Height - PlayBarHotZoneHeight);
@@ -920,7 +901,6 @@ namespace AdaWeldSystem.UIDesign.TabPage
         /// <summary>鼠标离开画面即隐藏播放控件栏</summary>
         /// <param name="sender">发送方。</param>
         /// <param name="e">事件参数。</param>
-        /// <remarks>光标已落在控件栏内则保持显示</remarks>
         private void imageBoxPlay_MouseLeave(object sender, EventArgs e)
         {
             if (panelPlayBar.Visible &&
@@ -939,7 +919,6 @@ namespace AdaWeldSystem.UIDesign.TabPage
         /// <summary>鼠标离开控件栏：确实移出栏区域才隐藏</summary>
         /// <param name="sender">发送方。</param>
         /// <param name="e">事件参数。</param>
-        /// <remarks>移入子按钮不算离开</remarks>
         private void panelPlayBar_MouseLeave(object sender, EventArgs e)
         {
             if (panelPlayBar.RectangleToScreen(panelPlayBar.ClientRectangle).Contains(Cursor.Position)) return;

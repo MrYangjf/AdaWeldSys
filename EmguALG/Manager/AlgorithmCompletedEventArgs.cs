@@ -2,9 +2,7 @@ using System;
 
 namespace AdaWeldSystem.EmguALG.Manager
 {
-    /// <summary>
-    /// 算法完成事件参数（低频：状态灯/日志；高频结果走 IResultStore 轮询）。
-    /// </summary>
+    /// <summary>算法完成事件参数</summary>
     public class AlgorithmCompletedEventArgs : EventArgs
     {
         /// <summary>算法名称</summary>

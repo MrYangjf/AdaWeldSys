@@ -4,13 +4,7 @@ using AdaWeldSystem.FileOperate;
 
 namespace AdaWeldSystem.EmguALG.Core
 {
-    /// <summary>
-    /// 统一算法基类（算法架构设计 §4）。
-    /// 封装预处理编排、mm↔px 变换与 Execute 模板方法。
-    /// 以及 INI 契约，具体节由子类实现 SaveToIni 与 LoadFromIni。
-    /// 不直接包含任何业务语义（焊缝/接头/对中）。
-    /// 业务规则由领域算法在 ExecuteCore 中实现。
-    /// </summary>
+    /// <summary>统一算法基类</summary>
     public abstract class AlgorithmBase
     {
         #region 抽象契约
@@ -31,8 +25,8 @@ namespace AdaWeldSystem.EmguALG.Core
 
         #region 预处理算子（配置驱动，转调 ImageAlgorithm）
 
-        /// <summary>配置驱动的预处理编排：滤波 → 形态学 → 边缘。 内部按 Operation </summary>
-        /// <remarks>转调 ImageAlgorithm 的原子算子（不重复实现算子）。</remarks>
+        /// <summary>配置驱动的预处理编排：滤波 → 形态学 → 边缘。 内部按 Operation</summary>
+
         /// <param name="cfg">配置对象。</param>
         protected Mat Preprocess(Mat src, PreprocessConfig cfg)
         {

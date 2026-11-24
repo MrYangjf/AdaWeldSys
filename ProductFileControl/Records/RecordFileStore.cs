@@ -9,38 +9,26 @@ using AdaWeldSystem.PCLOperate.Models;
 
 namespace AdaWeldSystem.ProductFileControl
 {
-    /// <summary>
-    /// 记录帧数据结构
-    /// </summary>
+    /// <summary>记录帧数据结构</summary>
     public class RecordFrame
     {
-        /// <summary>
-        /// 帧索引
-        /// </summary>
+        /// <summary>帧索引</summary>
         public int Index { get; set; }
 
-        /// <summary>
-        /// 时间戳
-        /// </summary>
+        /// <summary>时间戳</summary>
         public DateTime Timestamp { get; set; }
 
-        /// <summary>
-        /// 点云数据
-        /// </summary>
+        /// <summary>点云数据</summary>
         public PointCloudData PointCloud { get; set; }
     }
 
-    /// <summary>
-    /// 记录文件存储，模块内部实现，由 Manager 独占持有。
-    /// 承担记录缓存与 .ply/.pDat/.tmp 文件机制。
-    /// 只做文件机制，业务编排归记录类与 Manager。
-    /// </summary>
+    /// <summary>记录文件存储，模块内部实现，由 Manager 独占持有。 承担记</summary>
     internal sealed class RecordFileStore
     {
         /// <summary>动作记录格式版本（当前 v4，20 列）</summary>
         private const int ActionFormatVersion = 4;
 
-        /// <summary>动作记录 CSV 列名（v4，20 列）。写侧表头与读侧回落判据共用同一份定义。</summary>
+        /// <summary>动作记录 CSV 列名</summary>
         private const string ActionCsvHeader =
             "FrameIndex|Timestamp|ActionType|RobotX|RobotY|RobotZ|RobotSpeed|FeedSpeed|LaserPower|WeldWidth" +
             "|AdjustExecuted|AdjustData|JobId|SeamPointY|SeamPointZ" +
@@ -56,9 +44,7 @@ namespace AdaWeldSystem.ProductFileControl
         private bool _useObfuscation;
         private int _frameIndex = 0;
 
-        /// <summary>
-        /// 构造函数
-        /// </summary>
+        /// <summary>构造函数</summary>
         /// <param name="recordDirectory">记录目录</param>
         /// <param name="tempDirectory">临时文件目录</param>
         /// <param name="useObfuscation">是否混淆 pDat 文件</param>
@@ -71,25 +57,19 @@ namespace AdaWeldSystem.ProductFileControl
 
         #region 属性
 
-        /// <summary>
-        /// 是否会话进行中
-        /// </summary>
+        /// <summary>是否会话进行中</summary>
         public bool IsSessionOpen
         {
             get { return _isSessionOpen; }
         }
 
-        /// <summary>
-        /// 当前帧索引
-        /// </summary>
+        /// <summary>当前帧索引</summary>
         public int CurrentFrameIndex
         {
             get { return _frameIndex; }
         }
 
-        /// <summary>
-        /// 已缓存的帧数量
-        /// </summary>
+        /// <summary>已缓存的帧数量</summary>
         public int CachedFrameCount
         {
             get
@@ -101,27 +81,21 @@ namespace AdaWeldSystem.ProductFileControl
             }
         }
 
-        /// <summary>
-        /// 记录目录
-        /// </summary>
+        /// <summary>记录目录</summary>
         public string RecordDirectory
         {
             get { return _recordDirectory; }
             set { _recordDirectory = value; }
         }
 
-        /// <summary>
-        /// 临时文件目录
-        /// </summary>
+        /// <summary>临时文件目录</summary>
         public string TempDirectory
         {
             get { return _tempDirectory; }
             set { _tempDirectory = value; }
         }
 
-        /// <summary>
-        /// 是否混淆（已关闭，pDat 恒明文）；仅为兼容保留
-        /// </summary>
+        /// <summary>是否混淆（已关闭，pDat 恒明文）；仅为兼容保留</summary>
         public bool UseObfuscation
         {
             get { return _useObfuscation; }
@@ -132,9 +106,7 @@ namespace AdaWeldSystem.ProductFileControl
 
         #region 目录管理
 
-        /// <summary>
-        /// 获取指定日期的记录子目录
-        /// </summary>
+        /// <summary>获取指定日期的记录子目录</summary>
         /// <param name="date">记录日期</param>
         /// <returns>记录目录路径（不存在时创建）</returns>
         private string EnsureDateRecordDirectory(DateTime date)
@@ -156,9 +128,7 @@ namespace AdaWeldSystem.ProductFileControl
             return dir;
         }
 
-        /// <summary>
-        /// 确保目录存在
-        /// </summary>
+        /// <summary>确保目录存在</summary>
         public void EnsureDirectoriesExist()
         {
             if (!string.IsNullOrEmpty(_recordDirectory) && !Directory.Exists(_recordDirectory))
@@ -171,9 +141,7 @@ namespace AdaWeldSystem.ProductFileControl
             }
         }
 
-        /// <summary>
-        /// 获取指定日期的记录子目录路径
-        /// </summary>
+        /// <summary>获取指定日期的记录子目录路径</summary>
         /// <param name="date">记录日期</param>
         /// <returns>按 yyyyMMdd 组织的记录目录路径（不创建目录）</returns>
         public string GetDateRecordDirectoryPath(DateTime date)
@@ -185,9 +153,7 @@ namespace AdaWeldSystem.ProductFileControl
 
         #region 会话控制
 
-        /// <summary>
-        /// 开始记录会话
-        /// </summary>
+        /// <summary>开始记录会话</summary>
         public void StartSession()
         {
             lock (_lockObj)
@@ -205,9 +171,7 @@ namespace AdaWeldSystem.ProductFileControl
             }
         }
 
-        /// <summary>
-        /// 正常结束会话（删除临时文件）
-        /// </summary>
+        /// <summary>正常结束会话（删除临时文件）</summary>
         public void StopSession()
         {
             lock (_lockObj)
@@ -233,9 +197,7 @@ namespace AdaWeldSystem.ProductFileControl
             }
         }
 
-        /// <summary>
-        /// 异常中止会话（保留临时文件以便追溯）
-        /// </summary>
+        /// <summary>异常中止会话（保留临时文件以便追溯）</summary>
         public void AbortSession()
         {
             lock (_lockObj)
@@ -256,9 +218,7 @@ namespace AdaWeldSystem.ProductFileControl
 
         #region 数据添加（由记录类经后台落盘线程调用）
 
-        /// <summary>
-        /// 向动作记录列表追加一条记录（线程安全）
-        /// </summary>
+        /// <summary>向动作记录列表追加一条记录（线程安全）</summary>
         /// <param name="record">动作记录条目</param>
         private void AddRecord(WeldActionRecord record)
         {
@@ -270,9 +230,7 @@ namespace AdaWeldSystem.ProductFileControl
             }
         }
 
-        /// <summary>
-        /// 添加一帧点云数据
-        /// </summary>
+        /// <summary>添加一帧点云数据</summary>
         /// <param name="robotXOffset">点云 X 统一偏移到机器人 X 的偏移量（毫米）</param>
         /// <param name="pointCloud">点云数据</param>
         public void AddFrame(PointCloudData pointCloud, double robotXOffset = 0.0)
@@ -295,9 +253,7 @@ namespace AdaWeldSystem.ProductFileControl
             }
         }
 
-        /// <summary>
-        /// 记录一帧工艺过程快照
-        /// </summary>
+        /// <summary>记录一帧工艺过程快照</summary>
         /// <param name="robotX">机器人 X 坐标（毫米）</param>
         /// <param name="robotY">机器人 Y 坐标（毫米）</param>
         /// <param name="robotZ">机器人 Z 坐标（毫米）</param>
@@ -344,9 +300,7 @@ namespace AdaWeldSystem.ProductFileControl
             });
         }
 
-        /// <summary>
-        /// 记录一次工艺参数调整
-        /// </summary>
+        /// <summary>记录一次工艺参数调整</summary>
         /// <param name="robotX">机器人 X 坐标（毫米）</param>
         /// <param name="robotY">机器人 Y 坐标（毫米）</param>
         /// <param name="robotZ">机器人 Z 坐标（毫米）</param>
@@ -379,9 +333,7 @@ namespace AdaWeldSystem.ProductFileControl
             });
         }
 
-        /// <summary>
-        /// 记录一次线激光分析工具切换
-        /// </summary>
+        /// <summary>记录一次线激光分析工具切换</summary>
         /// <param name="robotX">机器人 X 坐标（毫米）</param>
         /// <param name="robotY">机器人 Y 坐标（毫米）</param>
         /// <param name="robotZ">机器人 Z 坐标（毫米）</param>
@@ -428,9 +380,7 @@ namespace AdaWeldSystem.ProductFileControl
 
         #region 文件保存
 
-        /// <summary>
-        /// 保存所有帧合并为一个PLY文件
-        /// </summary>
+        /// <summary>保存所有帧合并为一个PLY文件</summary>
         /// <param name="filePath">点云文件保存路径</param>
         private void SaveFramesToPly(string filePath)
         {
@@ -455,9 +405,7 @@ namespace AdaWeldSystem.ProductFileControl
             PointCloudWriter.SaveToPly(mergedData, filePath);
         }
 
-        /// <summary>
-        /// 保存动作记录到pDat文件
-        /// </summary>
+        /// <summary>保存动作记录到pDat文件</summary>
         /// <param name="filePath">动作记录文件保存路径</param>
         private void SaveActionsToPDat(string filePath)
         {
@@ -486,9 +434,7 @@ namespace AdaWeldSystem.ProductFileControl
             File.WriteAllText(filePath, sb.ToString(), Encoding.UTF8);
         }
 
-        /// <summary>
-        /// 保存记录到正式文件
-        /// </summary>
+        /// <summary>保存记录到正式文件</summary>
         /// <param name="fileName">文件名（不含扩展名）</param>
         /// <returns>保存的文件路径列表</returns>
         public List<string> SaveRecord(string fileName)
@@ -528,9 +474,7 @@ namespace AdaWeldSystem.ProductFileControl
 
         #region 临时文件处理
 
-        /// <summary>
-        /// 保存临时文件（内部调用）
-        /// </summary>
+        /// <summary>保存临时文件（内部调用）</summary>
         private void SaveTempFileInternal()
         {
             if (string.IsNullOrEmpty(_tempFilePath) || _frames.Count == 0) return;
@@ -567,9 +511,7 @@ namespace AdaWeldSystem.ProductFileControl
             }
         }
 
-        /// <summary>
-        /// 追加帧到临时文件
-        /// </summary>
+        /// <summary>追加帧到临时文件</summary>
         /// <param name="frame">待追加的记录帧</param>
         private void AppendToTempFile(RecordFrame frame)
         {
@@ -601,9 +543,7 @@ namespace AdaWeldSystem.ProductFileControl
             }
         }
 
-        /// <summary>
-        /// 从临时文件解析记录
-        /// </summary>
+        /// <summary>从临时文件解析记录</summary>
         /// <param name="tempFilePath">临时文件路径</param>
         /// <returns>解析是否成功</returns>
         public bool ParseFromTempFile(string tempFilePath)
@@ -669,9 +609,7 @@ namespace AdaWeldSystem.ProductFileControl
             }
         }
 
-        /// <summary>
-        /// 将临时文件转换为正常点云PLY和pDat
-        /// </summary>
+        /// <summary>将临时文件转换为正常点云PLY和pDat</summary>
         /// <param name="tempFilePath">临时文件路径</param>
         /// <param name="outputName">输出文件名（不含扩展名）</param>
         /// <returns>转换后的文件路径列表</returns>
@@ -704,9 +642,7 @@ namespace AdaWeldSystem.ProductFileControl
 
         #region 数据流读写辅助
 
-        /// <summary>
-        /// 将点云数据写入二进制流
-        /// </summary>
+        /// <summary>将点云数据写入二进制流</summary>
         /// <param name="writer">二进制写入器</param>
         /// <param name="data">待写入的点云</param>
         private void WritePointCloudToStream(BinaryWriter writer, PointCloudData data)
@@ -739,9 +675,7 @@ namespace AdaWeldSystem.ProductFileControl
             }
         }
 
-        /// <summary>
-        /// 从二进制流读取点云数据
-        /// </summary>
+        /// <summary>从二进制流读取点云数据</summary>
         /// <param name="reader">二进制读取器</param>
         /// <returns>读取到的点云（格式异常时返回 null）</returns>
         private PointCloudData ReadPointCloudFromStream(BinaryReader reader)
@@ -778,9 +712,7 @@ namespace AdaWeldSystem.ProductFileControl
             return data;
         }
 
-        /// <summary>
-        /// 将动作记录写入二进制流（新版格式，version >= 2）
-        /// </summary>
+        /// <summary>将动作记录写入二进制流（新版格式，version >= 2）</summary>
         /// <param name="writer">二进制写入器</param>
         /// <param name="action">待写入的动作记录</param>
         private void WriteActionToStream(BinaryWriter writer, WeldActionRecord action)
@@ -808,7 +740,7 @@ namespace AdaWeldSystem.ProductFileControl
         }
 
         /// <summary>从二进制流读取动作记录（新版格式，version >= 2；>= 3 含 JobId；>= 4 含线激光</summary>
-        /// <remarks>特征点 + TA/LA/振镜/温度）</remarks>
+
         /// <returns>读取到的动作记录（格式异常时返回 null）</returns>
         /// <param name="reader">二进制读取器</param>
         /// <param name="version">文件头登记的格式版本</param>
@@ -847,9 +779,7 @@ namespace AdaWeldSystem.ProductFileControl
 
         #region 数据转换
 
-        /// <summary>
-        /// 克隆点云数据
-        /// </summary>
+        /// <summary>克隆点云数据</summary>
         /// <param name="source">源点云</param>
         /// <param name="xOffset">克隆后统一叠加的 X 偏移（毫米）</param>
         /// <returns>克隆后的点云（源为 null 时返回 null）</returns>
@@ -875,9 +805,7 @@ namespace AdaWeldSystem.ProductFileControl
             return clone;
         }
 
-        /// <summary>
-        /// 获取所有缓存的帧
-        /// </summary>
+        /// <summary>获取所有缓存的帧</summary>
         /// <returns>全部记录帧的副本</returns>
         public List<RecordFrame> GetAllFrames()
         {
@@ -892,9 +820,7 @@ namespace AdaWeldSystem.ProductFileControl
             }
         }
 
-        /// <summary>
-        /// 获取所有动作记录
-        /// </summary>
+        /// <summary>获取所有动作记录</summary>
         /// <returns>全部动作记录的副本</returns>
         public List<WeldActionRecord> GetAllActions()
         {
@@ -921,9 +847,7 @@ namespace AdaWeldSystem.ProductFileControl
             }
         }
 
-        /// <summary>
-        /// 获取指定帧的点云
-        /// </summary>
+        /// <summary>获取指定帧的点云</summary>
         /// <param name="frameIndex">帧序号</param>
         /// <returns>该帧的点云（序号越界时返回 null）</returns>
         public PointCloudData GetFramePointCloud(int frameIndex)
@@ -939,9 +863,7 @@ namespace AdaWeldSystem.ProductFileControl
 
         #region 混淆/反混淆
 
-        /// <summary>
-        /// 简单字节混淆（XOR）
-        /// </summary>
+        /// <summary>简单字节混淆（XOR）</summary>
         /// <param name="data">待混淆的字节数组</param>
         private void ObfuscateBytes(byte[] data)
         {
@@ -955,9 +877,7 @@ namespace AdaWeldSystem.ProductFileControl
             }
         }
 
-        /// <summary>
-        /// 读取pDat文件内容（自动处理混淆）
-        /// </summary>
+        /// <summary>读取pDat文件内容（自动处理混淆）</summary>
         /// <param name="filePath">动作记录文件路径</param>
         /// <returns>文件文本内容（文件不存在时返回空串）</returns>
         public string ReadPDatFile(string filePath)
@@ -984,10 +904,7 @@ namespace AdaWeldSystem.ProductFileControl
             return string.Empty;
         }
 
-        /// <summary>
-        /// 解析动作记录文件
-        /// 兼容旧格式（FrameIndex|Timestamp|ActionType|Parameter）。
-        /// </summary>
+        /// <summary>解析动作记录文件 兼容旧格式（FrameIndex|Timestamp|ActionType|Parameter）。</summary>
         /// <param name="filePath">动作记录文件路径</param>
         /// <returns>动作记录列表（文件缺失或解析失败时为空列表）</returns>
         public List<WeldActionRecord> ParsePDatRecords(string filePath)
@@ -1053,9 +970,7 @@ namespace AdaWeldSystem.ProductFileControl
 
         #region 临时文件列表
 
-        /// <summary>
-        /// 获取所有临时文件列表
-        /// </summary>
+        /// <summary>获取所有临时文件列表</summary>
         /// <returns>临时记录文件路径列表</returns>
         public List<string> GetTempFiles()
         {
@@ -1067,9 +982,7 @@ namespace AdaWeldSystem.ProductFileControl
                 .ToList();
         }
 
-        /// <summary>
-        /// 获取所有记录文件列表
-        /// </summary>
+        /// <summary>获取所有记录文件列表</summary>
         /// <returns>正式记录文件路径列表</returns>
         public List<string> GetRecordFiles()
         {
@@ -1081,9 +994,7 @@ namespace AdaWeldSystem.ProductFileControl
                 .OrderByDescending(f => File.GetCreationTime(f)).ToList();
         }
 
-        /// <summary>
-        /// 列出全部动作记录文件
-        /// </summary>
+        /// <summary>列出全部动作记录文件</summary>
         /// <returns>动作记录文件路径列表</returns>
         public List<string> GetWeldActionRecordFiles()
         {
@@ -1095,7 +1006,7 @@ namespace AdaWeldSystem.ProductFileControl
         }
 
         /// <summary>列出指定日期的动作记录文件 依据所选日期索</summary>
-        /// <remarks>引 yyyyMMdd 子目录，目录不存在时返回空列表</remarks>
+
         /// <param name="date">记录日期</param>
         /// <returns>该日期下的动作记录文件路径列表</returns>
         public List<string> GetWeldActionRecordFiles(DateTime date)
@@ -1108,7 +1019,7 @@ namespace AdaWeldSystem.ProductFileControl
         }
 
         /// <summary>按保留天数清理过期会话文件夹与残留平铺文</summary>
-        /// <remarks>件（0=永久）；逐个失败跳过</remarks>
+
         /// <returns>结果码。</returns>
         public int CleanupExpiredRecords(int retainDays)
         {

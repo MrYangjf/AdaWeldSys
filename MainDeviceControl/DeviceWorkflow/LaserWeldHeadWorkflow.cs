@@ -1,4 +1,4 @@
-﻿﻿using System;
+﻿using System;
 using AdaWeldSystem.Comm.SystemComm;
 using AdaWeldSystem.MainDeviceControl.DeviceStateApiCore;
 using AdaWeldSystem.MotionControl;
@@ -10,7 +10,6 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
 {
 
     /// <summary>焊接头工作流（骨架）。</summary>
-    /// <remarks>差异化职责：监控温度阈值（点位待硬件明确）。</remarks>
     public class LaserWeldHeadWorkflow : DeviceWorkflowBase
     {
         #region 常量
@@ -26,11 +25,8 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
 
         #region 私有变量
 
-        /// <summary>上次已下发的振镜摆幅（毫米）；与目标不一致才下发，避免逐帧刷总线</summary>
+        /// <summary>上次已下发的振镜摆幅</summary>
         private double _lastGalvoAmplitudeMm = double.NaN;
-
-        /// <summary>本次运行的振镜摆动是否启用（LoadConfig 时取自焊参配置）</summary>
-        private bool _galvoWeaveEnabled;
 
         /// <summary>最近温度上报（保护镜/环境/温升/气压），供 UI 读取。</summary>
         private LaserHeadTemperatureData _lastTemperature;
@@ -44,13 +40,13 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         /// <summary>目标光斑对应的 LA 基准位置（毫米，曲线A 反查 = TA=0 时的 LA 位）</summary>
         private double _laBaseMm;
 
-        /// <summary>当前目标光斑大小（毫米）；初值取曲线A 锚点（经 WeldParamManager 读取，构造期赋值）。</summary>
+        /// <summary>当前目标光斑大小（毫米）；初值取曲线A 锚点</summary>
         private double _targetSpotMm;
 
-        /// <summary>上次已下发的 LA 目标位置（毫米）；变化超死区才下发，避免逐拍刷从站总线</summary>
+        /// <summary>上次已下发的 LA 目标位置</summary>
         private double _lastLaTargetMm = double.NaN;
 
-        /// <summary>上次已下发的振镜频率（Hz，-1=未下发）；与摆幅/中心共同决定是否重发</summary>
+        /// <summary>上次已下发的振镜频率</summary>
         private int _lastGalvoFreqHz = -1;
 
         /// <summary>光丝对中补偿后的振镜 X 中心（mm，单写口 ApplyGalvoCenterOffset）</summary>
@@ -88,8 +84,8 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         /// <summary>模组配置文件名（不含扩展名），在本流程类别目录。</summary>
         protected override string ConfigFileName { get { return "LaserWeldHeadWorkflow"; } }
 
-        /// <summary>配置落LaserWeldHead\Workflow_XML 子目录。</summary>
-        protected override string ConfigRelativeDir { get { return @"Config\LaserWeldHead\Workflow_XML"; } }
+        /// <summary>模组配置所属模块（全局配置目录下的模块层）。</summary>
+        protected override string ConfigModule { get { return "LaserWeldHead"; } }
 
         /// <summary>最近一次温度上报（只读；未上报过为 null）。</summary>
         public LaserHeadTemperatureData LastTemperature { get { return _lastTemperature; } }
@@ -126,7 +122,6 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         }
 
         /// <summary>LA（焊接头从站：对焦电机 / 振镜）流程层就绪。</summary>
-        /// <remarks>LA 就绪判定归本流程（硬件状态来自从站）。</remarks>
         public bool LaReady { get { return MontionManager.Instance.LaReady; } }
 
         /// <summary>LA 不可用原因（就绪返回空串）。</summary>
@@ -139,8 +134,6 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         public override bool IsHomed { get { return MontionManager.Instance.TaHomed; } }
 
         /// <summary>TA 已在工作零位（L4）。</summary>
-        /// <remarks>2026-11-17 改版：读工作零位到位观测位 <see cref="MontionManager.TaAtWorkZero"/>，
-        /// 不再读「TA 指令是否可执行」——两者语义不同（L4 ≠ L1∧L3）。</remarks>
         public override bool IsAtWorkZero { get { return MontionManager.Instance.TaAtWorkZero; } }
 
         /// <summary>TA 轴需回零后位置才可信。</summary>
@@ -177,7 +170,6 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         }
 
         /// <summary>订阅焊接头温度与报警事件（断开时退订）。</summary>
-        /// <remarks>阈值不在此重复下发（SetAlarmThresholds 归初始化，避免双写）。</remarks>
         private void SubscribeWeldHeadEvents()
         {
             WeldHeadSlaveDevice weldHead = MontionManager.Instance.WeldHead;
@@ -196,7 +188,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         }
 
         /// <summary>温度越阈上报：记保护镜温度与温升，超阈报警。</summary>
-        /// <remarks>越阈触发在从站侧，阈值与级别判定归本方法。</remarks>
+
         /// <param name="sender">事件源（WeldHeadSlaveDevice）。</param>
         /// <param name="data">本次上报的温度气压数据。</param>
         private void OnWeldHeadTemperatureAlarm(object sender, LaserHeadTemperatureData data)
@@ -237,7 +229,6 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         #endregion
 
         /// <summary>释放托管资源：退订焊接头从站事件（基类 Dispose 调此钩</summary>
-        /// <remarks>本类不得写 <c>Dispose(bool)</c>；基类提供 <c>DisposeManaged()</c> 钩子。 子）。</remarks>
         protected override void DisposeManaged()
         {
             UnsubscribeWeldHeadEvents();
@@ -247,9 +238,6 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         #region 私有函数
 
         /// <summary>按当前摆幅下发振镜参数（值未变则跳过，避免逐</summary>
-        /// <remarks>摆幅取 <c>WeldParamControlWorkflow.LastOutput.GalvoAmplitude</c>；
-        /// 关闭摆动时下发 0，振镜回到不摆动状态。
-        /// ⚠️ 中心偏移由 <c>ApplyGalvoCenterOffset</c> 单写。</remarks>
         private void ApplyGalvoAmplitude()
         {
             WeldHeadSlaveDevice weldHead = MontionManager.Instance.WeldHead;
@@ -262,7 +250,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             WeldParamAdaptControl output = WeldStatus == SubDeviceWeldStatus.Working
                 ? WeldParamControlWorkflow.Instance.LastOutput
                 : null;
-            double amplitude = (_galvoWeaveEnabled && output != null) ? output.GalvoAmplitude : 0.0;
+            double amplitude = (IsGalvoWeaveEnabled() && output != null) ? output.GalvoAmplitude : 0.0;
             if (amplitude < 0.0)
             {
                 amplitude = 0.0;
@@ -284,14 +272,14 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
                 return;
             }
 
-            // ⛔ 变量名不可用 `params`（C# 关键字）
+            // 变量名避开 C# 关键字
             GalvoParams galvo = GalvoParams.CreateLogicalHome();
             galvo.Width = amplitude;
             galvo.Length = amplitude;
             galvo.GalvoEnable = amplitude > 0.0;
-            // 图形种类 = 人工编辑项，不参与宽度自适应
-            WeldAlgorithmsConfig algoCfg = WeldParamManager.Instance.AlgorithmsConfig;
-            galvo.Pattern = (WsgGalvoPattern)(algoCfg != null ? algoCfg.GalvoPattern : (int)WsgGalvoPattern.Line);
+            // 未设图形按直线兜底
+            WeldParamConfig algoCfg = WeldParamManager.Instance.AlgorithmsConfig;
+            galvo.Pattern = ResolveGalvoPattern(algoCfg != null ? algoCfg.GalvoPattern : 0);
             galvo.Frequency = frequency;
             galvo.XCenter = _galvoCenterXmm;
             galvo.YCenter = _galvoCenterYmm;
@@ -303,6 +291,28 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
                 _lastGalvoCenterXmm = _galvoCenterXmm;
                 _lastGalvoCenterYmm = _galvoCenterYmm;
             }
+        }
+
+        /// <summary>配置图形值 → 设备协议图形：0</summary>
+
+        /// <param name="configValue">配置中的图形编号</param>
+        /// <returns>可下发的协议图形</returns>
+        public static WsgGalvoPattern ResolveGalvoPattern(int configValue)
+        {
+            if (configValue < (int)WsgGalvoPattern.Circle || configValue > (int)WsgGalvoPattern.Arc)
+            {
+                return WsgGalvoPattern.Line;
+            }
+            return (WsgGalvoPattern)configValue;
+        }
+
+        /// <summary>振镜摆动是否启用（实时读配置真相源）。</summary>
+
+        /// <returns>true = 已启用振镜跟随摆动工艺</returns>
+        public static bool IsGalvoWeaveEnabled()
+        {
+            WeldParamConfig cfg = WeldParamManager.Instance.AlgorithmsConfig;
+            return cfg != null && cfg.EnableGalvoWeave;
         }
 
         /// <summary>LA 目标位置下发（毫米，随动与 Spot/Pose 共用；0.01mm 死区防刷总线）。</summary>
@@ -333,7 +343,6 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         }
 
         /// <summary>LA auto 随动一步：LA 目标 = 光斑基准位 + 曲线B 按 TA 位置的偏移补</summary>
-        /// <remarks>偿。</remarks>
         private void ApplyLaFollow()
         {
             double taMm = MotionControlWorkflow.Instance.TaPositionMm;
@@ -347,8 +356,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         }
 
         /// <summary>设目标光斑大小：曲线A 反查基准位，叠加当前 TA 偏移</summary>
-        /// <remarks>本方法与 LA_Pose 同退随动，再做一次定位下发。
-        /// 目标 = 曲线A 基准 + 曲线B 当前 TA 偏移；持续随动仅由 <see cref="LaAuto"/> 重新进入。</remarks>
+
         /// <param name="spotMm">目标光斑大小（毫米）</param>
         /// <param name="actionName">动作名（日志用）</param>
         /// <returns>受理并下发成功返回 true</returns>
@@ -396,7 +404,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         }
 
         /// <summary>LA 调试位移动（Pose 共用）：退出随动后直接下发目标位，不</summary>
-        /// <remarks>经曲线。</remarks>
+
         /// <param name="posMm">目标位置（毫米）</param>
         /// <param name="actionName">动作名（日志用）</param>
         /// <returns>下发成功返回 true</returns>
@@ -435,8 +443,6 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         #region 常驻流程
 
         /// <summary>流程处理：按步驱动振镜参数运行期下发（摆幅随</summary>
-        /// <remarks>本工作流按拍消费 <c>WeldParamAdaptControl.GalvoAmplitude</c>，保证界面改参数运行期生效；
-        /// case 内禁 Thread.Sleep / while 轮询。 焊缝宽度自适应）。</remarks>
         public override void FlowProcess()
         {
             if (!IsEnable) return;
@@ -465,7 +471,32 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         {
             ClearStatus();
             SetWeldStatus(SubDeviceWeldStatus.Standby, "流程复位");
+            // 焊接头回零位（LA / 振镜）尚未实现：机械回零动作待现场方案确定后接入，
+            // 此处仅把振镜退回逻辑零位并记录待办，不臆造 LA 机械回零。
+            GalvoHomeForReset();
             return true;
+        }
+
+        /// <summary>复位时振镜退回逻辑零位（LA 机械回零待实现）。</summary>
+        private void GalvoHomeForReset()
+        {
+            WeldHeadSlaveDevice weldHead = MontionManager.Instance.WeldHead;
+            if (weldHead == null || !weldHead.IsInitialized)
+            {
+                Log("焊接头复位 振镜回逻辑零位跳过 焊接头从站未就绪", MessageLevel.Warning);
+                return;
+            }
+            _galvoCenterXmm = 0.0;
+            _galvoCenterYmm = 0.0;
+            _lastGalvoAmplitudeMm = double.NaN;
+            _lastGalvoFreqHz = -1;
+            _lastGalvoCenterXmm = double.NaN;
+            _lastGalvoCenterYmm = double.NaN;
+            bool ok = weldHead.SetGalvoParams(GalvoParams.CreateLogicalHome());
+            Log(ok
+                ? "焊接头复位 振镜已回逻辑零位 LA 机械回零待实现"
+                : "焊接头复位 振镜回逻辑零位失败 LA 机械回零待实现",
+                ok ? MessageLevel.Info : MessageLevel.Warning);
         }
 
         /// <summary>状态清理：复位标志与执行步。</summary>
@@ -476,14 +507,13 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         }
 
         /// <summary>清除步骤用时：防止暂停 / 停止期间的时间被计入</summary>
-        /// <remarks>步骤时长。</remarks>
         public override void ResetWorkTime()
         {
             ResetStepTime();
         }
 
         /// <summary>设备连接（阻塞）：无实体设备，仅切换状态机</summary>
-        /// <remarks>回。</remarks>
+
         /// <returns>连接成功返回 true</returns>
         public override bool InitializeOn()
         {
@@ -493,7 +523,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         }
 
         /// <summary>设备断开（阻塞）：无实体设备，仅切换状态机</summary>
-        /// <remarks>回。</remarks>
+
         /// <returns>断开成功返回 true</returns>
         public override bool InitializeOff()
         {
@@ -524,12 +554,10 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         {
             TimeOutSeconds = ReadInt("TimeOutSeconds", 30);
 
-            // 振镜摆动开关与系数归焊参配置，此处只取开关
-            WeldAlgorithmsConfig cfg = WeldParamManager.Instance.AlgorithmsConfig;
+            // 目标光斑取焊参配置
+            WeldParamConfig cfg = WeldParamManager.Instance.AlgorithmsConfig;
             if (cfg != null)
             {
-                _galvoWeaveEnabled = cfg.EnableGalvoWeave;
-                // 目标光斑取配置（键 LA_SPOT_TARGET_MM）
                 if (cfg.LaSpotTargetMm > 0.0) _targetSpotMm = cfg.LaSpotTargetMm;
             }
             _laBaseMm = WeldParamManager.Instance.TaLaCurve.QueryLaPositionMm(_targetSpotMm);
@@ -570,11 +598,8 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             return true;
         }
 
-        /// <summary>焊接头手动动作统一门禁：自动焊接流程进行中 ⇒ 拒绝</summary>
-        /// <remarks>2026-11-17 新增（ADR-100 演进）：通过界面 UI 发起的动作一律是手动模式，
-        /// 自动焊接流程一旦启动到结束必须拒绝——手动与生产流程同时驱动同一台电机会互相打架。
-        /// 判据唯一来源 = <see cref="DeviceControlWork.IsAutoWeldingRunning"/>（主设备级权威）。
-        /// ⛔ 不复用 <c>IsWelding</c>：后者覆盖整段开机期，过宽会把正常调试也一并禁掉。</remarks>
+        /// <summary>焊接头手动动作统一门禁</summary>
+
         /// <param name="actionName">动作名（日志与提示用）</param>
         /// <param name="reason">拒绝原因（放行时为空串）</param>
         /// <returns>允许执行返回 true</returns>
@@ -589,12 +614,10 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
 
         /// <summary>LA auto：开启随动（TA 上下移动时 LA 跟随补偿保持光斑恒定）。</summary>
         /// <returns>受理返回 true</returns>
-        /// <remarks>开启时先按配置目标光斑下发一次，再进随动。
-        /// 配置未设置（≤0）时沿用最近一次目标光斑。</remarks>
         public bool LaAuto()
         {
-            if (!EnsureManualWeldHeadActionAllowed("LA auto", out string laReject)) return false;
-            WeldAlgorithmsConfig cfg = WeldParamManager.Instance.AlgorithmsConfig;
+            if (!EnsureManualWeldHeadActionAllowed("LA auto", out _)) return false;
+            WeldParamConfig cfg = WeldParamManager.Instance.AlgorithmsConfig;
             if (cfg != null && cfg.LaSpotTargetMm > 0.0)
             {
                 if (!LaApplySpot(cfg.LaSpotTargetMm, "LA auto 开启"))
@@ -608,12 +631,32 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             return true;
         }
 
+        /// <summary>LA 自动模式入口（流程内调用，焊前阶段进工作模式）。</summary>
+        /// <remarks>与手动入口 <see cref="LaAuto"/> 的区别：⛔ 不做「自动焊接中禁手动动作」门禁检查——
+        /// 焊前阶段本就属自动流程，主控派发的动作是流程组成而非手动干预。</remarks>
+        /// <returns>受理返回 true</returns>
+        public bool LaAutoAuto()
+        {
+            WeldParamConfig cfg = WeldParamManager.Instance.AlgorithmsConfig;
+            if (cfg != null && cfg.LaSpotTargetMm > 0.0)
+            {
+                if (!LaApplySpot(cfg.LaSpotTargetMm, "LA 自动模式开启"))
+                {
+                    return false;
+                }
+            }
+            _laFollowActive = true;
+            _lastLaTargetMm = double.NaN;   // 重入强制首下发
+            Log(string.Format("LA 自动模式随动开启 目标光斑 {0:F3}mm 基准位 {1:F3}mm", _targetSpotMm, _laBaseMm));
+            return true;
+        }
+
         /// <summary>LA Spot1：设目标光斑并按当前 TA 位置推算 LA 位。</summary>
         /// <returns>下发成功返回 true</returns>
         public bool LaSpot1()
         {
-            if (!EnsureManualWeldHeadActionAllowed("LA Spot1", out string laReject)) return false;
-            WeldAlgorithmsConfig cfg = WeldParamManager.Instance.AlgorithmsConfig;
+            if (!EnsureManualWeldHeadActionAllowed("LA Spot1", out _)) return false;
+            WeldParamConfig cfg = WeldParamManager.Instance.AlgorithmsConfig;
             if (cfg == null)
             {
                 Log("LA Spot1 失败 工艺配置不可用", MessageLevel.Error);
@@ -626,8 +669,8 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         /// <returns>下发成功返回 true</returns>
         public bool LaSpot2()
         {
-            if (!EnsureManualWeldHeadActionAllowed("LA Spot2", out string laReject)) return false;
-            WeldAlgorithmsConfig cfg = WeldParamManager.Instance.AlgorithmsConfig;
+            if (!EnsureManualWeldHeadActionAllowed("LA Spot2", out _)) return false;
+            WeldParamConfig cfg = WeldParamManager.Instance.AlgorithmsConfig;
             if (cfg == null)
             {
                 Log("LA Spot2 失败 工艺配置不可用", MessageLevel.Error);
@@ -640,8 +683,8 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         /// <returns>下发成功返回 true</returns>
         public bool LaPose1()
         {
-            if (!EnsureManualWeldHeadActionAllowed("LA Pose1", out string laReject)) return false;
-            WeldAlgorithmsConfig cfg = WeldParamManager.Instance.AlgorithmsConfig;
+            if (!EnsureManualWeldHeadActionAllowed("LA Pose1", out _)) return false;
+            WeldParamConfig cfg = WeldParamManager.Instance.AlgorithmsConfig;
             if (cfg == null)
             {
                 Log("LA Pose1 失败 工艺配置不可用", MessageLevel.Error);
@@ -650,26 +693,54 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             return LaMoveToPose(cfg.LaPose1Mm, "LA Pose1");
         }
 
-        /// <summary>LA Pose2：直接移到预设调试位观察光斑。</summary>
+        /// <summary>LA 默认焦平面：直接移到 LA 的默认工作位</summary>
         /// <returns>下发成功返回 true</returns>
-        public bool LaPose2()
+        public bool LaDefaultFocus()
         {
-            if (!EnsureManualWeldHeadActionAllowed("LA Pose2", out string laReject)) return false;
-            WeldAlgorithmsConfig cfg = WeldParamManager.Instance.AlgorithmsConfig;
+            if (!EnsureManualWeldHeadActionAllowed("LA 默认焦平面", out _)) return false;
+            WeldParamConfig cfg = WeldParamManager.Instance.AlgorithmsConfig;
             if (cfg == null)
             {
-                Log("LA Pose2 失败 工艺配置不可用", MessageLevel.Error);
+                Log("LA 默认焦平面 失败 工艺配置不可用", MessageLevel.Error);
                 return false;
             }
-            return LaMoveToPose(cfg.LaPose2Mm, "LA Pose2");
+            return LaMoveToPose(cfg.LaDefaultFocusMm, "LA 默认焦平面");
+        }
+
+        /// <summary>LA 就位到默认焦平面</summary>
+        /// <returns>下发成功返回 true</returns>
+        public bool MoveToDefaultFocus()
+        {
+            WeldParamConfig cfg = WeldParamManager.Instance.AlgorithmsConfig;
+            if (cfg == null)
+            {
+                Log("LA 默认焦平面 跳过 工艺配置不可用", MessageLevel.Warning);
+                return false;
+            }
+            double posMm = cfg.LaDefaultFocusMm;
+            if (posMm <= 0.0)
+            {
+                Log("LA 默认焦平面 跳过 未配置位置", MessageLevel.Info);
+                return false;
+            }
+            WeldHeadSlaveDevice weldHead = MontionManager.Instance.WeldHead;
+            if (weldHead == null || !weldHead.IsInitialized)
+            {
+                Log("LA 默认焦平面 跳过 焊接头从站未就绪", MessageLevel.Warning);
+                return false;
+            }
+            bool ok = LaMoveTo(posMm, "LA 默认焦平面", true);
+            Log(ok ? "LA 已就位默认焦平面" : "LA 默认焦平面下发失败",
+                ok ? MessageLevel.Info : MessageLevel.Error);
+            return ok;
         }
 
         /// <summary>振镜回到逻辑零位：直线+最小摆幅+不使能，中心补</summary>
-        /// <remarks>偿状态一并清零。</remarks>
+
         /// <returns>下发成功返回 true</returns>
         public bool GalvoHome()
         {
-            if (!EnsureManualWeldHeadActionAllowed("振镜回逻辑零位", out string galvoReject)) return false;
+            if (!EnsureManualWeldHeadActionAllowed("振镜回逻辑零位", out _)) return false;
             WeldHeadSlaveDevice weldHead = MontionManager.Instance.WeldHead;
             if (weldHead == null)
             {
@@ -688,41 +759,129 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             return ok;
         }
 
-        /// <summary>振镜手动演示：按图形一次性下发演示参数（圆/八</summary>
-        /// <param name="pattern">演示图形</param>
-        /// <returns>下发成功返回 true</returns>
-        /// <remarks>一次性动作：不进入随动循环；演示摆幅 1.0mm、频率取协议默认；
-        /// 焊接中拒绝执行；停止演示 = <see cref="GalvoHome"/> 回零位。 字/直线/圆弧），与生产流程互斥。</remarks>
-        public bool GalvoDemo(WsgGalvoPattern pattern)
+        /// <summary>焊接头从站是否已装载并就绪</summary>
+        /// <remarks>从站未装载（如节点号撞号）属配置缺硬件，调用方应先判此值再决定是否下发，
+        /// 避免把「已知缺硬件」记成流程 Error。</remarks>
+        public bool IsSlaveReady
         {
-            if (!EnsureManualWeldHeadActionAllowed("振镜演示", out string demoReject)) return false;
+            get { return MontionManager.Instance.WeldHead != null; }
+        }
+
+        /// <summary>振镜摆动启动入口（流程内调用，焊前阶段按自适应基准值开启摆动）。</summary>
+        /// <remarks>与手动入口 <see cref="GalvoManualStart"/> 的区别：⛔ 不做「自动焊接中禁手动动作」门禁检查，
+        /// 且摆幅取自适应基准值（<c>AutoParam.SwingWidth</c>）与基准频率，
+        /// ⛔ 不依赖 Working 态的 <c>LastOutput</c>（焊前尚无当拍工艺输出）。</remarks>
+        /// <returns>下发成功返回 true</returns>
+        public bool GalvoWeaveStartAuto()
+        {
             WeldHeadSlaveDevice weldHead = MontionManager.Instance.WeldHead;
             if (weldHead == null)
             {
-                LogAction(RunMode, "振镜演示失败 焊接头从站未就绪", MessageLevel.Error);
+                Log("振镜摆动启动失败 焊接头从站未就绪", MessageLevel.Error);
                 return false;
             }
+            if (!IsGalvoWeaveEnabled())
+            {
+                Log("振镜摆动启动跳过 未启用振镜跟随摆动工艺", MessageLevel.Info);
+                return false;
+            }
+
+            AutoParam autoParam = WeldParamManager.Instance.CurrentAutoParam;
+            if (autoParam == null)
+            {
+                Log("振镜摆动启动失败 自适应参数未载入", MessageLevel.Error);
+                return false;
+            }
+
+            double amplitude = autoParam.SwingWidth;
+            if (amplitude <= 0.0)
+            {
+                Log("振镜摆动启动失败 自适应基准摆幅未配置", MessageLevel.Warning);
+                return false;
+            }
+            int frequency = (int)Math.Round(autoParam.SwingFreqHz1 > 0.0
+                ? autoParam.SwingFreqHz1
+                : AutoParam.DefaultSwingFreqHz1);
+
             GalvoParams galvo = GalvoParams.CreateLogicalHome();
-            galvo.Pattern = pattern;
-            galvo.Width = 1.0;
-            galvo.Length = 1.0;
+            galvo.Pattern = ResolveGalvoPattern(WeldParamManager.Instance.AlgorithmsConfig != null
+                ? WeldParamManager.Instance.AlgorithmsConfig.GalvoPattern : 0);
+            galvo.Width = amplitude;
+            galvo.Length = amplitude;
+            galvo.Frequency = frequency;
             galvo.GalvoEnable = true;
             galvo.XCenter = _galvoCenterXmm;
             galvo.YCenter = _galvoCenterYmm;
             bool ok = weldHead.SetGalvoParams(galvo);
             if (ok)
             {
-                _lastGalvoAmplitudeMm = 1.0;
-                _lastGalvoFreqHz = galvo.Frequency;
+                _lastGalvoAmplitudeMm = amplitude;
+                _lastGalvoFreqHz = frequency;
                 _lastGalvoCenterXmm = _galvoCenterXmm;
                 _lastGalvoCenterYmm = _galvoCenterYmm;
-                LogAction(RunMode, string.Format("振镜演示 图形 {0} 摆幅 1.0mm 频率 {1}Hz", pattern, galvo.Frequency));
+                Log(string.Format("振镜摆动已启动 图形 {0} 基准摆幅 {1:F3}mm 频率 {2}Hz",
+                    galvo.Pattern, amplitude, frequency));
+            }
+            else
+            {
+                Log("振镜摆动启动失败 参数写入失败", MessageLevel.Error);
             }
             return ok;
         }
 
+        /// <summary>振镜手动下发：按 GA 设定档</summary>
+        /// <param name="pattern">图形</param>
+        /// <param name="shape">该图形的分档参数（宽/长/频）</param>
+        /// <returns>下发成功返回 true</returns>
+        public bool GalvoManualStart(WsgGalvoPattern pattern, GalvoShapeParams shape)
+        {
+            if (!EnsureManualWeldHeadActionAllowed("振镜手动下发", out _)) return false;
+            WeldHeadSlaveDevice weldHead = MontionManager.Instance.WeldHead;
+            if (weldHead == null)
+            {
+                LogAction(RunMode, "振镜手动下发失败 焊接头从站未就绪", MessageLevel.Error);
+                return false;
+            }
+            if (shape == null)
+            {
+                LogAction(RunMode, "振镜手动下发失败 分档参数不可用", MessageLevel.Error);
+                return false;
+            }
+            GalvoParams galvo = GalvoParams.CreateLogicalHome();
+            galvo.Pattern = pattern;
+            galvo.Width = shape.Width;
+            galvo.Length = shape.Length;
+            galvo.Frequency = shape.Frequency;
+            galvo.GalvoEnable = true;
+            galvo.XCenter = _galvoCenterXmm;
+            galvo.YCenter = _galvoCenterYmm;
+            bool ok = weldHead.SetGalvoParams(galvo);
+            if (ok)
+            {
+                _lastGalvoAmplitudeMm = shape.Width;
+                _lastGalvoFreqHz = galvo.Frequency;
+                _lastGalvoCenterXmm = _galvoCenterXmm;
+                _lastGalvoCenterYmm = _galvoCenterYmm;
+                LogAction(RunMode, string.Format("振镜手动下发 图形 {0} 宽 {1:F3}mm 长 {2:F3}mm 频率 {3}Hz",
+                    pattern, shape.Width, shape.Length, galvo.Frequency));
+            }
+            else
+            {
+                LogAction(RunMode, "振镜手动下发失败 参数写入失败", MessageLevel.Error);
+            }
+            return ok;
+        }
+
+        /// <summary>振镜手动停止：撤销使能并回逻辑零位</summary>
+        /// <returns>下发成功返回 true</returns>
+        public bool GalvoManualStop()
+        {
+            if (!EnsureManualWeldHeadActionAllowed("振镜手动停止", out _)) return false;
+            return GalvoHome();
+        }
+
         /// <summary>光丝对中偏差→振镜中心微调的单写口：只改补偿</summary>
-        /// <remarks>状态，实际下发由随动步合并执行。</remarks>
+
         /// <param name="xMm">X 中心补偿后值（mm）</param>
         /// <param name="yMm">Y 中心补偿后值（mm）</param>
         public void ApplyGalvoCenterOffset(double xMm, double yMm)
@@ -753,3 +912,5 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         #endregion
     }
 }
+
+

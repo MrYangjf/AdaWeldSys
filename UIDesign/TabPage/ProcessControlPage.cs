@@ -1,5 +1,4 @@
-﻿﻿using AdaWeldSystem.Comm.SystemComm;
-
+﻿using AdaWeldSystem.Comm.SystemComm;
 using AdaWeldSystem.MainDeviceControl.DeviceStateApiCore;
 using AdaWeldSystem.MotionControl;
 using AdaWeldSystem.MotionControl.DeltaEtherCAT;
@@ -49,17 +48,12 @@ namespace AdaWeldSystem.UIDesign.TabPage
         }
 
         /// <summary>启动本页刷新节拍（Designer 托管的 timerRefresh；页内唯一实例）。</summary>
-        /// <remarks>⛔ 本页定时器只做显示信息刷新，⛔ 不与其它页面共用；
-        /// 按钮管控与状态判定一律事件驱动 + 点击时直读权威源。</remarks>
         private void StartActionRefresh()
         {
             timerRefresh.Start();
         }
 
         /// <summary>刷新节拍：只刷新本页显示信息（TA Break 停止位）。</summary>
-        /// <remarks>2026-11-17 改版：⛔ 去掉 Task.Run + BeginInvoke 跨线程刷新（卡顿与显示异常根因）；
-        /// 门禁快照采集整体退场——按 UI 状态规范「真相源唯一」，门禁改为点击时直读权威源，
-        /// 不再缓存会过期的快照。</remarks>
         private void timerRefresh_Tick(object sender, EventArgs e)
         {
             if (IsDisposed || Disposing) return;
@@ -74,7 +68,6 @@ namespace AdaWeldSystem.UIDesign.TabPage
         /// <summary>运控连机/断开时实时同步三个指令区可用性</summary>
         /// <param name="sender">发送方。</param>
         /// <param name="e">事件参数。</param>
-        /// <remarks>判定统一走 MotionManager</remarks>
         private void OnMotionStateSwitched(object sender,
             AdaWeldSystem.MainDeviceControl.DeviceStateApiCore.SubDeviceStateChangedEventArgs e)
         {
@@ -88,22 +81,19 @@ namespace AdaWeldSystem.UIDesign.TabPage
         }
 
         /// <summary>轴就绪事件（后台线程）</summary>
-        /// <remarks>封送到 UI 线程重算三区可用性，不等下次点击。</remarks>
         private void OnAxisReadyChanged()
         {
             PostToUi(RefreshActionStates);
         }
 
         /// <summary>TA_ZeroPose 阶段变化</summary>
-        /// <remarks>程序赋值必须走 _suppressActionRadio，避免重复执行指令；
-        /// 执行期间置为选中态，完成/失败按结果上色。</remarks>
         private void OnTaZeroPoseStageChanged()
         {
             PostToUi(ApplyTaZeroPoseStage);
         }
 
         /// <summary>后台事件封送到 UI 线程执行</summary>
-        /// <remarks>页面销毁、句柄未创建或已释放时安全丢弃。</remarks>
+
         /// <param name="action">UI 线程动作</param>
         private void PostToUi(Action action)
         {
@@ -125,7 +115,6 @@ namespace AdaWeldSystem.UIDesign.TabPage
         }
 
         /// <summary>同步 TA_ZeroPose 阶段到选中态与底色。</summary>
-        /// <remarks>仅在真正执行过时介入；必须运行在 UI 线程。</remarks>
         private void ApplyTaZeroPoseStage()
         {
             MotionControlWorkflow flow = MotionControlWorkflowInstance();
@@ -135,9 +124,9 @@ namespace AdaWeldSystem.UIDesign.TabPage
             // 跑过没有与结果如何分两维：失败必须呈红
             if (!running && !done && !attempted) return;
 
-            // 2026-11-17 改版：自动 ZeroPose **不抢用户的指令选中态**、**不占用指令区底色**。
-            // 抢走选中态会出现「TA_Zero 被选中、TA_Auto 是红的」自相矛盾状态（用户指令与自动流程混在一起）。
-            // 只有当用户自己正选中 TA_Zero（手动点了它在等结果）时，才把结果色落在它身上。
+            // 自动回零不抢选中态与底色
+            // 避免选中态与手动指令矛盾
+            // 仅用户选中时才落结果色
             if (radioQuickTaZeroPose.Checked)
             {
                 if (running) ApplyActionRunning(radioQuickTaZeroPose);
@@ -150,7 +139,6 @@ namespace AdaWeldSystem.UIDesign.TabPage
         /// <summary>页面首次可见兜底</summary>
         /// <param name="sender">发送方。</param>
         /// <param name="e">事件参数。</param>
-        /// <remarks>构造早于初始化，可见时重算一次避免禁用。</remarks>
         private void ProcessControlPage_VisibleChanged(object sender, EventArgs e)
         {
             if (!Visible) return;
@@ -160,7 +148,6 @@ namespace AdaWeldSystem.UIDesign.TabPage
 
         /// <summary>整机初始化完成后主动回填一次三区可用性</summary>
         /// <param name="success">是否成功。</param>
-        /// <remarks>构造/句柄事件可能早于运控就绪</remarks>
         private void OnMachineInitializationCompleted(bool success)
         {
             if (IsDisposed || Disposing) return;
@@ -175,9 +162,6 @@ namespace AdaWeldSystem.UIDesign.TabPage
         }
 
         /// <summary>三个指令区统一 Tooltip：只讲按钮作用</summary>
-        /// <remarks>Radio 只显示指令名。
-        /// 悬停给出中文释义。
-        /// ⛔ 不承载状态。</remarks>
         private void InitCommandTooltips()
         {
             _tooltip = new AntdUI.TooltipComponent();
@@ -188,7 +172,7 @@ namespace AdaWeldSystem.UIDesign.TabPage
             _tooltip.SetTip(radioQuickLaSpot1, "LA_Spot1：移动到光斑位 1");
             _tooltip.SetTip(radioQuickLaSpot2, "LA_Spot2：移动到光斑位 2");
             _tooltip.SetTip(radioQuickLaPose1, "LA_Pose1：移动到姿态位 1");
-            _tooltip.SetTip(radioQuickLaPose2, "LA_Pose2：移动到姿态位 2");
+            _tooltip.SetTip(radioQuickLaDefaultFocus, "LA_DefaultFocus：移动到 LA 默认焦平面（LA 默认工作位）");
             _tooltip.SetTip(radioQuickLaGalvoCircle, "GA_Circle：振镜图形=圆");
             _tooltip.SetTip(radioQuickLaGalvoEight, "GA_Eight：振镜图形=八字");
             _tooltip.SetTip(radioQuickLaGalvoLine, "GA_Line：振镜图形=直线");
@@ -246,7 +230,6 @@ namespace AdaWeldSystem.UIDesign.TabPage
         private ConfigListRow _selectedConfigRow;
 
         /// <summary>初始化参数列表表格列：Columns 须在代码后置设置，不可</summary>
-        /// <remarks>在 Designer 的 InitializeComponent 内赋值（DataReviewerPage/ConfigForm 先例）。</remarks>
         private void InitConfigListColumns()
         {
             tableConfigList.Columns = new AntdUI.ColumnCollection
@@ -264,7 +247,6 @@ namespace AdaWeldSystem.UIDesign.TabPage
         /// <summary>列表点击：记录选中行；右键弹出「选择/切换」菜单</summary>
         /// <param name="sender">发送方。</param>
         /// <param name="e">事件参数。</param>
-        /// <remarks>数据追溯/回放同构</remarks>
         private void tableConfigList_CellClick(object sender, AntdUI.TableClickEventArgs e)
         {
             _selectedConfigRow = e.Record as ConfigListRow;
@@ -329,7 +311,6 @@ namespace AdaWeldSystem.UIDesign.TabPage
         }
 
         /// <summary>右键「选择/切换」</summary>
-        /// <remarks>切换到列表选中的配置并重载参数</remarks>
         private void ConfigSelect()
         {
             string configId = _selectedConfigRow == null ? string.Empty : _selectedConfigRow.Id;
@@ -432,16 +413,15 @@ namespace AdaWeldSystem.UIDesign.TabPage
             if (!ApplyAdaptUiToMemory()) return;
 
             // ③自适应区落盘（EnableGuide 归 ②快捷启用区）
-            // ⛔ 不落 ①System 区：前馈安全/单调锁归系统设置页；
+            // 前馈与单调锁不落本区
             //    顺带落 System 会连系统设置页未保存项一并写盘。
-            WeldParamManager.Instance.SaveAlgorithmsZone(WeldAlgorithmsConfig.AlgorithmsZone.Adapt);
+            WeldParamManager.Instance.SaveAlgorithmsZone(WeldParamConfig.AlgorithmsZone.Adapt);
 
             AntdUI.Message.success(System.Windows.Forms.Form.ActiveForm, "焊参调整已保存");
         }
 
         /// <summary>自适应区「UI→内存」统一底座：六项，只写内存。</summary>
-        /// <remarks>「修改参数」与「保存焊参调整」共用。⑤三项归 Adapt 区，
-        /// 须在本方法之后落盘，否则不写入文件。</remarks>
+
         /// <returns>false 表示配置对象不可用，调用方应中止。</returns>
         private bool ApplyAdaptUiToMemory()
         {
@@ -456,11 +436,9 @@ namespace AdaWeldSystem.UIDesign.TabPage
             else if (segmentMm > 50.0) segmentMm = 50.0;
             cfg.SegmentDistanceMm = segmentMm;
 
-            // ⑤工艺输出（③自适应区）：手动宽度 / 光斑系数 / 输出频率
+            // 工艺输出项已移除
+            // 按段落长度触发，宽度取振镜档
             // ⚠️ 前馈系数/单调锁归①系统区，本面板不写。
-            WeldParamManager.Instance.ManualSeamWidthMm = ParseCalibDouble(txtParamManualWidth, WeldParamManager.Instance.ManualSeamWidthMm);
-            WeldParamManager.Instance.SpotWidthGain = ParseCalibDouble(txtParamSpotGain, WeldParamManager.Instance.SpotWidthGain);
-            WeldParamManager.Instance.ParamOutputHz = selParamOutputHz.SelectedIndex == 1 ? 30 : (selParamOutputHz.SelectedIndex == 2 ? 10 : 60);
             return true;
         }
 
@@ -469,16 +447,14 @@ namespace AdaWeldSystem.UIDesign.TabPage
         /// <param name="e">事件参数。</param>
         private void BtnReadAutoParam_Click(object sender, EventArgs e)
         {
-            WeldParamManager.Instance.LoadAlgorithmsConfig();
+            WeldParamManager.Instance.LoadAlgorithmsZone(WeldParamConfig.AlgorithmsZone.Adapt);
             LoadFlowSwitchOnForm();
-            LoadParamOutOnForm();
-            LoadProcessEnableOnForm();
             LoadParamOnForm();
             AntdUI.Message.info(System.Windows.Forms.Form.ActiveForm, "已读取焊参调整");
         }
 
         /// <summary>修改焊参调整：仅同步底部 6 项到内存，不落盘。</summary>
-        /// <remarks>语义同系统设置三按钮：读取/修改/保存。</remarks>
+
         /// <param name="sender">发送方。</param>
         /// <param name="e">事件参数。</param>
         private void btnCorAutoParam_Click(object sender, EventArgs e)
@@ -489,7 +465,7 @@ namespace AdaWeldSystem.UIDesign.TabPage
         }
 
         /// <summary>修正基准：采集基准参数→落 DB→重建查找表。</summary>
-        /// <remarks>重算工艺库是本按钮职责，不与修改混用。</remarks>
+
         /// <param name="sender">发送方。</param>
         /// <param name="e">事件参数。</param>
         private void btnCorBaseline_Click(object sender, EventArgs e)
@@ -517,43 +493,7 @@ namespace AdaWeldSystem.UIDesign.TabPage
 
         #region 线激光追踪工艺设置
 
-        /// <summary>激光工艺设置页·Tracking 设置区：线激光引导 Y 轴的跟踪几</summary>
-        /// <remarks>何（SEAM_GUIDE 几何段，XML）。</remarks>
-        private void LoadLaserCalibOnForm()
-        {
-            var cfg = WeldParamManager.Instance.AlgorithmsConfig;
-            if (cfg == null) return;
-
-            txtGeoAxisPerLaser.Text = cfg.AxisMmPerLaserMm.ToString("F3");
-            selGeoGuideSign.SelectedIndex = cfg.GuideSign >= 0 ? 0 : 1;
-            txtGeoLeadDistance.Text = cfg.LeadDistanceMm.ToString("F3");
-            txtGeoRobotYGain.Text = cfg.RobotYGain.ToString("F3");
-            txtGeoYAxisMin.Text = cfg.YAxisMinMm.ToString("F3");
-            txtGeoYAxisMax.Text = cfg.YAxisMaxMm.ToString("F3");
-            // 自系统设置页迁入（跟踪工艺设置区 10 项满额）
-            txtTeachLockY.Text = cfg.TeachLockYMm.ToString("F3");
-            txtCalibCenterY.Text = cfg.CalibratedCenterY.ToString("F3");
-            txtCalibCenterZ.Text = cfg.CalibratedCenterZ.ToString("F3");
-        }
-
-        /// <summary>激光工艺设置页·Tracking 设置区：UI→内存（不落盘；供"修改参数""</summary>
-        /// <param name="cfg">配置对象。</param>
-        /// <remarks>保存参数"共用）。</remarks>
-        private void ApplyTrackingGeomToConfig(WeldAlgorithmsConfig cfg)
-        {
-            cfg.AxisMmPerLaserMm = ParseCalibDouble(txtGeoAxisPerLaser, cfg.AxisMmPerLaserMm);
-            cfg.GuideSign = selGeoGuideSign.SelectedIndex == 0 ? 1 : -1;
-            cfg.LeadDistanceMm = ParseCalibDouble(txtGeoLeadDistance, cfg.LeadDistanceMm);
-            cfg.RobotYGain = ParseCalibDouble(txtGeoRobotYGain, cfg.RobotYGain);
-            cfg.YAxisMinMm = ParseCalibDouble(txtGeoYAxisMin, cfg.YAxisMinMm);
-            cfg.YAxisMaxMm = ParseCalibDouble(txtGeoYAxisMax, cfg.YAxisMaxMm);
-            // 迁入项写回（示教 Y / 标定中心 Y/Z）
-            cfg.TeachLockYMm = ParseCalibDouble(txtTeachLockY, cfg.TeachLockYMm);
-            cfg.CalibratedCenterY = ParseCalibDouble(txtCalibCenterY, cfg.CalibratedCenterY);
-            cfg.CalibratedCenterZ = ParseCalibDouble(txtCalibCenterZ, cfg.CalibratedCenterZ);
-        }
-
-        /// <summary>振镜工艺参数：UI→WeldHeadConfig.DefaultGalvo（宽度/长度/频率/图形），不落盘。</summary>
+        /// <summary>振镜工艺参数：UI→分图形档（宽度/长度/频率），不落盘。</summary>
         /// <returns>是否成功。</returns>
         private bool ApplyGalvoParamsToHead()
         {
@@ -581,33 +521,28 @@ namespace AdaWeldSystem.UIDesign.TabPage
                 AntdUI.Message.warn(this.FindForm(), "振镜长度范围 0~5mm");
                 return false;
             }
-            var cfg = WeldParamManager.Instance.AlgorithmsConfig;
-            GalvoParams galvo = headCfg.DefaultGalvo;
-            galvo.Pattern = (WsgGalvoPattern)(cfg != null ? cfg.GalvoPattern : (int)WsgGalvoPattern.Line);
-            galvo.Width = width;
-            galvo.Length = length;
-            galvo.Frequency = freq;
+            headCfg.GalvoShapePresets[CurrentGalvoPattern()] = new GalvoShapeParams(width, length, freq);
             return true;
         }
 
-        /// <summary>读取激光工艺参数：文件→UI（Tracking / LA / TA / 振镜 / 焊参调整 / 工艺输出）</summary>
+        /// <summary>读取激光工艺参数：文件→UI（Tracking / LA / TA / 振镜 / YT 设置）</summary>
         /// <param name="sender">发送方。</param>
         /// <param name="e">事件参数。</param>
-        /// <remarks>振镜参数来自焊接头配置文件，初始化只读一次；界面不先重载就取到内存旧值。</remarks>
         private void BtnReadLaserZone_Click(object sender, EventArgs e)
         {
-            WeldParamManager.Instance.LoadAlgorithmsConfig();
+            WeldParamManager.Instance.LoadAlgorithmsZone(
+                WeldParamConfig.AlgorithmsZone.Preset,
+                WeldParamConfig.AlgorithmsZone.Quick);
 
             // 焊接头配置从文件重载（振镜宽/长/频/阈值/量纲）
             MontionManager motion = MontionManager.Instance;
             motion?.LoadWeldHeadConfig();
 
-            LoadLaserCalibOnForm();
             LoadGalvoActionUi();
             LoadLaParamUi();
             LoadTaParamUi();
-            LoadFlowSwitchOnForm();
-            LoadParamOutOnForm();
+            LoadYtCalibUi();
+            LoadProcessEnableOnForm();
             AntdUI.Message.info(System.Windows.Forms.Form.ActiveForm, "已读取激光工艺参数");
         }
 
@@ -621,11 +556,11 @@ namespace AdaWeldSystem.UIDesign.TabPage
             if (!ApplyTaToConfig(cfg)) return;
             if (!ApplyLaToConfig(cfg)) return;
             if (!ApplyGalvoParamsToHead()) return;
-            ApplyTrackingGeomToConfig(cfg);
+            ApplyYtCalibToConfig(cfg);
             AntdUI.Message.success(System.Windows.Forms.Form.ActiveForm, "激光工艺参数已修改（未保存，点保存参数落盘）");
         }
 
-        /// <summary>保存参数：UI→内存→文件，落 ④与①双区。</summary>
+        /// <summary>保存参数：UI→内存→文件，落 ④Preset 区（含 YT 设置三项）。</summary>
         /// <param name="sender">发送方。</param>
         /// <param name="e">事件参数。</param>
         private void BtnSaveLaserZone_Click(object sender, EventArgs e)
@@ -635,10 +570,10 @@ namespace AdaWeldSystem.UIDesign.TabPage
             if (!ApplyTaToConfig(cfg)) return;
             if (!ApplyLaToConfig(cfg)) return;
             if (!ApplyGalvoParamsToHead()) return;
-            ApplyTrackingGeomToConfig(cfg);
-            // ④工艺设定值 + ①系统设置，两区分别落盘。
-            WeldParamManager.Instance.SaveAlgorithmsZone(WeldAlgorithmsConfig.AlgorithmsZone.Preset);
-            WeldParamManager.Instance.SaveAlgorithmsZone(WeldAlgorithmsConfig.AlgorithmsZone.System);
+            ApplyYtCalibToConfig(cfg);
+            // ④Preset 区落盘（工艺设定值 + YT 设置三项）。
+            WeldParamManager.Instance.SaveAlgorithmsZone(WeldParamConfig.AlgorithmsZone.Preset);
+            // 几何与标定参数不落本区
             MontionManager motion = MontionManager.Instance;
             if (motion != null)
             {
@@ -646,11 +581,13 @@ namespace AdaWeldSystem.UIDesign.TabPage
                 WeldHeadSlaveDevice head = motion.WeldHead;
                 if (head != null && head.IsInitialized && motion.WeldHeadConfig != null)
                 {
-                    head.SetGalvoParams(motion.WeldHeadConfig.DefaultGalvo);
+                    // 下发全局项与当前图形档
+                    head.SetGalvoParams(motion.WeldHeadConfig.BuildGalvoParamsFor(CurrentGalvoPattern()));
                 }
             }
             LoadLaParamUi();
             LoadTaParamUi();
+            LoadYtCalibUi();
             AntdUI.Message.success(System.Windows.Forms.Form.ActiveForm, "激光工艺参数已保存");
         }
 
@@ -678,8 +615,6 @@ namespace AdaWeldSystem.UIDesign.TabPage
         }
 
         /// <summary>三个指令区加载默认态：一律选中各自的 Auto 项（Y_AutoTracking / LA_Auto / TA_Auto）。</summary>
-        /// <remarks>仅构造期调用一次；置 _loadingProcessEnable 抑制三家处理器下发运动指令；
-        /// 同时把内存 LockYCalib 归零（只改内存，不落盘）。</remarks>
         private void ApplyDefaultCommandModes()
         {
             var cfg = WeldParamManager.Instance.AlgorithmsConfig;
@@ -691,7 +626,7 @@ namespace AdaWeldSystem.UIDesign.TabPage
             {
                 radioQuickYAuto.Checked = true;
                 // TA 区不预选：预选会造成「再点不触发」的假禁用；
-                // 自动 TA_ZeroPose **不抢用户选中态**（2026-11-17 改版）⇒ 初始化后 TA 区无选中项，
+                // 自动回零不抢用户选中态
                 // 操作员点哪条执行哪条。
                 // 两组已在独立容器内各自单选，可同时选中；
                 // 振镜组默认项由 LoadGalvoActionUi 落定，此处只复位对焦组默认项。
@@ -727,7 +662,7 @@ namespace AdaWeldSystem.UIDesign.TabPage
         /// <summary>Y 指令确认弹窗的关键参数文案。</summary>
         /// <param name="cfg">配置对象。</param>
         /// <returns>结果文本。</returns>
-        private static string BuildYActionDetail(AntdUI.Radio radio, WeldAlgorithmsConfig cfg)
+        private static string BuildYActionDetail(AntdUI.Radio radio, WeldParamConfig cfg)
         {
             switch (radio.Name)
             {
@@ -742,33 +677,33 @@ namespace AdaWeldSystem.UIDesign.TabPage
 
         /// <summary>Y 指令执行体</summary>
         /// <param name="cfg">配置对象。</param>
-        /// <remarks>返回 false 表示未下发/下发失败，用于红底提示</remarks>
+
         /// <returns>是否成功。</returns>
-        private bool ExecuteYAction(AntdUI.Radio radio, WeldAlgorithmsConfig cfg)
+        private bool ExecuteYAction(AntdUI.Radio radio, WeldParamConfig cfg)
         {
             switch (radio.Name)
             {
                 case "radioQuickYAuto":
                     cfg.LockYCalib = false;
                     // LockYCalib 归 ②Quick 区（INI PROCESS_CONTROL/LOCK_Y_CALIB）：只落该分区，禁全量保存
-                    WeldParamManager.Instance.SaveAlgorithmsZone(WeldAlgorithmsConfig.AlgorithmsZone.Quick);
+                    WeldParamManager.Instance.SaveAlgorithmsZone(WeldParamConfig.AlgorithmsZone.Quick);
                     GlobalCommData.ShowLog("工艺设置", "Y_AutoTracking Y 轴跟随线激光目标值", MessageLevel.Info);
                     return true;
                 case "radioQuickYForceCalibPose":
                     cfg.LockYCalib = true;
                     if (!MoveAxisToTarget(MontionManager.SeamTrackYKeys, cfg.TeachLockYMm, "Y_ForceCalibPose")) return false;
-                    WeldParamManager.Instance.SaveAlgorithmsZone(WeldAlgorithmsConfig.AlgorithmsZone.Quick);
+                    WeldParamManager.Instance.SaveAlgorithmsZone(WeldParamConfig.AlgorithmsZone.Quick);
                     return true;
                 case "radioQuickYForceHome":
                     cfg.LockYCalib = false;
-                    WeldParamManager.Instance.SaveAlgorithmsZone(WeldAlgorithmsConfig.AlgorithmsZone.Quick);
+                    WeldParamManager.Instance.SaveAlgorithmsZone(WeldParamConfig.AlgorithmsZone.Quick);
                     return MoveAxisHome(MontionManager.SeamTrackYKeys, "Y_ForceHome");
                 default:
                     return false;
             }
         }
         /// <summary>按轴名关键字定位跟踪轴并下发非阻塞回零</summary>
-        /// <remarks>应用动作归 MotionControlWorkflow</remarks>
+
         /// <param name="keys">轴名角色关键字。</param>
         /// <param name="actionName">动作名（日志与单飞隔离键）。</param>
         /// <returns>是否成功。</returns>
@@ -785,7 +720,7 @@ namespace AdaWeldSystem.UIDesign.TabPage
             return ok;
         }
         /// <summary>按轴名关键字在运控配置中定位轴并绝对移动</summary>
-        /// <remarks>应用动作归 MotionControlWorkflow</remarks>
+
         /// <param name="keys">轴名角色关键字。</param>
         /// <param name="targetMm">目标位置（mm）。</param>
         /// <param name="actionName">动作名（日志与单飞隔离键）。</param>
@@ -810,7 +745,7 @@ namespace AdaWeldSystem.UIDesign.TabPage
         }
 
         /// <summary>应用动作入口拒绝码 → 界面提示与日志</summary>
-        /// <remarks>回零/绝对移动共用；已拒绝返回 true</remarks>
+
         /// <param name="rejectCode">拒绝码</param>
         /// <param name="rejectDetail">拒绝详情</param>
         /// <param name="keys">轴名角色关键字（未装配提示用）</param>
@@ -846,7 +781,7 @@ namespace AdaWeldSystem.UIDesign.TabPage
         }
 
         /// <summary>状态检测结果 → 日志与失败提示</summary>
-        /// <remarks>回零/绝对移动共用</remarks>
+
         /// <param name="actionName">动作名</param>
         /// <param name="ok">是否达成</param>
         /// <param name="evidence">判据实测证据</param>
@@ -869,14 +804,8 @@ namespace AdaWeldSystem.UIDesign.TabPage
 
         #region 激光头工艺动作绑定
 
-        /// <summary>回填期静默标记（振镜启用开关）</summary>
+        /// <summary>回填期静默标记：程序回填 Radio 时抑制 CheckedChanged</summary>
         private bool _loadingGalvoUi;
-
-        /// <summary>当前编辑/演示的振镜图形（默认直线，唯一图形态）</summary>
-        private WsgGalvoPattern _galvoPatternSelected = WsgGalvoPattern.Line;
-
-        /// <summary>双向同步抑制标记：程序赋值不下发指令</summary>
-        private bool _syncingLaRadios;
 
         /// <summary>TA_Auto 门状态（-2 未判定 / -1 等待 / 0 不可用 / 1 可用）</summary>
         private int _lastTaAutoGate = -2;
@@ -918,9 +847,6 @@ namespace AdaWeldSystem.UIDesign.TabPage
         }
 
         /// <summary>指令区按钮可用性同步（事件驱动单一入口，UI 线程）</summary>
-        /// <remarks>2026-11-17 改版：⛔ 门禁快照整体退场——按 UI 状态规范「真相源唯一」，
-        /// 可用性直接读权威源（MontionManager / Workflow），不再缓存会过期的快照；
-        /// 本方法只做按钮管控，不做显示信息刷新（显示信息由本页定时器负责）。</remarks>
         private void RefreshActionStates()
         {
             if (IsDisposed || Disposing) return;
@@ -950,17 +876,20 @@ namespace AdaWeldSystem.UIDesign.TabPage
             SetControlEnabled(radioQuickLaSpot1, laReady);
             SetControlEnabled(radioQuickLaSpot2, laReady);
             SetControlEnabled(radioQuickLaPose1, laReady);
-            SetControlEnabled(radioQuickLaPose2, laReady);
-            SetControlEnabled(radioQuickLaGalvoCircle, laReady);
-            SetControlEnabled(radioQuickLaGalvoEight, laReady);
-            SetControlEnabled(radioQuickLaGalvoLine, laReady);
-            SetControlEnabled(radioQuickLaGalvoArc, laReady);
-            SetControlEnabled(selGalvoPattern, laReady);
+            SetControlEnabled(radioQuickLaDefaultFocus, laReady);
+            // 振镜未启用则图形组禁用
+            bool galvoWeaveOn = LaserWeldHeadWorkflow.IsGalvoWeaveEnabled();
+            SetControlEnabled(radioQuickLaGalvoCircle, laReady && galvoWeaveOn);
+            SetControlEnabled(radioQuickLaGalvoEight, laReady && galvoWeaveOn);
+            SetControlEnabled(radioQuickLaGalvoLine, laReady && galvoWeaveOn);
+            SetControlEnabled(radioQuickLaGalvoArc, laReady && galvoWeaveOn);
             SetControlEnabled(txtGalvoWidth, laReady);
             SetControlEnabled(txtGalvoLength, laReady);
             SetControlEnabled(txtGalvoFreq, laReady);
-            SetControlEnabled(btnGalvoDemo, laReady);
-            SetControlEnabled(btnGalvoHome, laReady);
+            // 手动与自动模式互斥
+            bool autoWelding = AdaWeldSystem.MainDeviceControl.DeviceControlWork.Instance.IsAutoWeldingRunning;
+            SetControlEnabled(btnGalvoManualStart, laReady && !autoWelding);
+            SetControlEnabled(btnGalvoManualStop, laReady && !autoWelding);
         }
 
         /// <summary>差分设可用性：值没变不碰控件</summary>
@@ -984,7 +913,7 @@ namespace AdaWeldSystem.UIDesign.TabPage
         }
 
         /// <summary>TA_Auto 门状态变化日志</summary>
-        /// <remarks>状态文案只进日志，不进界面标签与 Tooltip。</remarks>
+
         /// <param name="initDone">初始化闸门是否已打开</param>
         /// <param name="taMotionReady">TA 轴可动（ZeroPose 可重试）</param>
         /// <param name="taReady">TA 执行就绪（TaAvailable：已使能 + 已回零；不要求已到工作零位）</param>
@@ -1010,41 +939,125 @@ namespace AdaWeldSystem.UIDesign.TabPage
             _lastTaAutoGate = gate;
         }
 
-        /// <summary>加载振镜工艺区（图形 Select + 宽度/长度/频率 + 手动宽度）；目标光斑由 LA 参数区回填。</summary>
+        /// <summary>加载振镜工艺区</summary>
         private void LoadGalvoActionUi()
         {
             _loadingGalvoUi = true;
             try
             {
-                var cfg = WeldParamManager.Instance.AlgorithmsConfig;
-                if (cfg != null)
-                {
-                    _galvoPatternSelected = (WsgGalvoPattern)cfg.GalvoPattern;
-                    txtManualWidth.Text = cfg.ManualSeamWidthMm.ToString("F3", CultureInfo.InvariantCulture);
-                }
-                MontionManager motion = MontionManager.Instance;
-                WeldHeadConfig headCfg = motion?.WeldHeadConfig;
-                if (headCfg != null)
-                {
-                    GalvoParams galvo = headCfg.DefaultGalvo;
-                    txtGalvoWidth.Text = galvo.Width.ToString("0.000", CultureInfo.InvariantCulture);
-                    txtGalvoLength.Text = galvo.Length.ToString("0.000", CultureInfo.InvariantCulture);
-                    txtGalvoFreq.Text = galvo.Frequency.ToString();
-                }
-                _syncingLaRadios = true;
-                GalvoPatternToRadio(_galvoPatternSelected).Checked = true;
-                selGalvoPattern.SelectedIndex = (int)_galvoPatternSelected - 1;
+                ApplyGalvoPatternSelection();
+                LoadGalvoShapeToInputs();
             }
             finally
             {
                 _loadingGalvoUi = false;
-                _syncingLaRadios = false;
             }
             RefreshActionStates();
         }
 
+        /// <summary>把「当前图形」的分档参数（宽/长/频）载入输入框。</summary>
+        private void LoadGalvoShapeToInputs()
+        {
+            WeldHeadConfig headCfg = MontionManager.Instance?.WeldHeadConfig;
+            if (headCfg == null) return;
+            GalvoShapeParams shape = headCfg.GetGalvoShape(CurrentGalvoPattern());
+            txtGalvoWidth.Text = shape.Width.ToString("0.000", CultureInfo.InvariantCulture);
+            txtGalvoLength.Text = shape.Length.ToString("0.000", CultureInfo.InvariantCulture);
+            txtGalvoFreq.Text = shape.Frequency.ToString();
+        }
+
+        /// <summary>当前图形：GA 指令区选中的那个（未选 ⇒ 配置里的图形）。</summary>
+        /// <returns>图形枚举</returns>
+        private WsgGalvoPattern CurrentGalvoPattern()
+        {
+            if (radioQuickLaGalvoCircle.Checked) return WsgGalvoPattern.Circle;
+            if (radioQuickLaGalvoEight.Checked) return WsgGalvoPattern.Eight;
+            if (radioQuickLaGalvoArc.Checked) return WsgGalvoPattern.Arc;
+            if (radioQuickLaGalvoLine.Checked) return WsgGalvoPattern.Line;
+            // 未选中时用配置图形取档
+            WeldParamConfig cfg = WeldParamManager.Instance.AlgorithmsConfig;
+            return cfg != null ? LaserWeldHeadWorkflow.ResolveGalvoPattern(cfg.GalvoPattern) : WsgGalvoPattern.Line;
+        }
+
+        /// <summary>按振镜启用态决定图形选态</summary>
+        private void ApplyGalvoPatternSelection()
+        {
+            if (!LaserWeldHeadWorkflow.IsGalvoWeaveEnabled())
+            {
+                // 未启用振镜则清空图形选中
+                ClearGalvoPatternSelection();
+                return;
+            }
+            WsgGalvoPattern? configured = ReadConfiguredGalvoPattern();
+            if (configured == null)
+            {
+                // 未设图形则回退默认直线
+                SaveGalvoPattern(WsgGalvoPattern.Line);
+                GlobalCommData.ShowLog("工艺设置", "振镜已启用但未设置图形，已落回默认直线", MessageLevel.Info);
+                configured = WsgGalvoPattern.Line;
+            }
+            AntdUI.Radio patternRadio = GalvoPatternToRadio(configured);
+            if (patternRadio != null) patternRadio.Checked = true;
+        }
+
+        /// <summary>清空 GA 图形组选中态（振镜未启用 = 没有图形）。</summary>
+        private void ClearGalvoPatternSelection()
+        {
+            radioQuickLaGalvoCircle.Checked = false;
+            radioQuickLaGalvoEight.Checked = false;
+            radioQuickLaGalvoLine.Checked = false;
+            radioQuickLaGalvoArc.Checked = false;
+        }
+
+        /// <summary>GA「手动下发」</summary>
+        private void btnGalvoManualStart_Click(object sender, EventArgs e)
+        {
+            WeldHeadConfig headCfg = MontionManager.Instance?.WeldHeadConfig;
+            if (headCfg == null)
+            {
+                AntdUI.Message.warn(this.FindForm(), "焊接头配置不可用");
+                return;
+            }
+            if (!ApplyGalvoParamsToHead()) return;   // 先校验输入并写入当前图形档
+            WsgGalvoPattern pattern = CurrentGalvoPattern();
+            GalvoShapeParams shape = headCfg.GetGalvoShape(pattern);
+            LaserWeldHeadWorkflow head = LaserWeldHeadWorkflow.Instance;
+            head.SetRunMode(WorkflowRunMode.Manual);
+            if (!head.GalvoManualStart(pattern, shape))
+            {
+                AntdUI.Message.warn(this.FindForm(), "振镜手动下发失败（自动焊接进行中或从站未就绪）");
+                return;
+            }
+            GlobalCommData.ShowLog("工艺设置", "振镜手动下发 图形 " + GalvoPatternText(pattern), MessageLevel.Info);
+            RefreshActionStates();
+        }
+
+        /// <summary>GA「关闭退出」：撤销振镜使能并回逻辑零位。</summary>
+        private void btnGalvoManualStop_Click(object sender, EventArgs e)
+        {
+            LaserWeldHeadWorkflow head = LaserWeldHeadWorkflow.Instance;
+            head.SetRunMode(WorkflowRunMode.Manual);
+            if (!head.GalvoManualStop())
+            {
+                AntdUI.Message.warn(this.FindForm(), "振镜关闭退出失败（自动焊接进行中或从站未就绪）");
+                return;
+            }
+            GlobalCommData.ShowLog("工艺设置", "振镜已关闭退出", MessageLevel.Info);
+            RefreshActionStates();
+        }
+
+        /// <summary>读取配置的振镜图形</summary>
+        /// <returns>有效图形，无则返回空</returns>
+        private static WsgGalvoPattern? ReadConfiguredGalvoPattern()
+        {
+            WeldParamConfig cfg = WeldParamManager.Instance.AlgorithmsConfig;
+            if (cfg == null) return null;
+            int value = cfg.GalvoPattern;
+            if (value < (int)WsgGalvoPattern.Circle || value > (int)WsgGalvoPattern.Arc) return null;
+            return (WsgGalvoPattern)value;
+        }
+
         /// <summary>让 Radio 背景色真正可见</summary>
-        /// <remarks>须同时 Fill 透明并关 AllPaintingInWmPaint。实测值详见 wiki modules CommentConstraintRegistry。</remarks>
         private static void EnableBackColorPaint(AntdUI.Radio radio)
         {
             if (radio == null || SetStyleMethod == null) return;
@@ -1071,7 +1084,7 @@ namespace AdaWeldSystem.UIDesign.TabPage
                 radioQuickTaAuto, radioQuickTaBreak, radioQuickTaRetract,
                 radioQuickTaPose1, radioQuickTaPose2, radioQuickTaZeroPose,
                 radioQuickLaAuto, radioQuickLaSpot1, radioQuickLaSpot2,
-                radioQuickLaPose1, radioQuickLaPose2,
+                radioQuickLaPose1, radioQuickLaDefaultFocus,
                 radioQuickLaGalvoCircle, radioQuickLaGalvoEight, radioQuickLaGalvoLine, radioQuickLaGalvoArc
             };
             for (int i = 0; i < radios.Length; i++) EnableBackColorPaint(radios[i]);
@@ -1091,7 +1104,7 @@ namespace AdaWeldSystem.UIDesign.TabPage
         }
 
         /// <summary>UI 提示统一经 BeginInvoke</summary>
-        /// <remarks>指令与状态检测在后台线程，不碰控件</remarks>
+
         /// <param name="error">true=错误提示，false=警告提示</param>
         /// <param name="text">提示文本</param>
         private void UiMessage(bool error, string text)
@@ -1115,8 +1128,6 @@ namespace AdaWeldSystem.UIDesign.TabPage
         }
 
         /// <summary>上色：成功=绿 / 失败=红</summary>
-        /// <remarks>底色可被看见的前提见 <see cref="EnableBackColorPaint"/>；
-        /// 失败原因只进日志，不再写状态标签。</remarks>
         private void ApplyActionBack(AntdUI.Radio radio, bool ok)
         {
             if (radio == null) return;
@@ -1140,7 +1151,6 @@ namespace AdaWeldSystem.UIDesign.TabPage
         }
 
         /// <summary>复位旧指令底色</summary>
-        /// <remarks>切换选中瞬间调用，避免残留上一个结果色</remarks>
         private void ResetActionBack(AntdUI.Radio radio)
         {
             if (radio == null) return;
@@ -1150,9 +1160,7 @@ namespace AdaWeldSystem.UIDesign.TabPage
         }
 
         /// <summary>指令区互斥单色：复位同组其它指令 Radio 的底色。</summary>
-        /// <remarks>指令区按**容器**分组（AntdUI Radio 的互斥作用域 = 父容器）：
-        /// Y 组 / TA 组 / LA 对焦组 / GA 振镜组。任一时刻每组最多一个控件带底色，
-        /// 且带底色者 = 该组当前选中者（消除「点一下多一个红」「选中的没色、被拒的却是红的」）。</remarks>
+
         /// <param name="current">当前 Radio（自身底色不动）</param>
         private void ResetOtherRadioBacks(AntdUI.Radio current)
         {
@@ -1196,7 +1204,7 @@ namespace AdaWeldSystem.UIDesign.TabPage
                 return new AntdUI.Radio[]
                 {
                     radioQuickLaAuto, radioQuickLaSpot1, radioQuickLaSpot2,
-                    radioQuickLaPose1, radioQuickLaPose2
+                    radioQuickLaPose1, radioQuickLaDefaultFocus
                 };
             }
             return new AntdUI.Radio[0];
@@ -1208,11 +1216,7 @@ namespace AdaWeldSystem.UIDesign.TabPage
         /// <param name="detail">确认弹窗里的关键参数行</param>
         /// <param name="exec">实际下发指令的委托</param>
         /// <param name="last">上次成功按钮，被拒或取消时回退</param>
-        /// <remarks>2026-11-17 改版：① <b>确认在前</b>——执行动作必须等用户点确定才生效，
-        /// 门禁判定放在确认之后（用户点确认但被拦截时给出明确反馈）；
-        /// ② 门禁/单飞被拒**保持当前选中态**并标红（不再回退选中态 ⇒ 不会出现
-        /// 「TA_Zero 被选中、TA_Auto 是红的」自相矛盾状态）；③ 取消确认才回退选中态。
-        /// 下发与检测在后台线程，上色经 BeginInvoke。</remarks>
+
         /// <returns>是否已成功下发到后台线程</returns>
         private bool RunInstruction(AntdUI.Radio radio, string axisName, string detail, Func<bool> exec, ref AntdUI.Radio last)
         {
@@ -1222,7 +1226,7 @@ namespace AdaWeldSystem.UIDesign.TabPage
             // ① 确认：执行动作必须等用户点确定才生效
             if (!ConfirmInstruction(radio, axisName, detail))
             {
-                // 取消确认：回退选中态，并清掉本次的旧底色（保持「带底色者 = 选中者」）
+                // 取消时回退选中态与底色
                 ResetActionBack(radio);
                 RevertInstructionSelection(radio, last);
                 return false;
@@ -1273,8 +1277,7 @@ namespace AdaWeldSystem.UIDesign.TabPage
         }
 
         /// <summary>指令被拒：保持当前选中态 + 标红 + 清同组旧底色。</summary>
-        /// <remarks>不变量：指令区任何时刻最多一个控件带底色，且带底色者 = 当前选中者。
-        /// 被拒时若回退选中态，就会出现「选中的没色、被拒的却是红的」自相矛盾状态。</remarks>
+
         /// <param name="radio">被拒的指令 Radio</param>
         /// <param name="logText">日志文本</param>
         private void MarkInstructionRejected(AntdUI.Radio radio, string logText)
@@ -1284,7 +1287,7 @@ namespace AdaWeldSystem.UIDesign.TabPage
             GlobalCommData.ShowLog("工艺设置", logText, MessageLevel.Warning);
         }
 
-        /// <summary>后台执行指令并阻塞等待状态检测结果；UI 更新一律经 BeginInvoke</summary>
+        /// <summary>后台执行指令并阻塞等待状态检测结果；UI 更新一</summary>
         private void InstructionWorker(AntdUI.Radio radio, Func<bool> exec)
         {
             bool ok = false;
@@ -1330,8 +1333,7 @@ namespace AdaWeldSystem.UIDesign.TabPage
         }
 
         /// <summary>按轴取门禁原因（就绪返空串）</summary>
-        /// <remarks>2026-11-17 改版：⛔ 不再读本地缓存快照，改为直读权威源
-        /// （MotionControlWorkflow / LaserWeldHeadWorkflow）——快照会过期，直读才是真相源。</remarks>
+
         /// <param name="radio">指令 Radio</param>
         /// <param name="manager">运控管理器（仅判空）</param>
         /// <returns>不可执行原因；空串表示放行或交执行段判定</returns>
@@ -1343,8 +1345,7 @@ namespace AdaWeldSystem.UIDesign.TabPage
             LaserWeldHeadWorkflow laserFlow = LaserWeldHeadWorkflowInstance();
             if (radio.Name.StartsWith("radioQuickTa", StringComparison.Ordinal))
             {
-                // 2026-11-17 改版：TA_Zero 与其它 TA 指令**同口径** —— 必须「已使能 + 已回零」。
-                // 「已回零」不区分来源（手动回零与复位回零共用同一回零实现），位置可信才谈得上定位。
+                // TA_Zero 须已使能且回零
                 bool ok = motionFlow != null && motionFlow.TaAvailable;
                 if (ok) return string.Empty;
                 return motionFlow == null ? "运控流程未就绪" : motionFlow.TaDegradedReason;
@@ -1363,7 +1364,6 @@ namespace AdaWeldSystem.UIDesign.TabPage
         }
 
         /// <summary>指令所属轴名</summary>
-        /// <remarks>单飞隔离键；LA 对焦轴不在台达轴注册表，用固定键 LA；返回 null 表示轴未装配</remarks>
         private static string ResolveInstructionAxisKey(AntdUI.Radio radio)
         {
             MontionManager manager = MontionManager.Instance;
@@ -1454,46 +1454,24 @@ namespace AdaWeldSystem.UIDesign.TabPage
             return LaserWeldHeadWorkflowInstance().LaPose1();
         }
 
-        private bool DoLaPose2()
+        private bool DoLaDefaultFocus()
         {
-            return LaserWeldHeadWorkflowInstance().LaPose2();
+            return LaserWeldHeadWorkflowInstance().LaDefaultFocus();
         }
         /// <summary>振镜图形落盘唯一入口：GalvoPattern 归 ④Preset 区（INI PROCESS_CONTROL/GALVO_PATTERN）。</summary>
-        /// <remarks>⛔ 禁全量保存：会连带重写 XML 与全部 INI 段。</remarks>
         private void SaveGalvoPattern(WsgGalvoPattern pattern)
         {
             var cfg = WeldParamManager.Instance.AlgorithmsConfig;
             if (cfg == null) return;
 
             cfg.GalvoPattern = (int)pattern;
-            WeldParamManager.Instance.SaveAlgorithmsZone(WeldAlgorithmsConfig.AlgorithmsZone.Preset);
+            WeldParamManager.Instance.SaveAlgorithmsZone(WeldParamConfig.AlgorithmsZone.Preset);
         }
 
+        /// <summary>振镜图形设定唯一入口：由 GA_* 图形组 Radio 触发，落盘走 <see cref="SaveGalvoPattern"/>。</summary>
         private void SetGalvoPattern(WsgGalvoPattern pattern)
         {
-            _galvoPatternSelected = pattern;
             SaveGalvoPattern(pattern);
-            _syncingLaRadios = true;
-            try { selGalvoPattern.SelectedIndex = (int)pattern - 1; }
-            finally { _syncingLaRadios = false; }
-            GlobalCommData.ShowLog("工艺设置", "振镜图形已设为 " + GalvoPatternText(pattern), MessageLevel.Info);
-            RefreshActionStates();
-        }
-
-        /// <summary>工艺设置区图形 Select：与 GA_* 图形组 Radio 双向同步。</summary>
-        /// <param name="sender">发送方。</param>
-        /// <param name="e">事件参数。</param>
-        private void selGalvoPattern_SelectedIndexChanged(object sender, AntdUI.IntEventArgs e)
-        {
-            if (_loadingGalvoUi || _syncingLaRadios) return;
-            int idx = selGalvoPattern.SelectedIndex;
-            if (idx < 0 || idx > 3) return;
-            WsgGalvoPattern pattern = (WsgGalvoPattern)(idx + 1);
-            _galvoPatternSelected = pattern;
-            SaveGalvoPattern(pattern);
-            _syncingLaRadios = true;
-            try { GalvoPatternToRadio(pattern).Checked = true; }
-            finally { _syncingLaRadios = false; }
             GlobalCommData.ShowLog("工艺设置", "振镜图形已设为 " + GalvoPatternText(pattern), MessageLevel.Info);
             RefreshActionStates();
         }
@@ -1502,14 +1480,14 @@ namespace AdaWeldSystem.UIDesign.TabPage
         // Radio 同父容器自动互斥，统一按 Name 分发。
         private void radioQuickTa_CheckedChanged(object sender, AntdUI.BoolEventArgs e)
         {
-            // Radio 同父容器自动互斥：选中新的 TA 指令即取消上一个指令的状态
-            // （指令区任何时刻最多一个有色；⛔ 不在此清自己的底色，清色统一在动作启动时执行）
+            // 单选同组互斥，选中新指令取消旧态
+            // 清底色统一在动作启动时执行
             if (!e.Value || _loadingProcessEnable || _suppressActionRadio) return;
             if (sender is AntdUI.Radio radio) ResetOtherRadioBacks(radio);
         }
 
         /// <summary>TA 指令派发：挂在 Click，选中态仅作显示</summary>
-        /// <remarks>Radio 已选中时再点不触发 CheckedChanged，挂那里会「点了没反应」。</remarks>
+
         /// <param name="sender">被点击的 Radio</param>
         /// <param name="e">事件参数</param>
         private void radioQuickTa_Click(object sender, EventArgs e)
@@ -1541,7 +1519,7 @@ namespace AdaWeldSystem.UIDesign.TabPage
         /// <summary>确认弹窗文案：力值/方向/基准/目标</summary>
         private static string BuildTaActionDetail(AntdUI.Radio radio)
         {
-            WeldAlgorithmsConfig cfg = WeldParamManager.Instance.AlgorithmsConfig;
+            WeldParamConfig cfg = WeldParamManager.Instance.AlgorithmsConfig;
             MontionManager manager = MontionManager.Instance;
             DeltaTaHomeConfig home = manager?.TaHomeConfig;
             double force = cfg == null ? 0 : Math.Abs(cfg.TaForceN);
@@ -1568,7 +1546,7 @@ namespace AdaWeldSystem.UIDesign.TabPage
         }
 
         /// <summary>TA 指令执行体：先处理 ZeroPose 互斥停止，再按 Name 分发</summary>
-        /// <remarks>返回 false 用于红底提示</remarks>
+
         /// <returns>是否成功。</returns>
         private bool ExecuteTaAction(AntdUI.Radio radio)
         {
@@ -1588,13 +1566,21 @@ namespace AdaWeldSystem.UIDesign.TabPage
         // 同处 gridQuickLa 一个区域（已拆平，不再分区容器）；组内天然互斥、跨组互不影响（可同时各选一个）。
         private void radioQuickLa_CheckedChanged(object sender, AntdUI.BoolEventArgs e)
         {
-            if (!e.Value || _loadingGalvoUi || _loadingProcessEnable || _syncingLaRadios || _suppressActionRadio) return;
+            if (!e.Value || _loadingGalvoUi || _loadingProcessEnable || _suppressActionRadio) return;
             if (!(sender is AntdUI.Radio radio)) return;
 
             if (radio.Name.StartsWith("radioQuickLaGalvo"))
             {
                 // 图形选择属配置项（非动作指令）：不弹确认、不上色
-                SetGalvoPattern(RadioToGalvoPattern(radio.Name));
+                WsgGalvoPattern? pattern = RadioToGalvoPattern(radio.Name);
+                if (pattern == null)
+                {
+                    GlobalCommData.ShowLog("工艺设置", "振镜图形 Radio 未在映射表中 " + radio.Name, MessageLevel.Warning);
+                    return;
+                }
+                SetGalvoPattern(pattern.Value);
+                // 切换图形 ⇒ 载入该图形的分档参数（宽/长/频各不同）
+                LoadGalvoShapeToInputs();
                 return;
             }
 
@@ -1607,7 +1593,7 @@ namespace AdaWeldSystem.UIDesign.TabPage
         /// <returns>结果文本。</returns>
         private static string BuildLaActionDetail(AntdUI.Radio radio)
         {
-            WeldAlgorithmsConfig cfg = WeldParamManager.Instance.AlgorithmsConfig;
+            WeldParamConfig cfg = WeldParamManager.Instance.AlgorithmsConfig;
             switch (radio.Name)
             {
                 case "radioQuickLaAuto":
@@ -1618,8 +1604,8 @@ namespace AdaWeldSystem.UIDesign.TabPage
                     return "目标光斑位 2：" + (cfg == null ? 0 : cfg.LaSpot2Mm).ToString("F3", CultureInfo.InvariantCulture) + " mm";
                 case "radioQuickLaPose1":
                     return "目标姿态位 1：" + (cfg == null ? 0 : cfg.LaPose1Mm).ToString("F3", CultureInfo.InvariantCulture) + " mm";
-                case "radioQuickLaPose2":
-                    return "目标姿态位 2：" + (cfg == null ? 0 : cfg.LaPose2Mm).ToString("F3", CultureInfo.InvariantCulture) + " mm";
+                case "radioQuickLaDefaultFocus":
+                    return "LA 默认焦平面：" + (cfg == null ? 0 : cfg.LaDefaultFocusMm).ToString("F3", CultureInfo.InvariantCulture) + " mm";
                 default:
                     return string.Empty;
             }
@@ -1635,32 +1621,38 @@ namespace AdaWeldSystem.UIDesign.TabPage
                 case "radioQuickLaSpot1": return DoLaSpot1();
                 case "radioQuickLaSpot2": return DoLaSpot2();
                 case "radioQuickLaPose1": return DoLaPose1();
-                case "radioQuickLaPose2": return DoLaPose2();
+                case "radioQuickLaDefaultFocus": return DoLaDefaultFocus();
                 default: return false;
             }
         }
-        /// <summary>Radio 名 → 振镜图形枚举。</summary>
+        /// <summary>Radio 名 → 振镜图形枚举；名称不匹配返回 null。</summary>
         /// <param name="name">名称。</param>
-        private static WsgGalvoPattern RadioToGalvoPattern(string name)
+        /// <returns>对应图形，无匹配返回空</returns>
+        private static WsgGalvoPattern? RadioToGalvoPattern(string name)
         {
             switch (name)
             {
                 case "radioQuickLaGalvoCircle": return WsgGalvoPattern.Circle;
                 case "radioQuickLaGalvoEight": return WsgGalvoPattern.Eight;
                 case "radioQuickLaGalvoArc": return WsgGalvoPattern.Arc;
-                default: return WsgGalvoPattern.Line;
+                case "radioQuickLaGalvoLine": return WsgGalvoPattern.Line;
+                default: return null;
             }
         }
 
-        /// <summary>振镜图形枚举 → 图形组 Radio。</summary>
-        private AntdUI.Radio GalvoPatternToRadio(WsgGalvoPattern pattern)
+        /// <summary>振镜图形枚举 → 图形组 Radio；无对应图形返回 null。</summary>
+        /// <param name="pattern">图形。</param>
+        /// <returns>对应单选钮，无匹配返回空</returns>
+        private AntdUI.Radio GalvoPatternToRadio(WsgGalvoPattern? pattern)
         {
-            switch (pattern)
+            if (pattern == null) return null;
+            switch (pattern.Value)
             {
                 case WsgGalvoPattern.Circle: return radioQuickLaGalvoCircle;
                 case WsgGalvoPattern.Eight: return radioQuickLaGalvoEight;
                 case WsgGalvoPattern.Arc: return radioQuickLaGalvoArc;
-                default: return radioQuickLaGalvoLine;
+                case WsgGalvoPattern.Line: return radioQuickLaGalvoLine;
+                default: return null;
             }
         }
 
@@ -1668,7 +1660,7 @@ namespace AdaWeldSystem.UIDesign.TabPage
         // TA 工艺设置区为参数区（TA_Force / TA_Break停止位 / TA_Pose1 / TA_Pose2），
         // 指令统一走快捷区 Radio，本区不设按钮。
 
-        /// <summary>从 WeldAlgorithmsConfig 回填 TA 参数区（下压力 / Break停止位 / Pose1 / Pose2）。</summary>
+        /// <summary>从 WeldParamConfig 回填 TA 参数区（下压力 / Break停止位 / Pose1 / Pose2）。</summary>
         private void LoadTaParamUi()
         {
             var ta = WeldParamManager.Instance.AlgorithmsConfig;
@@ -1685,9 +1677,9 @@ namespace AdaWeldSystem.UIDesign.TabPage
         }
 
         /// <summary>激光工艺设置区·TA 参数：UI→内存（含 force 校验；返回 false 表示校验</summary>
-        /// <remarks>失败）。</remarks>
+
         /// <returns>是否成功。</returns>
-        private bool ApplyTaToConfig(WeldAlgorithmsConfig ta)
+        private bool ApplyTaToConfig(WeldParamConfig ta)
         {
             if (!double.TryParse(txtTaForce.Text.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out double force))
             {
@@ -1738,10 +1730,9 @@ namespace AdaWeldSystem.UIDesign.TabPage
         }
 
         // —— 激光工艺设置区（LA 参数区，无指令按钮）——
-        // LA 设置与 TA 设置同形态，是「设置」不是指令动作——
-        // 原 LA 按钮组已删除，指令统一走快捷区
+        // LA 设置与 TA 设置同形态，是「设置」不是指令动作
 
-        /// <summary>从 WeldAlgorithmsConfig 回填 LA 参数区（Spot1/Spot2 光斑 + Pose1/Pose2 调试位 + 目标光斑）。</summary>
+        /// <summary>从 WeldParamConfig 回填 LA 参数区（Spot1/Spot2 光斑 + Pose1/Pose2 调试位 + 目标光斑）。</summary>
         private void LoadLaParamUi()
         {
             var la = WeldParamManager.Instance.AlgorithmsConfig;
@@ -1749,14 +1740,14 @@ namespace AdaWeldSystem.UIDesign.TabPage
             txtLaSpot1.Text = la.LaSpot1Mm.ToString("F2", CultureInfo.InvariantCulture);
             txtLaSpot2.Text = la.LaSpot2Mm.ToString("F2", CultureInfo.InvariantCulture);
             txtLaPose1.Text = la.LaPose1Mm.ToString("F3", CultureInfo.InvariantCulture);
-            txtLaPose2.Text = la.LaPose2Mm.ToString("F3", CultureInfo.InvariantCulture);
+            txtLaDefaultFocus.Text = la.LaDefaultFocusMm.ToString("F3", CultureInfo.InvariantCulture);
             txtLaSpotTarget.Text = la.LaSpotTargetMm.ToString("F2", CultureInfo.InvariantCulture);
         }
 
         /// <summary>激光工艺设置区·LA 参数：UI→内存（含 Spot1/Spot2/Target 校验；返回 false 表示校验</summary>
-        /// <remarks>失败）。</remarks>
+
         /// <returns>是否成功。</returns>
-        private bool ApplyLaToConfig(WeldAlgorithmsConfig la)
+        private bool ApplyLaToConfig(WeldParamConfig la)
         {
             if (!double.TryParse(txtLaSpot1.Text.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out double spot1) || spot1 <= 0.0)
             {
@@ -1777,51 +1768,30 @@ namespace AdaWeldSystem.UIDesign.TabPage
             la.LaSpot2Mm = spot2;
             la.LaSpotTargetMm = target;
             if (double.TryParse(txtLaPose1.Text.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var p1)) la.LaPose1Mm = p1;
-            if (double.TryParse(txtLaPose2.Text.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var p2)) la.LaPose2Mm = p2;
+            if (double.TryParse(txtLaDefaultFocus.Text.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var p2)) la.LaDefaultFocusMm = p2;
             return true;
         }
 
-        // —— 振镜演示/回零位 ——
-
-        private void btnGalvoDemo_Click(object sender, EventArgs e)
-        {
-            var head = AdaWeldSystem.MainDeviceControl.DeviceWorkflow.LaserWeldHeadWorkflow.Instance;
-            // 界面按钮属手动动作，置手动模式
-            head.SetRunMode(WorkflowRunMode.Manual);
-            head.GalvoDemo(_galvoPatternSelected);
-            RefreshActionStates();
-        }
-
-        private void btnGalvoHome_Click(object sender, EventArgs e)
-        {
-            var head = AdaWeldSystem.MainDeviceControl.DeviceWorkflow.LaserWeldHeadWorkflow.Instance;
-            // 界面按钮属手动动作，置手动模式
-            head.SetRunMode(WorkflowRunMode.Manual);
-            head.GalvoHome();
-            RefreshActionStates();
-        }
-
-        /// <summary>手动焊缝宽度输入失焦：写入 ManualSeamWidthMm 并随 ③自适应区落盘。</summary>
-        /// <param name="sender">发送方。</param>
-        /// <param name="e">事件参数。</param>
-        /// <remarks>手动模式固定宽度值，与 ⑤区同源（两个入口）。</remarks>
-        private void txtManualWidth_Leave(object sender, EventArgs e)
+        /// <summary>回填 YT 设置区（标定中心 Y/Z + 示教 Y 轴锁定坐标）。</summary>
+        private void LoadYtCalibUi()
         {
             var cfg = WeldParamManager.Instance.AlgorithmsConfig;
             if (cfg == null) return;
-            if (!double.TryParse(txtManualWidth.Text.Trim(), out double v) || v <= 0.0)
-            {
-                txtManualWidth.Text = cfg.ManualSeamWidthMm.ToString("F3", CultureInfo.InvariantCulture);
-                AntdUI.Message.warn(this.FindForm(), "手动焊缝宽度须为正数，已还原原值");
-                return;
-            }
-            cfg.ManualSeamWidthMm = v;
-            WeldParamManager.Instance.SaveAlgorithmsZone(WeldAlgorithmsConfig.AlgorithmsZone.Adapt);
-            if (cfg.SeamWidthSource == SeamWidthSource.Manual && WeldParamManager.Instance.CurrentAutoParam != null)
-            {
-                WeldParamManager.Instance.RefreshSpotWidthByGain();
-            }
-            GlobalCommData.ShowLog("工艺设置", "手动焊缝宽度 " + v.ToString("F3", CultureInfo.InvariantCulture) + "mm 已保存", MessageLevel.Info);
+
+            txtCalibCenterY.Text = cfg.CalibratedCenterY.ToString("F3", CultureInfo.InvariantCulture);
+            txtCalibCenterZ.Text = cfg.CalibratedCenterZ.ToString("F3", CultureInfo.InvariantCulture);
+            txtTeachLockY.Text = cfg.TeachLockYMm.ToString("F3", CultureInfo.InvariantCulture);
+        }
+
+        /// <summary>YT 设置区 UI→内存（解析失败保留原值）。</summary>
+        /// <param name="cfg">目标配置对象。</param>
+        private void ApplyYtCalibToConfig(WeldParamConfig cfg)
+        {
+            if (cfg == null) return;
+
+            cfg.CalibratedCenterY = ParseCalibDouble(txtCalibCenterY, cfg.CalibratedCenterY);
+            cfg.CalibratedCenterZ = ParseCalibDouble(txtCalibCenterZ, cfg.CalibratedCenterZ);
+            cfg.TeachLockYMm = ParseCalibDouble(txtTeachLockY, cfg.TeachLockYMm);
         }
 
         #endregion
@@ -1834,16 +1804,14 @@ namespace AdaWeldSystem.UIDesign.TabPage
         /// <summary>将本页参数读入输入控件（构造/页显示调用）。</summary>
         private void LoadAlgoConfigOnForm()
         {
-            LoadLaserCalibOnForm();
             LoadFlowSwitchOnForm();
-            LoadParamOutOnForm();
             LoadGalvoActionUi();
             LoadLaParamUi();
             LoadTaParamUi();   
+            LoadYtCalibUi();
         }
 
         /// <summary>TA 参数区首次补载</summary>
-        /// <remarks>仅首次回填时执行，避免覆盖用户编辑值。</remarks>
         private void EnsureTaParamFilled()
         {
             if (_taParamFilled) return;
@@ -1852,7 +1820,7 @@ namespace AdaWeldSystem.UIDesign.TabPage
             _taParamFilled = true;
         }
 
-        /// <summary>焊参调整面板内的流程开关（归属 WeldAlgorithmsConfig ③自适应区；EnableGuide 入口已裁撤）。</summary>
+        /// <summary>焊参调整面板内的流程开关</summary>
         private void LoadFlowSwitchOnForm()
         {
             var cfg = WeldParamManager.Instance.AlgorithmsConfig;
@@ -1862,20 +1830,8 @@ namespace AdaWeldSystem.UIDesign.TabPage
             txtFlowCountNum.Text = cfg.SegmentDistanceMm.ToString("F1");
         }
 
-        /// <summary>⑤工艺输出区回填（读走 WeldParamManager facade = 参数调整算法管理）。</summary>
-        private void LoadParamOutOnForm()
-        {
-            WeldParamManager mgr = WeldParamManager.Instance;
-            if (mgr.AlgorithmsConfig == null) return;
-
-            // 前馈安全/单调锁已迁系统设置页轨迹点过滤区
-            txtParamManualWidth.Text = mgr.ManualSeamWidthMm.ToString("F3");
-            txtParamSpotGain.Text = mgr.SpotWidthGain.ToString("F3");
-            selParamOutputHz.SelectedIndex = mgr.ParamOutputHz > 45 ? 0 : (mgr.ParamOutputHz > 15 ? 1 : 2);
-        }
-
         /// <summary>解析标定输入的 double：解析失败回退原值。</summary>
-        /// <remarks>同系统设置页口径，避免逗号小数点回退。</remarks>
+
         /// <returns>计算结果。</returns>
         private static double ParseCalibDouble(AntdUI.Input box, double fallback)
         {
@@ -1887,7 +1843,7 @@ namespace AdaWeldSystem.UIDesign.TabPage
         }
 
         /// <summary>解析整型输入控件的数值：InvariantCulture 优先、当前文化回落，解</summary>
-        /// <remarks>析失败回退原值。</remarks>
+
         /// <returns>结果码。</returns>
         private static int ParseInt(AntdUI.Input box, int fallback)
         {
@@ -1938,3 +1894,5 @@ namespace AdaWeldSystem.UIDesign.TabPage
         }
     }
 }
+
+

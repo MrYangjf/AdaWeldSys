@@ -329,8 +329,7 @@ namespace AdaWeldSystem.UIDesign.SubDialog.DataReviewerDialog
             }
         }
 
-        /// <summary>释放外部嵌套资源（UI 设计器类使用 DisposeComponents）。 设计器生成的 Dispose(bool) </summary>
-        /// <remarks>仅释放 components 容器内控件； _viewer（PointCloudViewer 内部含 WPF Viewport3DX）为代码创建的独立资源，须在此显式释放。 由父页面关闭时调用。</remarks>
+        /// <summary>释放外部嵌套资源（UI 设计器类使用 DisposeComponents）。 设计器生成的 Dispose(bool)</summary>
         public void DisposeComponents()
         {
             _viewer?.Dispose();
@@ -339,7 +338,6 @@ namespace AdaWeldSystem.UIDesign.SubDialog.DataReviewerDialog
 
         /// <summary>1. 从文件加载点云（显示原始全部点） 导入文件后调</summary>
         /// <param name="filePath">文件路径。</param>
-        /// <remarks>用，清除之前所有内容，显示原始点云</remarks>
         public void LoadPointCloud(string filePath, float pointSize = 2f)
         {
             if (_viewer == null) return;
@@ -359,7 +357,7 @@ namespace AdaWeldSystem.UIDesign.SubDialog.DataReviewerDialog
         }
 
         /// <summary>2. 减点显示：清除界面上原始点的显示后显示减点</summary>
-        /// <remarks>后的点云</remarks>
+
         /// <param name="ratio">显示比例（0.01-1.0），如0.5表示显示一半点数</param>
         public void ReducePointCloud(float ratio)
         {

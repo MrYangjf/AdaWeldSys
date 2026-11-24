@@ -5,8 +5,6 @@ using AdaWeldSystem.Comm.SystemComm;
 namespace AdaWeldSystem.MotionControl
 {
     /// <summary>运控数据：台达运控配置的持有者。</summary>
-    /// <remarks>由 MontionManager 持有（唯一入口 Instance.MoveData），运控参数由 MotionConfig XML 承载；
-    /// 线激光参数不存副本，统一经 WeldAlgorithmsConfig 读写。</remarks>
     public class MoveControlData
     {
         #region 私有变量

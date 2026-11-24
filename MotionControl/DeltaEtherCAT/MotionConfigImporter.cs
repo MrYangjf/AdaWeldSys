@@ -8,8 +8,6 @@ using AdaWeldSystem.Comm.SystemComm;
 namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
 {
     /// <summary>运控配置 CSV 导入器</summary>
-    /// <remarks>电气填写的三张 CSV 校验后全量替换进 DeltaMotionConfig。
-    /// 落盘后下次初始化生效。校验失败不写入，全部错误经 msg 回传。</remarks>
     public static class MotionConfigImporter
     {
         #region 私有变量
@@ -68,7 +66,7 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
         }
 
         /// <summary>按 CSV 规则拆分单行，支持双引号包裹（内部双引号写</summary>
-        /// <remarks>成两个）</remarks>
+
         /// <param name="line">原始行文本</param>
         /// <returns>字段数组</returns>
         private static string[] SplitCsvLine(string line)
@@ -164,7 +162,7 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
         }
 
         /// <summary>解析带范围约束的整数</summary>
-        /// <remarks>越界记入错误列表并取默认值</remarks>
+
         /// <param name="txt">单元格文本</param>
         /// <param name="def">空串/越界默认值</param>
         /// <param name="where">出错时定位描述</param>
@@ -184,7 +182,7 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
         }
 
         /// <summary>解析双精度，空串取默认值，非法文本记入错误列</summary>
-        /// <remarks>表</remarks>
+
         /// <param name="txt">单元格文本</param>
         /// <param name="def">空串默认值</param>
         /// <param name="where">出错时定位描述</param>
@@ -404,7 +402,7 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
         }
 
         /// <summary>校验气缸引用的 IO 名存在，非空且未命中时记入错</summary>
-        /// <remarks>误列表</remarks>
+
         /// <param name="ioName">引用的 IO 名</param>
         /// <param name="names">名称集合</param>
         /// <param name="column">列名（出错定位用）</param>
@@ -420,7 +418,7 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
         }
 
         /// <summary>单元格文本转 CSV 字段，含逗号或引号时用双引号包</summary>
-        /// <remarks>裹并转义</remarks>
+
         /// <param name="text">原始文本</param>
         /// <returns>可写入 CSV 的字段</returns>
         private static string CsvField(string text)
@@ -442,7 +440,7 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
         }
 
         /// <summary>双精度转 CSV 文本，固定不变文化，避免小数点随系统</summary>
-        /// <remarks>区域变化</remarks>
+
         /// <param name="value">数值</param>
         /// <returns>数值文本</returns>
         private static string CsvDouble(double value)
@@ -541,7 +539,7 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
         }
 
         /// <summary>写出三张 CSV 配置表，表头与导入侧逐字一致，可原样</summary>
-        /// <remarks>回填</remarks>
+
         /// <param name="dir">目标目录</param>
         /// <param name="config">运控配置实例</param>
         private static void WriteAllCsv(string dir, DeltaMotionConfig config)
@@ -588,7 +586,7 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
         }
 
         /// <summary>分节导入：只替换 flag 为 true 的节，其余节保留原配置</summary>
-        /// <remarks>缺文件时按分节跳过</remarks>
+
         /// <param name="dir">CSV 所在目录</param>
         /// <param name="importAxes">是否导入并替换轴节</param>
         /// <param name="importIos">是否导入并替换 IO 节</param>
@@ -601,7 +599,7 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
         }
 
         /// <summary>分节导入</summary>
-        /// <remarks>复用上层备份目录：一次操作只备份一次</remarks>
+
         /// <param name="dir">CSV 所在目录</param>
         /// <param name="importAxes">是否导入轴</param>
         /// <param name="importIos">是否导入 IO</param>
@@ -687,7 +685,6 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
         /// <param name="dir">导出目录，不存在时自动创建</param>
         /// <param name="msg">成功回传导出摘要，失败回传错误描述</param>
         /// <returns>导出成功返回 true</returns>
-        /// <remarks>表头与导入侧逐字一致可原样回填；只读实例不改内存状态，导出失败不影响运行期。</remarks>
         public static bool Export(string dir, ref string msg)
         {
             if (string.IsNullOrEmpty(dir))

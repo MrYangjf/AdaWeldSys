@@ -1,8 +1,6 @@
 ﻿namespace AdaWeldSystem.LineLaserCam.ILineLaser
 {
     /// <summary>线激光校准数据快照（厂商无关的中性结构）</summary>
-    /// <remarks>厂商层 SDK 回调捕获，业务层经 <see cref="LineLaserCameraBase.Calibration"/> 读取；
-    /// 角点与中心单位毫米，索引 0 为横向、1 为高度。</remarks>
     public class LineLaserCalibration
     {
         #region 公共变量

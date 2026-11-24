@@ -16,8 +16,6 @@ using AdaWeldSystem.Comm.Communication.Abstractions;
 namespace AdaWeldSystem.Comm.Communication.Implementations
 {
     /// <summary>RSI（Robot Sensor Interface）UDP 实时通讯实现</summary>
-    /// <remarks>机器人按 IPO 周期（12ms/4ms）发 XML 数据包，本机须在周期内回组包；收发线程分离，
-    /// 迟到包由机器人 HOLDON 保持；契约见 KUKA RSI 3.3 开发指南。</remarks>
     public class KukaRsiComm : CommChannelBase
     {
         /// <summary>连续 N 周期无包触发告警</summary>
@@ -31,8 +29,6 @@ namespace AdaWeldSystem.Comm.Communication.Implementations
         private readonly object _replyLock = new object();
 
         /// <summary>收包信号，回复线程一包一回</summary>
-        /// <remarks>机器人主动发包，回复须同周期同 IPOC；
-        /// 盲发会洪泛重复 IPOC；内容取缓存。</remarks>
         private readonly AutoResetEvent _replySignal = new AutoResetEvent(false);
         private RsiRobotPacket _latestPacket;
         private double _laserPower;
@@ -105,7 +101,7 @@ namespace AdaWeldSystem.Comm.Communication.Implementations
         /// <summary>本机监听 IP（对应 RobotServer.xml HOST_IP；必须已分配到本机已启用网口）</summary>
         public string LocalIp { get; set; }
 
-        /// <summary>最近一次启动/停止失败原因（成功时清空；供调试界面直接展示）</summary>
+        /// <summary>最近一次启动/停止失败原因</summary>
         public string LastError { get; private set; }
 
         /// <summary>传感器系统标识（须与机器人端 XML 配置的 SENTYPE 一致）</summary>
@@ -138,7 +134,7 @@ namespace AdaWeldSystem.Comm.Communication.Implementations
         /// <summary>RSI 错误事件</summary>
         public event EventHandler<RSIErrorEventArgs> ErrorOccurred;
 
-        /// <summary>收到的机器人包计数（调试面板展示；线程安全读取）</summary>
+        /// <summary>收到的机器人包计数</summary>
         public long RxPacketCount
         {
             get { lock (_replyLock) { return _rxPacketCount; } }
@@ -150,13 +146,13 @@ namespace AdaWeldSystem.Comm.Communication.Implementations
             get { lock (_replyLock) { return _txPacketCount; } }
         }
 
-        /// <summary>最近一帧收到的机器人包原文（调试面板展示；线程安全读取）</summary>
+        /// <summary>最近一帧收到的机器人包原文</summary>
         public string LastRxRaw
         {
             get { lock (_replyLock) { return _lastRxRaw; } }
         }
 
-        /// <summary>最近一帧发出的回复包原文（调试面板展示；线程安全读取）</summary>
+        /// <summary>最近一帧发出的回复包原文</summary>
         public string LastTxRaw
         {
             get { lock (_replyLock) { return _lastTxRaw; } }
@@ -168,7 +164,7 @@ namespace AdaWeldSystem.Comm.Communication.Implementations
             get { return Math.Max(CycleMs * 5, 500); }
         }
 
-        /// <summary>最近一次收到有效机器人包的时间（本地时间；未收到过返回 DateTime.MinValue）。</summary>
+        /// <summary>最近一次收到有效机器人包的时间</summary>
         public DateTime LastReceiveTime
         {
             get
@@ -179,8 +175,6 @@ namespace AdaWeldSystem.Comm.Communication.Implementations
         }
 
         /// <summary>在线判据：监听中且有新包</summary>
-        /// <remarks>UDP 无连接态，监听开不等于已连；
-        /// 以实际收包为准，供心跳与界面。</remarks>
         public bool IsRobotOnline
         {
             get
@@ -207,7 +201,7 @@ namespace AdaWeldSystem.Comm.Communication.Implementations
             get { lock (_replyLock) { return _latestPacket != null ? _latestPacket.RxPayload : 0.0; } }
         }
 
-        /// <summary>最近一帧的 IPOC 时间戳（调试面板展示；用于校验回传一致性）</summary>
+        /// <summary>最近一帧的 IPOC 时间戳</summary>
         public string LastIpoc
         {
             get { lock (_replyLock) { return _latestPacket != null ? _latestPacket.Ipoc : string.Empty; } }
@@ -232,7 +226,7 @@ namespace AdaWeldSystem.Comm.Communication.Implementations
         }
 
         /// <summary>校验本机是否存在承载指定 IPv4 的已启用物理/虚拟</summary>
-        /// <remarks>网口。</remarks>
+
         /// <param name="address">待绑定本机 IP</param>
         /// <param name="nicName">命中网口名称</param>
         /// <param name="reason">失败原因（本机未找到该 IP / 网口未就绪）</param>
@@ -272,7 +266,7 @@ namespace AdaWeldSystem.Comm.Communication.Implementations
         }
 
         /// <summary>占位值解析：按占位名取实时值</summary>
-        /// <remarks>时间戳取 IPOC，其余按字面量。</remarks>
+
         /// <param name="placeholder">占位名（详见 wiki 占位符表）</param>
         /// <param name="laserPower">激光功率（W）</param>
         /// <param name="wireSpeed">送丝速度（m/min）</param>
@@ -418,7 +412,6 @@ namespace AdaWeldSystem.Comm.Communication.Implementations
         }
 
         /// <summary>接收超时判定：连续 N 周期未收包则告警一次，恢复</summary>
-        /// <remarks>后复位</remarks>
         private void CheckReceiveStall()
         {
             if (_latestPacket == null)
@@ -438,7 +431,6 @@ namespace AdaWeldSystem.Comm.Communication.Implementations
         }
 
         /// <summary>回复循环线程：与接收线程解耦，超时用上一帧有</summary>
-        /// <remarks>效值回包</remarks>
         private void SendLoop()
         {
             GlobalCommData.ShowCommLogForView(Tag, "RSI 回复线程已启动");
@@ -730,9 +722,7 @@ namespace AdaWeldSystem.Comm.Communication.Implementations
         }
 
         /// <summary>下发下行指令（TxCmd + TxPayload + TxSeq 三件套）</summary>
-        /// <remarks>机器人按 TxSeq 变化且 TxCmd≠0 沿触发执行，执行后清 0；
-        /// TxSeq 自增保证序号唯一，首序号跳变豁免不误触发。
-        /// 只写回复缓存，实际发出在下一回复周期。</remarks>
+
         /// <param name="txCmd">下行指令码（CommandCore.Tx* 对应的数值码）</param>
         /// <param name="txPayload">下行指令载荷（无载荷置 0）</param>
         public void SendTxCommand(int txCmd, double txPayload = 0.0)
@@ -747,7 +737,6 @@ namespace AdaWeldSystem.Comm.Communication.Implementations
         }
 
         /// <summary>清零下行指令码（机器人已执行，或上位机主动撤</summary>
-        /// <remarks>销未发出的指令）</remarks>
         public void ClearTxCommand()
         {
             lock (_replyLock)
@@ -766,7 +755,7 @@ namespace AdaWeldSystem.Comm.Communication.Implementations
         }
 
         /// <summary>按发送格式文档解析机器人 XML 数据包（格式驱动：读</summary>
-        /// <remarks>哪些元素、按属性顺序取值均由 sendFormat 决定）</remarks>
+
         /// <param name="xml">XML 文本</param>
         /// <param name="sendFormat">机器人发送格式（null 时用内置默认）</param>
         /// <returns>解析结果，RIst 主定位元素缺失返回 null</returns>
@@ -864,7 +853,7 @@ namespace AdaWeldSystem.Comm.Communication.Implementations
         }
 
         /// <summary>组装回复给机器人的 XML 数据包（内置默认格式：Sen 包具</summary>
-        /// <remarks>名元素 + IPOC）</remarks>
+
         /// <param name="laserPower">激光功率（W）</param>
         /// <param name="wireSpeed">送丝速度（m/min）</param>
         /// <param name="ipoc">IPOC 时间戳（必须与收到包一致）</param>
@@ -1163,8 +1152,7 @@ namespace AdaWeldSystem.Comm.Communication.Implementations
         }
 
         /// <summary>内置默认机器人发送格式（Rob 包：RIst 六属性 + Tool 三属性 + RxCmd + RxPayload + IPOC 文本）</summary>
-        /// <remarks>TAG 含「.」→ 属性形式（Tool.X）；不含「.」→ 元素形式（RxCmd/RxPayload）。
-        /// 契约见 robot-comm-spec/WeldControlConfig.xml SEND 段。</remarks>
+
         /// <returns>默认发送格式</returns>
         public static RsiPacketFormat CreateDefaultSendFormat()
         {
@@ -1213,9 +1201,7 @@ namespace AdaWeldSystem.Comm.Communication.Implementations
         }
 
         /// <summary>内置默认回复格式（Sen 包：8 个具名元素 + IPOC 回传）</summary>
-        /// <remarks>契约见 robot-comm-spec/WeldControlConfig.xml RECEIVE 段：
-        /// WeldPower(1) / WireSpeed(2) / CutWire(3) / WeldSpeed(4) / WeaveAmp(5) /
-        /// TxCmd(6) / TxPayload(7) / TxSeq(8)，全部 HOLDON=1。</remarks>
+
         /// <returns>默认回复格式</returns>
         public static RsiPacketFormat CreateDefaultReplyFormat()
         {
@@ -1383,7 +1369,7 @@ namespace AdaWeldSystem.Comm.Communication.Implementations
         }
 
         /// <summary>解析格式文档节为数据包格式（首子元素为包根，</summary>
-        /// <remarks>属性为类型标识）</remarks>
+
         /// <param name="section">格式节元素（缺失返回 null，运行时回退内置默认）</param>
         /// <returns>数据包格式</returns>
         public static RsiPacketFormat ParseFormatSection(XElement section)

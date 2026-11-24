@@ -31,12 +31,15 @@ namespace AdaWeldSystem.UIDesign.ControlPage
             this.components = new System.ComponentModel.Container();
             this.inputLog = new AntdUI.Input();
             this.panelChart2 = new AntdUI.Panel();
-            this.chkSeamWidth = new AntdUI.Checkbox();
-            this.chkWireZ = new AntdUI.Checkbox();
+            this.gPanelPlot2 = new AntdUI.GridPanel();
+            this.formsPlot2 = new ScottPlot.FormsPlot();
+            this.flowPanel1 = new AntdUI.FlowPanel();
             this.chkLaserPower = new AntdUI.Checkbox();
             this.chkFeedSpeed = new AntdUI.Checkbox();
+            this.chkWireZ = new AntdUI.Checkbox();
             this.chkRobotSpeed = new AntdUI.Checkbox();
-            this.formsPlot2 = new ScottPlot.FormsPlot();
+            this.chkSeamWidth = new AntdUI.Checkbox();
+            this.label1 = new AntdUI.Label();
             this.PanelDashborad = new AntdUI.Panel();
             this.StatusGridPanel = new AntdUI.GridPanel();
             this.panelfloatbutton = new AntdUI.In.Panel();
@@ -48,14 +51,21 @@ namespace AdaWeldSystem.UIDesign.ControlPage
             this.divider2 = new AntdUI.Divider();
             this.LabelStatus = new AntdUI.Label();
             this.panel1 = new AntdUI.Panel();
+            this.gPanelPlot1 = new AntdUI.GridPanel();
             this.formsPlot1 = new ScottPlot.FormsPlot();
+            this.flowPanel2 = new AntdUI.FlowPanel();
+            this.label2 = new AntdUI.Label();
             this.tableLayoutPanel3 = new System.Windows.Forms.TableLayoutPanel();
             this.panelChart2.SuspendLayout();
+            this.gPanelPlot2.SuspendLayout();
+            this.flowPanel1.SuspendLayout();
             this.PanelDashborad.SuspendLayout();
             this.StatusGridPanel.SuspendLayout();
             this.gridTopBlock.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)(this.imb_WeldViewer)).BeginInit();
             this.panel1.SuspendLayout();
+            this.gPanelPlot1.SuspendLayout();
+            this.flowPanel2.SuspendLayout();
             this.tableLayoutPanel3.SuspendLayout();
             this.SuspendLayout();
             // 
@@ -80,12 +90,7 @@ namespace AdaWeldSystem.UIDesign.ControlPage
             this.panelChart2.Back = System.Drawing.Color.FromArgb(((int)(((byte)(255)))), ((int)(((byte)(255)))), ((int)(((byte)(255)))));
             this.panelChart2.BorderColor = System.Drawing.Color.FromArgb(((int)(((byte)(217)))), ((int)(((byte)(217)))), ((int)(((byte)(217)))));
             this.tableLayoutPanel3.SetColumnSpan(this.panelChart2, 2);
-            this.panelChart2.Controls.Add(this.chkSeamWidth);
-            this.panelChart2.Controls.Add(this.chkWireZ);
-            this.panelChart2.Controls.Add(this.chkLaserPower);
-            this.panelChart2.Controls.Add(this.chkFeedSpeed);
-            this.panelChart2.Controls.Add(this.chkRobotSpeed);
-            this.panelChart2.Controls.Add(this.formsPlot2);
+            this.panelChart2.Controls.Add(this.gPanelPlot2);
             this.panelChart2.Dock = System.Windows.Forms.DockStyle.Fill;
             this.panelChart2.Location = new System.Drawing.Point(643, 3);
             this.panelChart2.Name = "panelChart2";
@@ -97,44 +102,55 @@ namespace AdaWeldSystem.UIDesign.ControlPage
             this.panelChart2.TabIndex = 12;
             this.panelChart2.Text = "panelChart2";
             // 
-            // chkSeamWidth
+            // gPanelPlot2
             // 
-            this.chkSeamWidth.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
-            this.chkSeamWidth.AutoSizeMode = AntdUI.TAutoSize.Auto;
-            this.chkSeamWidth.BackColor = System.Drawing.Color.White;
-            this.chkSeamWidth.Checked = true;
-            this.chkSeamWidth.CheckState = System.Windows.Forms.CheckState.Checked;
-            this.chkSeamWidth.Font = new System.Drawing.Font("Microsoft YaHei UI", 10F);
-            this.chkSeamWidth.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(48)))), ((int)(((byte)(48)))), ((int)(((byte)(48)))));
-            this.chkSeamWidth.Location = new System.Drawing.Point(83, 9);
-            this.chkSeamWidth.Name = "chkSeamWidth";
-            this.chkSeamWidth.Size = new System.Drawing.Size(131, 44);
-            this.chkSeamWidth.TabIndex = 1;
-            this.chkSeamWidth.Text = "JointWidth";
+            this.gPanelPlot2.Controls.Add(this.formsPlot2);
+            this.gPanelPlot2.Controls.Add(this.flowPanel1);
+            this.gPanelPlot2.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.gPanelPlot2.Location = new System.Drawing.Point(8, 8);
+            this.gPanelPlot2.Name = "gPanelPlot2";
+            this.gPanelPlot2.Size = new System.Drawing.Size(618, 530);
+            this.gPanelPlot2.Span = "40:fill;fill";
+            this.gPanelPlot2.TabIndex = 6;
+            this.gPanelPlot2.Text = "gridPanel1";
             // 
-            // chkWireZ
+            // formsPlot2
             // 
-            this.chkWireZ.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
-            this.chkWireZ.AutoSizeMode = AntdUI.TAutoSize.Auto;
-            this.chkWireZ.BackColor = System.Drawing.Color.White;
-            this.chkWireZ.Font = new System.Drawing.Font("Microsoft YaHei UI", 10F);
-            this.chkWireZ.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(48)))), ((int)(((byte)(48)))), ((int)(((byte)(48)))));
-            this.chkWireZ.Location = new System.Drawing.Point(315, 8);
-            this.chkWireZ.Name = "chkWireZ";
-            this.chkWireZ.Size = new System.Drawing.Size(66, 44);
-            this.chkWireZ.TabIndex = 5;
-            this.chkWireZ.Text = "TA";
+            this.formsPlot2.BackColor = System.Drawing.Color.White;
+            this.formsPlot2.Font = new System.Drawing.Font("Microsoft YaHei UI", 12F);
+            this.formsPlot2.Location = new System.Drawing.Point(5, 53);
+            this.formsPlot2.Margin = new System.Windows.Forms.Padding(5, 3, 5, 3);
+            this.formsPlot2.Name = "formsPlot2";
+            this.formsPlot2.RightToLeft = System.Windows.Forms.RightToLeft.No;
+            this.formsPlot2.Size = new System.Drawing.Size(608, 474);
+            this.formsPlot2.TabIndex = 2;
+            // 
+            // flowPanel1
+            // 
+            this.flowPanel1.Align = AntdUI.TAlignFlow.RightCenter;
+            this.flowPanel1.Controls.Add(this.chkLaserPower);
+            this.flowPanel1.Controls.Add(this.chkFeedSpeed);
+            this.flowPanel1.Controls.Add(this.chkWireZ);
+            this.flowPanel1.Controls.Add(this.chkRobotSpeed);
+            this.flowPanel1.Controls.Add(this.chkSeamWidth);
+            this.flowPanel1.Controls.Add(this.label1);
+            this.flowPanel1.Location = new System.Drawing.Point(3, 3);
+            this.flowPanel1.Name = "flowPanel1";
+            this.flowPanel1.RightToLeft = System.Windows.Forms.RightToLeft.No;
+            this.flowPanel1.Size = new System.Drawing.Size(612, 44);
+            this.flowPanel1.TabIndex = 7;
+            this.flowPanel1.Text = "flowPanel1";
             // 
             // chkLaserPower
             // 
             this.chkLaserPower.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
             this.chkLaserPower.AutoSizeMode = AntdUI.TAutoSize.Auto;
             this.chkLaserPower.BackColor = System.Drawing.Color.White;
-            this.chkLaserPower.Font = new System.Drawing.Font("Microsoft YaHei UI", 10F);
+            this.chkLaserPower.Font = new System.Drawing.Font("Microsoft YaHei UI", 8F);
             this.chkLaserPower.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(48)))), ((int)(((byte)(48)))), ((int)(((byte)(48)))));
-            this.chkLaserPower.Location = new System.Drawing.Point(387, 11);
+            this.chkLaserPower.Location = new System.Drawing.Point(502, 3);
             this.chkLaserPower.Name = "chkLaserPower";
-            this.chkLaserPower.Size = new System.Drawing.Size(136, 44);
+            this.chkLaserPower.Size = new System.Drawing.Size(107, 34);
             this.chkLaserPower.TabIndex = 4;
             this.chkLaserPower.Text = "LaserPower";
             // 
@@ -143,38 +159,64 @@ namespace AdaWeldSystem.UIDesign.ControlPage
             this.chkFeedSpeed.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
             this.chkFeedSpeed.AutoSizeMode = AntdUI.TAutoSize.Auto;
             this.chkFeedSpeed.BackColor = System.Drawing.Color.White;
-            this.chkFeedSpeed.Font = new System.Drawing.Font("Microsoft YaHei UI", 10F);
+            this.chkFeedSpeed.Font = new System.Drawing.Font("Microsoft YaHei UI", 8F);
             this.chkFeedSpeed.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(48)))), ((int)(((byte)(48)))), ((int)(((byte)(48)))));
-            this.chkFeedSpeed.Location = new System.Drawing.Point(220, 8);
+            this.chkFeedSpeed.Location = new System.Drawing.Point(426, 3);
             this.chkFeedSpeed.Name = "chkFeedSpeed";
-            this.chkFeedSpeed.Size = new System.Drawing.Size(89, 44);
+            this.chkFeedSpeed.Size = new System.Drawing.Size(70, 34);
             this.chkFeedSpeed.TabIndex = 3;
             this.chkFeedSpeed.Text = "Vwire";
+            // 
+            // chkWireZ
+            // 
+            this.chkWireZ.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
+            this.chkWireZ.AutoSizeMode = AntdUI.TAutoSize.Auto;
+            this.chkWireZ.BackColor = System.Drawing.Color.White;
+            this.chkWireZ.Font = new System.Drawing.Font("Microsoft YaHei UI", 8F);
+            this.chkWireZ.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(48)))), ((int)(((byte)(48)))), ((int)(((byte)(48)))));
+            this.chkWireZ.Location = new System.Drawing.Point(368, 3);
+            this.chkWireZ.Name = "chkWireZ";
+            this.chkWireZ.Size = new System.Drawing.Size(52, 34);
+            this.chkWireZ.TabIndex = 5;
+            this.chkWireZ.Text = "TA";
             // 
             // chkRobotSpeed
             // 
             this.chkRobotSpeed.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
             this.chkRobotSpeed.AutoSizeMode = AntdUI.TAutoSize.Auto;
             this.chkRobotSpeed.BackColor = System.Drawing.Color.White;
-            this.chkRobotSpeed.Font = new System.Drawing.Font("Microsoft YaHei UI", 10F);
+            this.chkRobotSpeed.Font = new System.Drawing.Font("Microsoft YaHei UI", 8F);
             this.chkRobotSpeed.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(48)))), ((int)(((byte)(48)))), ((int)(((byte)(48)))));
-            this.chkRobotSpeed.Location = new System.Drawing.Point(526, 11);
+            this.chkRobotSpeed.Location = new System.Drawing.Point(283, 3);
             this.chkRobotSpeed.Name = "chkRobotSpeed";
-            this.chkRobotSpeed.Size = new System.Drawing.Size(100, 44);
+            this.chkRobotSpeed.Size = new System.Drawing.Size(79, 34);
             this.chkRobotSpeed.TabIndex = 2;
             this.chkRobotSpeed.Text = "Vrobot";
             // 
-            // formsPlot2
+            // chkSeamWidth
             // 
-            this.formsPlot2.BackColor = System.Drawing.Color.White;
-            this.formsPlot2.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.formsPlot2.Font = new System.Drawing.Font("Microsoft YaHei UI", 10F);
-            this.formsPlot2.Location = new System.Drawing.Point(8, 8);
-            this.formsPlot2.Margin = new System.Windows.Forms.Padding(5, 3, 5, 3);
-            this.formsPlot2.Name = "formsPlot2";
-            this.formsPlot2.RightToLeft = System.Windows.Forms.RightToLeft.No;
-            this.formsPlot2.Size = new System.Drawing.Size(618, 530);
-            this.formsPlot2.TabIndex = 2;
+            this.chkSeamWidth.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
+            this.chkSeamWidth.AutoSizeMode = AntdUI.TAutoSize.Auto;
+            this.chkSeamWidth.BackColor = System.Drawing.Color.White;
+            this.chkSeamWidth.Checked = true;
+            this.chkSeamWidth.CheckState = System.Windows.Forms.CheckState.Checked;
+            this.chkSeamWidth.Font = new System.Drawing.Font("Microsoft YaHei UI", 8F);
+            this.chkSeamWidth.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(48)))), ((int)(((byte)(48)))), ((int)(((byte)(48)))));
+            this.chkSeamWidth.Location = new System.Drawing.Point(173, 3);
+            this.chkSeamWidth.Name = "chkSeamWidth";
+            this.chkSeamWidth.Size = new System.Drawing.Size(104, 34);
+            this.chkSeamWidth.TabIndex = 1;
+            this.chkSeamWidth.Text = "JointWidth";
+            // 
+            // label1
+            // 
+            this.label1.AutoSizeMode = AntdUI.TAutoSize.Auto;
+            this.label1.Font = new System.Drawing.Font("Microsoft YaHei UI", 12F);
+            this.label1.Location = new System.Drawing.Point(7, 3);
+            this.label1.Name = "label1";
+            this.label1.Size = new System.Drawing.Size(160, 26);
+            this.label1.TabIndex = 8;
+            this.label1.Text = "焊接参数实时曲线";
             // 
             // PanelDashborad
             // 
@@ -312,7 +354,7 @@ namespace AdaWeldSystem.UIDesign.ControlPage
             this.panel1.Back = System.Drawing.Color.FromArgb(((int)(((byte)(255)))), ((int)(((byte)(255)))), ((int)(((byte)(255)))));
             this.panel1.BorderColor = System.Drawing.Color.FromArgb(((int)(((byte)(217)))), ((int)(((byte)(217)))), ((int)(((byte)(217)))));
             this.tableLayoutPanel3.SetColumnSpan(this.panel1, 2);
-            this.panel1.Controls.Add(this.formsPlot1);
+            this.panel1.Controls.Add(this.gPanelPlot1);
             this.panel1.Dock = System.Windows.Forms.DockStyle.Fill;
             this.panel1.Location = new System.Drawing.Point(3, 3);
             this.panel1.Name = "panel1";
@@ -326,16 +368,47 @@ namespace AdaWeldSystem.UIDesign.ControlPage
             this.panel1.TabIndex = 3;
             this.panel1.Text = "panel1";
             // 
+            // gPanelPlot1
+            // 
+            this.gPanelPlot1.Controls.Add(this.formsPlot1);
+            this.gPanelPlot1.Controls.Add(this.flowPanel2);
+            this.gPanelPlot1.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.gPanelPlot1.Location = new System.Drawing.Point(9, 9);
+            this.gPanelPlot1.Name = "gPanelPlot1";
+            this.gPanelPlot1.Size = new System.Drawing.Size(616, 528);
+            this.gPanelPlot1.Span = "40:fill;fill";
+            this.gPanelPlot1.TabIndex = 7;
+            this.gPanelPlot1.Text = "gridPanel1";
+            // 
             // formsPlot1
             // 
             this.formsPlot1.BackColor = System.Drawing.Color.Transparent;
-            this.formsPlot1.Dock = System.Windows.Forms.DockStyle.Fill;
             this.formsPlot1.Font = new System.Drawing.Font("Microsoft YaHei UI", 10F);
-            this.formsPlot1.Location = new System.Drawing.Point(9, 9);
+            this.formsPlot1.Location = new System.Drawing.Point(5, 53);
             this.formsPlot1.Margin = new System.Windows.Forms.Padding(5, 3, 5, 3);
             this.formsPlot1.Name = "formsPlot1";
-            this.formsPlot1.Size = new System.Drawing.Size(616, 528);
+            this.formsPlot1.Size = new System.Drawing.Size(606, 472);
             this.formsPlot1.TabIndex = 2;
+            // 
+            // flowPanel2
+            // 
+            this.flowPanel2.Align = AntdUI.TAlignFlow.Center;
+            this.flowPanel2.Controls.Add(this.label2);
+            this.flowPanel2.Location = new System.Drawing.Point(3, 3);
+            this.flowPanel2.Name = "flowPanel2";
+            this.flowPanel2.RightToLeft = System.Windows.Forms.RightToLeft.No;
+            this.flowPanel2.Size = new System.Drawing.Size(610, 44);
+            this.flowPanel2.TabIndex = 7;
+            // 
+            // label2
+            // 
+            this.label2.AutoSizeMode = AntdUI.TAutoSize.Auto;
+            this.label2.Font = new System.Drawing.Font("Microsoft YaHei UI", 12F);
+            this.label2.Location = new System.Drawing.Point(225, 3);
+            this.label2.Name = "label2";
+            this.label2.Size = new System.Drawing.Size(160, 26);
+            this.label2.TabIndex = 8;
+            this.label2.Text = "线激光实时轮廓线";
             // 
             // tableLayoutPanel3
             // 
@@ -367,12 +440,17 @@ namespace AdaWeldSystem.UIDesign.ControlPage
             this.Size = new System.Drawing.Size(1920, 920);
             this.Load += new System.EventHandler(this.MainPage_Shown);
             this.panelChart2.ResumeLayout(false);
-            this.panelChart2.PerformLayout();
+            this.gPanelPlot2.ResumeLayout(false);
+            this.flowPanel1.ResumeLayout(false);
+            this.flowPanel1.PerformLayout();
             this.PanelDashborad.ResumeLayout(false);
             this.StatusGridPanel.ResumeLayout(false);
             this.gridTopBlock.ResumeLayout(false);
             ((System.ComponentModel.ISupportInitialize)(this.imb_WeldViewer)).EndInit();
             this.panel1.ResumeLayout(false);
+            this.gPanelPlot1.ResumeLayout(false);
+            this.flowPanel2.ResumeLayout(false);
+            this.flowPanel2.PerformLayout();
             this.tableLayoutPanel3.ResumeLayout(false);
             this.ResumeLayout(false);
 
@@ -401,5 +479,11 @@ namespace AdaWeldSystem.UIDesign.ControlPage
         private AntdUI.Divider divider3;
         private Emgu.CV.UI.ImageBox imb_WeldViewer;
         private AntdUI.In.Panel panelfloatbutton;
+        private AntdUI.FlowPanel flowPanel1;
+        private AntdUI.Label label1;
+        private AntdUI.GridPanel gPanelPlot2;
+        private AntdUI.GridPanel gPanelPlot1;
+        private AntdUI.FlowPanel flowPanel2;
+        private AntdUI.Label label2;
     }
 }

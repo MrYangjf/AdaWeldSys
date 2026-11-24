@@ -1,9 +1,6 @@
 ﻿﻿namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
 {
     /// <summary>台达单轴配置（按台达原生参数结构组织）</summary>
-    /// <remarks>台达按卡号+站点+槽号三级寻址，故用 NodeId 与 SlotNo；
-    /// 速度/回零对齐 CSP_Start_Move、Home_Config 原生结构，
-    /// 与雷赛那套 MinVel/HomeDir 结构不同。Equiv 为工程单位/脉冲，换算只在实现层完成。</remarks>
     public class DeltaAxisConfig
     {
         #region 公共变量
@@ -63,24 +60,15 @@
         public double NegativeLimit { get; set; }
 
         /// <summary>软限位使能模式，对应台达 CSP_Set_Softlimit Mode</summary>
-        /// <remarks>⛔ 无下发路径：仅随 XML/CSV 存储，不送驱动器。</remarks>
         public ushort SoftLimitMode { get; set; }
 
-        /// <summary>是否启用 CST 力矩模式（送丝下压力控制；false 走常规 CSP 位置模式）</summary>
+        /// <summary>是否启用 CST 力矩模式</summary>
         public bool TorqueModeEnabled { get; set; }
 
-        /// <summary>
-        /// 目标力矩/下压力（已弃用，勿在新代码中消费）。
-        /// </summary>
-        /// <remarks>
-        /// 下压力归 WeldAlgorithmsConfig.TaForceN。本字段仅用于迁移读取与 CSV 兼容。
-        /// TA_Auto 不再读。未用 Obsolete 标注：本文件无 using System。
-        /// </remarks>
+        /// <summary>目标力矩/下压力（已弃用，勿在新代码中消费）。</summary>
         public short TorqueTarget { get; set; }
 
         /// <summary>扭矩爬升速率（0.1%/s），对应台达 CST_Start_Move Slope</summary>
-        /// <remarks>TA 唯一斜率：冷/热切换与正反向调力都用本值。
-        /// ⚠️ 斜率只管力建立快慢，⛔ 不限速、治不了跑飞（见 ADR-088）。</remarks>
         public uint TorqueSlope { get; set; }
 
         #endregion

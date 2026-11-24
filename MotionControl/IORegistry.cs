@@ -6,8 +6,6 @@ using AdaWeldSystem.FileOperate;
 namespace AdaWeldSystem.MotionControl
 {
     /// <summary>IO 注册表</summary>
-    /// <remarks>按键名登记全部数字 IO 并保证注册进控制器；
-    /// 输入输出分表存放，键名空间独立，允许同名。</remarks>
     public class IORegistry
     {
         #region 私有变量

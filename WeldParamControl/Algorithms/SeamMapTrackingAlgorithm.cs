@@ -7,14 +7,6 @@ using AdaWeldSystem.WeldParamControl.Abstractions;
 namespace AdaWeldSystem.WeldParamControl.Algorithms
 {
     /// <summary>焊缝地图测量点。</summary>
-    /// <remarks>
-    /// 查图键 = 测量时机器人 X + 超前量。激光装在焊枪前方，
-    /// 当拍测到的是前方焊缝；按测量 X 入图会查到超前一段的缝。
-    /// 目标整体前移。加上前置量后键即空间真实位置，相位归零。
-    /// 存绝对 Y 目标，并记测量时机器人 Y。
-    /// 供写入时做机器人 Y 差分补偿。
-    /// 路径距离保留为诊断字段，不参与查图。
-    /// </remarks>
     public struct SeamMapPoint
     {
         #region 公共变量
@@ -57,7 +49,6 @@ namespace AdaWeldSystem.WeldParamControl.Algorithms
     }
 
     /// <summary>焊缝跟踪报警请求事件参数。</summary>
-    /// <remarks>算法只触发事件，停机处置由运控工作流执行。</remarks>
     public class TrackingAlarmEventArgs : EventArgs
     {
         #region 公共变量
@@ -80,11 +71,6 @@ namespace AdaWeldSystem.WeldParamControl.Algorithms
     }
 
     /// <summary>线激光前置引导焊缝地图跟踪算法实现（非单例）。</summary>
-    /// <remarks>
-    /// 只产修正量，Y 目标 = 锚点 + 修正量。
-    /// 链路：线激光回调换算→剔除→合成入图；位姿回调滤波→平滑→方向锁；运控叠加锚点下发。
-    /// 偏差 = (实时−标定)特征 × 比例 × 方向；⛔ 不做时间域低通，避免破坏相消；算法只计算不落盘，折返报警只置位并触发事件。
-    /// </remarks>
     public class SeamMapTrackingAlgorithm : WeldAlgorithmBase
     {
         #region 常量
@@ -112,7 +98,6 @@ namespace AdaWeldSystem.WeldParamControl.Algorithms
         private double _ffSlopeFiltered;
 
         /// <summary>首帧种子偏差上限（毫米），超出即丢</summary>
-        /// <remarks>单个炸点若成参考，后续正常值全被判突变。故首帧须独立物理合理性闸门。</remarks>
         private const double MaxSeedDeviationMm = 10.0;
 
         #endregion
@@ -124,9 +109,9 @@ namespace AdaWeldSystem.WeldParamControl.Algorithms
         /// <summary>焊缝绝对 Y 地图，按机器人 X 升序排列</summary>
         private readonly List<SeamMapPoint> _seamMap = new List<SeamMapPoint>();
 
-        private WeldAlgorithmsConfig _config;
+        private WeldParamConfig _config;
 
-        // 线激光侧状态（⛔ 地图值禁再滤波）
+        // 线激光侧状态，地图值不再滤波
         private double _lastFeatureY;
         private double _lastDy;
         private double _lastCorrectionMm;
@@ -215,7 +200,7 @@ namespace AdaWeldSystem.WeldParamControl.Algorithms
         public override bool IsReady { get { lock (_lock) { return _config != null; } } }
 
         /// <summary>当前配置（只读引用，运行期不再改动）。</summary>
-        public WeldAlgorithmsConfig Config { get { lock (_lock) { return _config; } } }
+        public WeldParamConfig Config { get { lock (_lock) { return _config; } } }
 
         /// <summary>是否正在跟踪（起焊置位，复位清除）。</summary>
         public bool IsTracking { get { lock (_lock) { return _isTracking; } } }
@@ -228,7 +213,6 @@ namespace AdaWeldSystem.WeldParamControl.Algorithms
         }
 
         /// <summary>最近查询修正量 = 绝对目标 − 标定轴值。</summary>
-        /// <remarks>仅供诊断；运控侧以 <see cref="TryGetTargetY"/> 取绝对目标，不再叠加起焊锚点。</remarks>
         public double CorrectionMm { get { lock (_lock) { return _correctionMm; } } }
 
         /// <summary>修正量是否已就绪。</summary>
@@ -298,7 +282,6 @@ namespace AdaWeldSystem.WeldParamControl.Algorithms
         public int JitterRejectCount { get { lock (_lock) { return _jitterRejectCount; } } }
 
         /// <summary>折返报警请求事件。</summary>
-        /// <remarks>只触发事件，停机由运控工作流执行。</remarks>
         public event EventHandler<TrackingAlarmEventArgs> TrackingAlarmRequested;
 
         #endregion
@@ -308,7 +291,7 @@ namespace AdaWeldSystem.WeldParamControl.Algorithms
         /// <summary>构造函数。</summary>
         public SeamMapTrackingAlgorithm()
         {
-            _config = new WeldAlgorithmsConfig();
+            _config = new WeldParamConfig();
             _alarmReason = "";
         }
 
@@ -332,7 +315,7 @@ namespace AdaWeldSystem.WeldParamControl.Algorithms
         }
 
         /// <summary>触发折返报警请求事件（在锁外调用，避免订阅方</summary>
-        /// <remarks>重入死锁）。</remarks>
+
         /// <param name="reason">报警原因</param>
         private void RaiseAlarmRequest(string reason)
         {
@@ -349,7 +332,7 @@ namespace AdaWeldSystem.WeldParamControl.Algorithms
         }
 
         /// <summary>处理一帧线激光结果：换算→剔除→合成入图</summary>
-        /// <remarks>先种子闸，再时间域/空间域剔除。</remarks>
+
         /// <param name="featureY">焊缝特征点横向坐标（毫米，线激光坐标）</param>
         /// <param name="axisPosMm">本帧对应的跟踪轴实际位置（毫米）</param>
         private void ProcessLaserResult(double featureY, double axisPosMm)
@@ -391,9 +374,9 @@ namespace AdaWeldSystem.WeldParamControl.Algorithms
             //    全式：Yt=(特征Y−标定Y)×方向+轴Y+机器人Y，Ycsp=Yt−机器人Y。
             //    特征偏差含 −ΔYa，加回 Ya1 相消；
             //    写入侧差分恰好实现 ±机器人Y 项。
-            // ⛔ 模拟前提：特征读数须随轴反变，
+            // 特征读数须随轴反向变化
             //    退化为「目标 = 轴延迟副本 + 常量」自指环，真机不复制。
-            // ⛔ 不得对偏差 rawDy 或对合成结果做任何时间域低通：
+            // 偏差与合成结果不做低通滤波
             //    · 滤 rawDy 会引入轴速反馈，拐点必冲过头。
             //    · 滤合成结果 ⇒ 入图值 = 真值 − τ·v_缝，斜段恒滞后。
             //    抑噪由查图侧高斯与三道闸门承担。
@@ -458,13 +441,7 @@ namespace AdaWeldSystem.WeldParamControl.Algorithms
         }
 
         /// <summary>野值检测：切线连续性违约或 3σ 统计异常即判为炸</summary>
-        /// <remarks>
-        /// 切向判据：野值指孤立飞点，而非偏差大。
-        /// 以地图尾部最近两个已测点作切线外推到 arriveX。
-        /// 新点偏离预测超地板加系数乘距离即判炸。
-        /// 阈值随距离放宽，只拦孤立飞点。
-        /// 参考点不足时不做判定。
-        /// </remarks>
+
         /// <param name="newTargetY">待判定的绝对 Y 轴目标（毫米）</param>
         /// <param name="arriveX">待判定点的查图键（毫米）</param>
         /// <returns>是炸点返回 true</returns>
@@ -521,7 +498,7 @@ namespace AdaWeldSystem.WeldParamControl.Algorithms
         }
 
         /// <summary>把测量点按机器人 X 升序插入焊缝地图，超容量时</summary>
-        /// <remarks>丢弃最旧点。</remarks>
+
         /// <param name="robotX">焊枪到达该处时的机器人 X 绝对坐标（毫米）</param>
         /// <param name="targetY">该 X 处的绝对 Y 轴目标（毫米）</param>
         /// <param name="robotY">测量时刻的机器人 Y 坐标（毫米）</param>
@@ -549,10 +526,7 @@ namespace AdaWeldSystem.WeldParamControl.Algorithms
         }
 
         /// <summary>按焊枪 X 取该处的绝对 Y 轴目标与测量时刻机器人 Y（</summary>
-        /// <remarks>
-        /// 查询中心即焊枪 X，窗口无需平移。
-        /// 对称窗用已测邻近点，属正确平滑。
-        ///  对称高斯窗，零相位）。</remarks>
+
         /// <param name="robotX">当前机器人 X 坐标（毫米）</param>
         /// <param name="targetY">该 X 处的绝对 Y 轴目标（毫米）</param>
         /// <param name="pointRobotY">窗口内加权平均的测量时刻机器人 Y（毫米）</param>
@@ -596,10 +570,7 @@ namespace AdaWeldSystem.WeldParamControl.Algorithms
         }
 
         /// <summary>单调约束：锁向后单向移动，反向超阈值解锁</summary>
-        /// <remarks>
-        /// 方向锁不因行程周期性失效。
-        /// 仅真实反弯解锁，噪声无法制造往复。
-        /// 退化为持距兜底上限。</remarks>
+
         /// <param name="rawValue">高斯平滑后的修正量（毫米）</param>
         /// <param name="robotX">当前机器人 X 坐标（毫米）</param>
         /// <returns>单调约束后的修正量（毫米）</returns>
@@ -645,7 +616,7 @@ namespace AdaWeldSystem.WeldParamControl.Algorithms
         }
 
         /// <summary>重新种子方向锁：以当前值为新参考并清除锁定</summary>
-        /// <remarks>态</remarks>
+
         /// <param name="rawValue">当前修正量（毫米）</param>
         /// <param name="robotX">当前机器人 X 坐标（毫米）</param>
         private void ReseedMonotonic(double rawValue, double robotX)
@@ -659,7 +630,7 @@ namespace AdaWeldSystem.WeldParamControl.Algorithms
         }
 
         /// <summary>焊接方向锁定与 X 折返监测：偶发折返仅警告，连续</summary>
-        /// <remarks>折返报警。</remarks>
+
         /// <param name="dx">本包机器人 X 位移（毫米）</param>
         /// <returns>本次调用新触发报警返回 true</returns>
         private bool UpdateDirection(double dx)
@@ -709,8 +680,7 @@ namespace AdaWeldSystem.WeldParamControl.Algorithms
         }
 
         /// <summary>处理一帧机器人位姿：Y 滤波 + X 单调化 + 路径距离 + 折返</summary>
-        /// <remarks>位姿帧只维护基准与安全监测。
-        /// 目标由运控写入时按当拍 RobotX 查询。</remarks>
+
         /// <param name="robotX">机器人 X 坐标（毫米）</param>
         /// <param name="robotY">机器人 Y 坐标（毫米）</param>
         /// <param name="robotZ">机器人 Z 坐标（毫米）</param>
@@ -802,8 +772,7 @@ namespace AdaWeldSystem.WeldParamControl.Algorithms
         }
 
         /// <summary>以位姿预测器的外推 X 刷新地图键基准。</summary>
-        /// <remarks>X 取位姿预测值，与查图侧同源。
-        /// 键阶梯会造成周期性微顿。</remarks>
+
         /// <param name="robotX">位姿预测器给出的外推机器人 X（毫米）</param>
         public void UpdatePredictedRobotX(double robotX)
         {
@@ -812,7 +781,6 @@ namespace AdaWeldSystem.WeldParamControl.Algorithms
         }
 
         /// <summary>清除折返报警态（对外：会话切换 / 异常清理时调用）。</summary>
-        /// <remarks>仅供 <see cref="WeldParamManager"/> 转发，业务侧不得直接调用算法实例。</remarks>
         public void ClearAlarmState()
         {
             lock (_lock)
@@ -827,7 +795,7 @@ namespace AdaWeldSystem.WeldParamControl.Algorithms
 
         /// <summary>更新配置，配置重新加载后调用。</summary>
         /// <param name="config">焊接算法配置</param>
-        public void SetConfig(WeldAlgorithmsConfig config)
+        public void SetConfig(WeldParamConfig config)
         {
             if (config == null) return;
             lock (_lock)
@@ -837,14 +805,13 @@ namespace AdaWeldSystem.WeldParamControl.Algorithms
         }
 
         /// <summary>载入线激光引导配置。</summary>
-        /// <param name="config">配置对象，应为 <see cref="WeldAlgorithmsConfig"/></param>
+        /// <param name="config">配置对象，应为 <see cref="WeldParamConfig"/></param>
         public override void LoadConfig(object config)
         {
-            SetConfig(config as WeldAlgorithmsConfig);
+            SetConfig(config as WeldParamConfig);
         }
 
         /// <summary>复位跟踪状态：清图、清位姿基准、清方向与报警，保</summary>
-        /// <remarks>留配置。</remarks>
         public override void Reset()
         {
             lock (_lock)
@@ -915,8 +882,6 @@ namespace AdaWeldSystem.WeldParamControl.Algorithms
         }
 
         /// <summary>起焊沿激活目标查询（给绝对 Y 目标）</summary>
-        /// <remarks>起焊前沿调用：先 <see cref="Reset"/> 清图，再置跟踪激活。
-        /// 无对应地图点时返回 false，运控保持标定值。</remarks>
         public void BeginCorrection()
         {
             lock (_lock)
@@ -928,10 +893,7 @@ namespace AdaWeldSystem.WeldParamControl.Algorithms
         }
 
         /// <summary>按机器人 X 向速度取 Y 轴跟踪速度需求</summary>
-        /// <remarks>
-        /// 需求 = |斜率 × 机器人 X 速度|。
-        /// 割线取参考点与末点，限幅+EMA 平滑。
-        /// 前馈只抬上限、不产生位移。</remarks>
+
         /// <param name="robotVxMmPerS">机器人 X 向速度幅值（毫米/秒，调用方由 X 差分推算）</param>
         /// <param name="requiredVelMmPerS">Y 轴速度需求幅值（毫米/秒）</param>
         /// <returns>可估计斜率且速度为正返回 true</returns>
@@ -967,11 +929,7 @@ namespace AdaWeldSystem.WeldParamControl.Algorithms
         }
 
         /// <summary>按当拍位姿取绝对 Y 轴目标（写入时刻调用）</summary>
-        /// <remarks>
-        /// 查图中心为当拍 RobotX。
-        /// 机器人 Y 取当拍值做差分补偿。
-        /// 机器人 Y 平移须由跟踪轴反向抵消。
-        /// 否则前置量行程内的 Y 变化无人补偿。</remarks>
+
         /// <param name="robotX">当拍机器人 X 坐标（毫米）</param>
         /// <param name="robotY">当拍机器人 Y 坐标（毫米）</param>
         /// <param name="targetY">绝对 Y 轴目标（毫米）；无可用地图点时取标定轴值</param>
@@ -996,7 +954,7 @@ namespace AdaWeldSystem.WeldParamControl.Algorithms
                 smoothedTarget -= _config.RobotYGain * _robotYWriteDiff;
 
                 // 死区：小于即保持输出（0.01mm）。
-                // ⛔ 勿改为逐拍相对基准判偏差。
+                // 偏差按固定基准判定
                 // 跳幅可达整段量级，写出链路无护栏。
                 // 无迟滞，边界抖动会来回跳。
                 if (_hasLastOutput && _config.OutputDeadbandMm > 0.0
@@ -1016,7 +974,7 @@ namespace AdaWeldSystem.WeldParamControl.Algorithms
         }
 
         /// <summary>喂入一帧线激光结果（相机 SDK 回调线程，约 60Hz）。</summary>
-        /// <remarks>位姿未就绪即丢帧，避免错键。</remarks>
+
         /// <param name="result">本帧焊缝识别结果</param>
         /// <param name="axisPosMm">本帧对应的跟踪轴实际位置（毫米）</param>
         public void OnLaserResult(LineLaserSeamResult result, double axisPosMm)
@@ -1062,3 +1020,4 @@ namespace AdaWeldSystem.WeldParamControl.Algorithms
         #endregion
     }
 }
+

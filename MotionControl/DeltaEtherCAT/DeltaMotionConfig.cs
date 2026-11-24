@@ -4,18 +4,16 @@ using System.Globalization;
 using System.IO;
 using System.Xml.Linq;
 using AdaWeldSystem.FileOperate;
+using AdaWeldSystem.ConfigFileControl.Implementations;
 using AdaWeldSystem.MotionControl.IMotion;
 using AdaWeldSystem.Comm.SystemComm;
 
 namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
 {
     /// <summary>焊接头从站配置（万顺兴 ScanCut，非轴设备）</summary>
-    /// <remarks>身份默认值取自厂商 ESI 文件 Wsx_ScanCut.xml：VendorID 0xE0000002 / ProductCode 0x26483052。</remarks>
     public class WeldHeadSlaveConfig
     {
         /// <summary>从站号（主站扫描分配后的节点号）</summary>
-        /// <remarks>默认 2 = 总线第三站（业主固定接线：Y 轴 → 送丝力矩 → 焊接头，顺序不变）。
-        /// 0 已被占用语义占用（导入器按「待填」处理），⛔ 不可作为默认节点号。</remarks>
         public ushort NodeId { get; set; }
 
         /// <summary>是否启用焊接头从站</summary>
@@ -42,8 +40,6 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
     }
 
     /// <summary>气缸配置（按名称绑定 IO 配置表中的输入与输出）</summary>
-    /// <remarks>到位传感器（输入）与电磁阀（输出）复合。各字段存 IO 名，空串表示未配置。
-    /// 装配时按名在 IO 注册表解析。</remarks>
     public class DeltaCylinderConfig
     {
         /// <summary>气缸名称</summary>
@@ -85,8 +81,6 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
     }
 
     /// <summary>流程等待超时配置（ROOT/FLOW_TIMEOUT，运控唯一真相源）</summary>
-    /// <remarks>全部缺省值 = 改造前的硬编码值，上线零行为变化；运行期由 <see cref="FlowTimeoutSettings"/> 发布快照。
-    /// 改配置后重载即生效，不需重启。⛔ 禁止在流程代码里再写新的固定秒数。</remarks>
     public class FlowTimeoutConfig
     {
         /// <summary>指令状态检测统一超时（秒）</summary>
@@ -168,11 +162,9 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
         public int ModbusReadWriteMs { get; set; }
 
         /// <summary>界面刷新节拍（毫秒，默认 33 ≈ 30Hz）</summary>
-        /// <remarks>仅 UI 刷屏用，⛔ 不复用轮询节拍 PollIntervalMs。</remarks>
         public int UiRefreshMs { get; set; }
 
         /// <summary>创建配置并填入改造前的现行值</summary>
-        /// <remarks>缺省值 = 现有行为</remarks>
         public FlowTimeoutConfig()
         {
             InstructionDetectSeconds = 5.0;
@@ -232,7 +224,7 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
             return def;
         }
         /// <summary>值域校验</summary>
-        /// <remarks>非法值逐项告警并回退缺省，运行期必得可用值</remarks>
+
         /// <param name="log">告警输出（键名 + 非法值 + 实际采用值）</param>
         public void Normalize(Action<string> log)
         {
@@ -274,16 +266,14 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
     }
 
     /// <summary>流程超时快照发布点：读侧取 <see cref="Current"/>，加载后替换</summary>
-    /// <remarks>引用替换是原子的，读侧无需加锁；未加载配置时取构造缺省值。</remarks>
     public static class FlowTimeoutSettings
     {
         private static FlowTimeoutConfig _current = new FlowTimeoutConfig();
 
-        /// <summary>执行侧轮询与等待节拍 16ms（⛔ 不是 UI 刷新节拍）</summary>
+        /// <summary>执行侧轮询节拍 16 毫秒</summary>
         public const int PollIntervalMs = 16;
 
         /// <summary>UI 刷新节拍（毫秒）：配置 ROOT/FLOW_TIMEOUT/UI_REFRESH_MS，缺省 33</summary>
-        /// <remarks>30Hz 刷屏专用；执行侧轮询仍走 PollIntervalMs。</remarks>
         public static int UiRefreshMs { get { return _current.UiRefreshMs; } }
 
         /// <summary>当前生效的流程超时（改配置即生效）</summary>
@@ -298,8 +288,6 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
     }
 
     /// <summary>台达运控配置</summary>
-    /// <remarks>承载主站、轴、IO、气缸与 PVT 跟踪参数（DeltaMotionConfig.xml，根 ROOT），
-    /// 走 XdocumentReaderWriter 读写，禁止 XmlSerializer；非线程安全，运行期禁止在流程循环内读写。</remarks>
     public class DeltaMotionConfig
     {
         #region 私有变量
@@ -325,8 +313,7 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
         private readonly List<DeltaIOConfig> _outputs = new List<DeltaIOConfig>();
         private readonly List<DeltaCylinderConfig> _cylinders = new List<DeltaCylinderConfig>();
 
-        /// <summary>撞号设备键清单（加载期校验产出，装配层据此跳过冲突设备）</summary>
-        /// <remarks>键格式：轴 = "AXIS:名称"、焊接头 = "WELDHEAD"；⛔ 不阻断整机初始化。</remarks>
+        /// <summary>撞号设备键清单</summary>
         public List<string> ConflictingDeviceKeys { get; private set; }
 
         /// <summary>焊接头从站设备键（撞号清单用）</summary>
@@ -347,8 +334,8 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
         /// <summary>配置文件名（不含扩展名）</summary>
         public string ConfigFileName { get { return "DeltaMotionConfig"; } }
 
-        /// <summary>运控配置 XML 子目录（相对程序基目录）</summary>
-        public const string MotionXmlRelativeDir = @"Config\MotionControl\Motion_XML";
+        /// <summary>运动配置所属模块（全局配置目录下的模块层）。</summary>
+        public const string ConfigModule = "MotionControl";
 
         /// <summary>主站卡号</summary>
         public ushort CardNo { get; set; }
@@ -401,7 +388,7 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
         /// <summary>跟踪位置死区：偏差小于该值不产生新点</summary>
         public double TrackDeadZone { get; set; }
 
-        // 线激光标定参数归 WeldAlgorithmsConfig，本类不承载，避免双数据源
+        // 线激光标定参数归 WeldParamConfig，本类不承载，避免双数据源
 
         /// <summary>焊接头从站配置（万顺兴 ScanCut）</summary>
         public WeldHeadSlaveConfig WeldHeadSlave { get; private set; }
@@ -410,12 +397,9 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
         public string SeamTrackAxisName { get; set; }
 
         /// <summary>TA（送丝力矩电机）轴名，按此名取轴做力矩输出</summary>
-        /// <remarks>轴名勿硬编码，默认取轴表实名。</remarks>
         public string TaAxisName { get; set; }
 
         /// <summary>TA 扭矩回零参数组（ROOT/TA_HOME 唯一真相源）</summary>
-        /// <remarks>与 Y 轴 AXIS 字段分离：Y 轴只读原参数；TA 区只读写本节点；
-        /// 旧文件缺该节点时从 AXIS 回零参数 seed。</remarks>
         public DeltaTaHomeConfig TaHome { get; private set; }
 
         /// <summary>流程等待超时（ROOT/FLOW_TIMEOUT 的唯一持有者；运行期由 <see cref="FlowTimeoutSettings"/> 发布）</summary>
@@ -466,11 +450,10 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
         }
 
         /// <summary>保存前记录将被改名的旧键（不静默）</summary>
-        /// <remarks>Load 兼容旧键名，Save 统一写新键名；本方法统计旧键数量并写入日志。</remarks>
         private void LogLegacyKeyRename()
         {
             string fullPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory,
-                MotionXmlRelativeDir, ConfigFileName + ".xml");
+                ConfigFileManager.ModuleRelativeDir(ConfigModule), ConfigFileName + ".xml");
             if (!File.Exists(fullPath)) return;
 
             try
@@ -547,7 +530,7 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
         }
 
         /// <summary>读取焊接头启用开关</summary>
-        /// <remarks>缺键或非法值按未启用并记一条 Info，⛔ 不许静默回落。</remarks>
+
         /// <param name="reader">配置读写器</param>
         /// <returns>启用返回 true</returns>
         private bool ReadWeldHeadEnabled(XdocumentReaderWriter reader)
@@ -590,7 +573,7 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
         }
 
         /// <summary>读取流程等待超时并发布运行期快照</summary>
-        /// <remarks>缺键取缺省值 = 改造前行为</remarks>
+
         /// <param name="reader">配置读写器</param>
         /// <param name="writeLog">是否输出生效值日志；预览读传 false</param>
         private void LoadFlowTimeouts(XdocumentReaderWriter reader, bool writeLog)
@@ -656,7 +639,7 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
         {
             string axisName = ChildValue(element, "AXIS_NAME", string.Empty);
             // 力矩类轴（TA/力矩/TORQUE）缺省走力矩模式，其余位置模式。
-            // XML 显式写 TORQUE_MODE 时以 XML 为准；⛔ 该默认值不由 UI 初始化决定。
+            // 扭矩模式以 XML 显式值为准
             string torqueDefault = (axisName.IndexOf("力矩", StringComparison.Ordinal) >= 0
                 || axisName.ToUpperInvariant().IndexOf("TORQUE", StringComparison.Ordinal) >= 0
                 || axisName.ToUpperInvariant().StartsWith("TA", StringComparison.Ordinal)) ? "TRUE" : "FALSE";
@@ -691,8 +674,6 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
         /// <summary>读取 TA 扭矩回零参数组并镜像回 TA 的 AXIS 节点</summary>
         /// <param name="reader">配置读写器</param>
         /// <param name="writeLog">是否输出加载结论日志；预览读传 false</param>
-        /// <remarks>该节点缺失时从 AXIS 回零参数 seed，防现场参数被覆盖；
-        /// 镜像回 AXIS 供 CSV 读写同值，运行期以本对象为准。</remarks>
         private void LoadTaHome(XdocumentReaderWriter reader, bool writeLog)
         {
             DeltaAxisConfig taAxis = GetAxis(TaAxisName);
@@ -729,8 +710,6 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
         }
 
         /// <summary>扭矩上限值域兜底</summary>
-        /// <remarks>⛔ 0 或负值兜底成小上限会让轴推不动、打滑。
-        /// 上限超过 1000‰（100% 基准）驱动侧无法表达，一律压回基准值。 1N~100% 力量基准，非法值按「不降额」并由日志暴露。</remarks>
         private void NormalizeTaTorqueLimit()
         {
             double basis = TaHome.Force100PctN > 0.0 ? TaHome.Force100PctN : 37.0;
@@ -861,7 +840,7 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
         }
 
         /// <summary>解析有符号短整型</summary>
-        /// <remarks>回零模式支持负值扭矩模式），失败返回 0</remarks>
+
         /// <param name="txt">文本</param>
         /// <returns>数值</returns>
         private static short ParseShort(string txt)
@@ -891,7 +870,7 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
         }
 
         /// <summary>把当前内存配置写成完整节点树</summary>
-        /// <remarks>保存与补缺模板共用，默认值单一来源</remarks>
+
         /// <param name="reader">目标读写器（已 NewXdocument）</param>
         private void WriteConfigNodes(XdocumentReaderWriter reader)
         {
@@ -1019,7 +998,6 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
         }
 
         /// <summary>加载配置</summary>
-        /// <remarks>输出加载结论日志），读取失败时保留默认值</remarks>
         public void LoadConfig()
         {
             LoadConfig(true);
@@ -1036,13 +1014,10 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
         /// <summary>加载配置（可显式控制补缺写盘）</summary>
         /// <param name="writeLog">是否输出加载结论日志</param>
         /// <param name="allowHeal">是否允许缺键补写；预览读、差异审计读必须传 false</param>
-        /// <remarks>⛔ 方向键缺省时不在加载期自愈。其默认值由 <see cref="WeldParamManager"/> 迁移判定后写入。
-        /// 避免补出 +1 被误认。因此加载期只在方向键已存在时补其它缺键；
-        /// 方向键缺省时整文件补缺推迟到迁移后的 <see cref="SelfHealMissingKeys"/>。保证同一进程只写盘一次。</remarks>
         public void LoadConfig(bool writeLog, bool allowHeal)
         {
             string fullPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory,
-                MotionXmlRelativeDir, ConfigFileName + ".xml");
+                ConfigFileManager.ModuleRelativeDir(ConfigModule), ConfigFileName + ".xml");
             bool fileMissing = !File.Exists(fullPath);
             if (fileMissing && allowHeal)
             {
@@ -1050,8 +1025,7 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
             }
 
             // 读取一律 createIfMissing=false：缺失时保持默认
-            XdocumentReaderWriter reader = new XdocumentReaderWriter(
-                MotionXmlRelativeDir, ConfigFileName, false);
+            XdocumentReaderWriter reader = ConfigFileManager.Instance.GetModuleXml(ConfigModule, ConfigFileName, false).Raw;
             if (reader.GetXDocument() == null || reader.GetXDocument().Root == null)
             {
                 if (writeLog) Log("配置为空，保留默认参数", MessageLevel.Warning);
@@ -1071,7 +1045,7 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
                 _axes.Add(ReadAxis(element));
             }
             // 轴参数组自证：Y 与 TA 各取自身 AXIS 节点
-            // 预览读（writeLog=false）不打印，避免与权威加载重复刷出同一批参数
+            // 预览读不打印参数日志
             if (writeLog)
             {
                 foreach (DeltaAxisConfig axis in _axes)
@@ -1142,18 +1116,7 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
             ValidateNodeIdConflicts();
         }
 
-        /// <summary>从站节点号撞号校验（轴 / 焊接头 按 (节点号, 槽号) 互查）</summary>
-        /// <remarks>
-        /// 节点号是主站扫描分配的物理地址，同一 (节点号, 槽号) 被两个运动设备声明 ⇒ 后者会向他人发起
-        /// SDO/PDO 读写（实证：焊接头 NodeId=0 与 Y 轴 NodeId=0 相撞 ⇒ 读 0x2004 打到 Y 轴伺服
-        /// ⇒ 从站 abort 0x1302）。检出即记 Error 报警，冲突方登记到 <see cref="ConflictingDeviceKeys"/>，
-        /// 由装配层跳过该设备。
-        /// ⛔ 只报警不阻断整机初始化（现场一台设备配错不应拖垮整线）。
-        /// <para>
-        /// ⛔ IO 不参与本校验：IO 寻址是 (节点号, 槽号, 位号)，同一从站挂多路 IO 属正常用法。
-        /// ⛔ 轴之间以 (节点号, 槽号) 为键：台达四轴模块一从站含多轴，靠槽号区分，非撞号。
-        /// </para>
-        /// </remarks>
+        /// <summary>从站节点号撞号校验</summary>
         private void ValidateNodeIdConflicts()
         {
             ConflictingDeviceKeys.Clear();
@@ -1186,8 +1149,7 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
         {
             string occupyKey = nodeId.ToString(CultureInfo.InvariantCulture) + ":" +
                 slotNo.ToString(CultureInfo.InvariantCulture);
-            string existing;
-            if (occupied.TryGetValue(occupyKey, out existing))
+            if (occupied.TryGetValue(occupyKey, out string existing))
             {
                 Log(string.Format(CultureInfo.InvariantCulture,
                     "节点号撞号 {0} 与 {1} 同用节点 {2} 槽 {3}，{1} 不装载",
@@ -1213,16 +1175,20 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
             if (!bulkSave)
             {
                 string folder = ConfigBackupHelper.CreateBackupFolder();
-                ConfigBackupHelper.BackupFile(MotionXmlRelativeDir + "\\" + ConfigFileName + ".xml", folder);
+                ConfigBackupHelper.BackupFile(ConfigFileManager.ModuleRelativeDir(ConfigModule) + "\\" + ConfigFileName + ".xml", folder);
             }
             LogLegacyKeyRename();
 
-            XdocumentReaderWriter reader = new XdocumentReaderWriter(MotionXmlRelativeDir, ConfigFileName);
-            reader.NewXdocument(RootName, "1.0", "UTF-8");
+            XmlConfigFile file = ConfigFileManager.Instance.GetModuleXml(ConfigModule, ConfigFileName);
+            XdocumentReaderWriter reader = file.Raw;
+            ConfigFileManager.SaveXmlWithAudit(file, "运动控制配置", "配置变更", () =>
+            {
+                reader.NewXdocument(RootName, "1.0", "UTF-8");
 
-            WriteConfigNodes(reader);
+                WriteConfigNodes(reader);
 
-            reader.SaveXdocument();
+                reader.SaveXdocument();
+            });
             if (!bulkSave)
             {
                 // 写盘结果由上层「重载保存完成」统一输出
@@ -1235,8 +1201,6 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
         /// <param name="allowWrite">false = 只检测不写盘</param>
         /// <param name="includeTorqueDirection">是否把 TA_TORQUE_DIRECTION 纳入模板；
         /// 缺省时必须传 false，迁移判定后合并为一次写盘</param>
-        /// <remarks>模板由 <see cref="WriteConfigNodes"/> 以当前值生成，保证默认值单一来源；
-        /// 整文件缺失时按模板生成完整默认配置。 只增不改，默认值取自当前内存配置</remarks>
         public void SelfHealMissingKeys(bool allowWrite, bool includeTorqueDirection)
         {
             XdocumentReaderWriter mirror = new XdocumentReaderWriter();
@@ -1256,8 +1220,8 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
             }
 
             string fileName = ConfigFileName + ".xml";
-            string fullPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, MotionXmlRelativeDir, fileName);
-            string relativePath = MotionXmlRelativeDir + "\\" + fileName;
+            string fullPath = ConfigFileManager.ModuleAbsolutePath(ConfigModule, fileName);
+            string relativePath = ConfigFileManager.ModuleRelativeDir(ConfigModule) + "\\" + fileName;
             bool hadDirectionKey = TaHome.TorqueDirectionKeyPresent;
             bool wrote = ConfigSelfHeal.EnsureXml(fullPath, relativePath, fileName, template, allowWrite);
             if (includeTorqueDirection && (hadDirectionKey || wrote))
@@ -1311,3 +1275,4 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
         #endregion
     }
 }
+

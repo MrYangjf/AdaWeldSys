@@ -17,7 +17,7 @@ namespace AdaWeldSystem.EmguALG.RealtimeMonitor.Playback
         /// <summary>文件大小（MB，一位小数）</summary>
         public string Size { get; set; }
 
-        /// <summary>预览缩略图（后台线程解码首帧后回填；null 表示仍在加载）</summary>
+        /// <summary>预览缩略图</summary>
         public Bitmap Thumbnail { get; set; }
     }
 }

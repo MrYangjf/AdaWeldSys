@@ -136,6 +136,13 @@
     <Compile Include="FileOperate\ConfigSelfHeal.cs" />
     <Compile Include="FileOperate\INIFile.cs" />
     <Compile Include="FileOperate\Log.cs" />
+    <Compile Include="ConfigFileControl\Abstractions\IConfigFileProvider.cs" />
+    <Compile Include="ConfigFileControl\Abstractions\IConfigRegion.cs" />
+    <Compile Include="ConfigFileControl\Implementations\IniConfigFile.cs" />
+    <Compile Include="ConfigFileControl\Implementations\XmlConfigFile.cs" />
+    <Compile Include="ConfigFileControl\Implementations\ConfigFileManager.cs" />
+    <Compile Include="ConfigFileControl\Implementations\ConfigSnapshot.cs" />
+    <Compile Include="ConfigFileControl\Implementations\ConfigChangeLogger.cs" />
     <Compile Include="FileOperate\XdocumentReaderWriter.cs" />
     <Compile Include="UIDesign\SubDialog\CommConfigDialog\FileEditorForm.cs">
       <SubType>UserControl</SubType>
@@ -145,8 +152,8 @@
     </Compile>
     <Compile Include="WeldParamControl\WeldParamData.cs" />
     <Compile Include="WeldParamControl\WeldParamManager.cs" />
-    <Compile Include="WeldParamControl\WeldAlgorithmsConfig.cs" />
-    <Compile Include="WeldParamControl\WeldParamChangeLogger.cs" />
+    <Compile Include="WeldParamControl\WeldParamProfileAudit.cs" />
+    <Compile Include="WeldParamControl\WeldParamConfig.cs" />
     <Compile Include="WeldParamControl\Abstractions\WeldAlgorithmBase.cs" />
     <Compile Include="WeldParamControl\Algorithms\SeamGuideSample.cs" />
     <Compile Include="WeldParamControl\Algorithms\WeldParamLookupAlgorithm.cs" />
@@ -247,11 +254,11 @@
     <Compile Include="UIDesign\ControlPage\DataReviewerPage.Designer.cs">
       <DependentUpon>DataReviewerPage.cs</DependentUpon>
     </Compile>
-    <Compile Include="UIDesign\TabPage\ILCamPage.cs">
+    <Compile Include="UIDesign\TabPage\LineLaserCamPage.cs">
       <SubType>UserControl</SubType>
     </Compile>
-    <Compile Include="UIDesign\TabPage\ILCamPage.Designer.cs">
-      <DependentUpon>ILCamPage.cs</DependentUpon>
+    <Compile Include="UIDesign\TabPage\LineLaserCamPage.Designer.cs">
+      <DependentUpon>LineLaserCamPage.cs</DependentUpon>
     </Compile>
     <Compile Include="UIDesign\TabPage\SystemControlPage.cs">
       <SubType>UserControl</SubType>
@@ -260,12 +267,6 @@
       <DependentUpon>SystemControlPage.cs</DependentUpon>
     </Compile>
     <Compile Include="UIDesign\SubDialog\MotionControlDialog\AxisConfigForm.cs">
-      <SubType>UserControl</SubType>
-    </Compile>
-    <Compile Include="UIDesign\SubDialog\MotionControlDialog\IoConfigForm.cs">
-      <SubType>UserControl</SubType>
-    </Compile>
-    <Compile Include="UIDesign\SubDialog\MotionControlDialog\CylinderConfigForm.cs">
       <SubType>UserControl</SubType>
     </Compile>
     <Compile Include="UIDesign\TabPage\MonitorCamPage.cs">
@@ -280,11 +281,14 @@
     <EmbeddedResource Include="UIDesign\SubDialog\FormMainDialog\InitWaitingForm.resx">
       <DependentUpon>InitWaitingForm.cs</DependentUpon>
     </EmbeddedResource>
+    <EmbeddedResource Include="UIDesign\TabPage\CommSettingPage.resx">
+      <DependentUpon>CommSettingPage.cs</DependentUpon>
+    </EmbeddedResource>
     <EmbeddedResource Include="UIDesign\TabPage\FilebackupPage.resx">
       <DependentUpon>FilebackupPage.cs</DependentUpon>
     </EmbeddedResource>
-    <EmbeddedResource Include="UIDesign\TabPage\ILCamPage.resx">
-      <DependentUpon>ILCamPage.cs</DependentUpon>
+    <EmbeddedResource Include="UIDesign\TabPage\LineLaserCamPage.resx">
+      <DependentUpon>LineLaserCamPage.cs</DependentUpon>
     </EmbeddedResource>
     <EmbeddedResource Include="UIDesign\TabPage\MonitorCamPage.resx">
       <DependentUpon>MonitorCamPage.cs</DependentUpon>
@@ -301,6 +305,12 @@
     <Compile Include="UIDesign\ControlPage\MainPage.Designer.cs">
       <DependentUpon>MainPage.cs</DependentUpon>
     </Compile>
+    <Compile Include="UIDesign\ControlPage\DeviceMonitorPage.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="UIDesign\ControlPage\DeviceMonitorPage.Designer.cs">
+      <DependentUpon>DeviceMonitorPage.cs</DependentUpon>
+    </Compile>
     <Compile Include="UIDesign\ControlPage\NavPage.cs">
       <SubType>UserControl</SubType>
     </Compile>
@@ -312,6 +322,12 @@
     </Compile>
     <Compile Include="UIDesign\TabPage\ProcessControlPage.Designer.cs">
       <DependentUpon>ProcessControlPage.cs</DependentUpon>
+    </Compile>
+    <Compile Include="UIDesign\TabPage\CommSettingPage.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="UIDesign\TabPage\CommSettingPage.Designer.cs">
+      <DependentUpon>CommSettingPage.cs</DependentUpon>
     </Compile>
     <Compile Include="UIDesign\TabPage\FilebackupPage.cs">
       <SubType>UserControl</SubType>
@@ -333,12 +349,6 @@
     </Compile>
     <Compile Include="UIDesign\SubDialog\FormMainDialog\InitWaitingForm.cs">
       <SubType>UserControl</SubType>
-    </Compile>
-    <Compile Include="UIDesign\SubDialog\ParamContolDialog\ConfigForm.cs">
-      <SubType>UserControl</SubType>
-    </Compile>
-    <Compile Include="UIDesign\SubDialog\ParamContolDialog\ConfigForm.Designer.cs">
-      <DependentUpon>ConfigForm.cs</DependentUpon>
     </Compile>
     <Compile Include="UIDesign\SubDialog\IntelligentLaserDialog\ILAlgorithmEditForm.cs">
       <SubType>UserControl</SubType>
@@ -432,6 +442,9 @@
     <EmbeddedResource Include="UIDesign\ControlPage\MainPage.resx">
       <DependentUpon>MainPage.cs</DependentUpon>
     </EmbeddedResource>
+    <EmbeddedResource Include="UIDesign\ControlPage\DeviceMonitorPage.resx">
+      <DependentUpon>DeviceMonitorPage.cs</DependentUpon>
+    </EmbeddedResource>
     <EmbeddedResource Include="UIDesign\ControlPage\NavPage.resx">
       <DependentUpon>NavPage.cs</DependentUpon>
     </EmbeddedResource>
@@ -446,9 +459,6 @@
     </EmbeddedResource>
     <EmbeddedResource Include="UIDesign\SubDialog\ParamContolDialog\AutoParamForm.resx">
       <DependentUpon>AutoParamForm.cs</DependentUpon>
-    </EmbeddedResource>
-    <EmbeddedResource Include="UIDesign\SubDialog\ParamContolDialog\ConfigForm.resx">
-      <DependentUpon>ConfigForm.cs</DependentUpon>
     </EmbeddedResource>
     <EmbeddedResource Include="UIDesign\SubDialog\UserManagerDialog\LoginForm.resx">
       <DependentUpon>LoginForm.cs</DependentUpon>

@@ -23,6 +23,7 @@ namespace AdaWeldSystem.UIDesign.MainWindow
         #region 私有变量
         // 子页面
         MainPage mainPage;
+        DeviceMonitorPage deviceMonitorPage;
         NavPage navPageParam;
         DataReviewerPage dataPage;
 
@@ -55,6 +56,7 @@ namespace AdaWeldSystem.UIDesign.MainWindow
 
             // ── 子页面实例化 ──
             mainPage = new MainPage();
+            deviceMonitorPage = new DeviceMonitorPage();
             navPageParam = new NavPage();
             dataPage = new DataReviewerPage();
 
@@ -62,9 +64,10 @@ namespace AdaWeldSystem.UIDesign.MainWindow
             navPageParam.LoadTabs(
                 ("工艺设置", new ProcessControlPage(), "ControlOutlined"),
                 ("系统设置", new SystemControlPage(), "ToolOutlined"),
-                ("线激光设置", new ILCamPage(), "FundOutlined"),
+                ("线激光设置", new LineLaserCamPage(), "FundOutlined"),
                 ("监控相机设置", new MonitorCamPage(), "VideoCameraOutlined"),
-                ("文档备份设置", new FilebackupPage(), "ApartmentOutlined")
+                ("通讯设置", new CommSettingPage(), "ApiOutlined"),
+                ("设置备份", new FilebackupPage(), "ApartmentOutlined")
             );
 
             LoadNavAndPages();
@@ -93,7 +96,6 @@ namespace AdaWeldSystem.UIDesign.MainWindow
         /// <summary>首次呈现后触发整机初始化并弹出等待 Modal（初始化</summary>
         /// <param name="sender">发送方。</param>
         /// <param name="e">事件参数。</param>
-        /// <remarks>结束事件自动关闭）。</remarks>
         private void FormMain_Shown(object sender, EventArgs e)
         {
             _initWaiting = new InitWaitingForm();
@@ -108,7 +110,7 @@ namespace AdaWeldSystem.UIDesign.MainWindow
             });
 
             // 初始化结束才进入运行态，此前拒绝历史查询。
-            // 这是"初始化完成"的唯一来源，⛔ 不用 Visible/Created/IsHandleCreated 判据。
+            // 初始化完成的唯一判定来源
             GlobalCommData.MarkAppRunning();
         }
 
@@ -172,10 +174,11 @@ namespace AdaWeldSystem.UIDesign.MainWindow
 
             // 初始化图表（轮廓线 + 4 条实时曲线）并订阅轮廓事件
             mainPage.AddContourLineChart();
-            mainPage.AddNewDataLineChart();
 
-            // Tab 1: 设备监控（占位空页，内容后续在 Designer 补）
+            // Tab 1: 设备监控
             AntdUI.TabPage tabMonitor = new AntdUI.TabPage { Text = "设备监控", Tag = "monitor" };
+            deviceMonitorPage.Dock = DockStyle.Fill;
+            tabMonitor.Controls.Add(deviceMonitorPage);
             tabsMain.AddTabSelect(tabMonitor);
 
             // Tab 2: 系统参数设置
@@ -313,7 +316,7 @@ namespace AdaWeldSystem.UIDesign.MainWindow
         }
 
         /// <summary>权限等级变更（登录/注销）回调：导航项显隐 + 状态栏</summary>
-        /// <remarks>权限标签即时刷新。</remarks>
+
         /// <param name="sender">事件源（GlobalCommData）。</param>
         /// <param name="level">新的权限等级。</param>
         private void OnOperateLevelChanged(object sender, OperateLevel level)
@@ -372,3 +375,4 @@ namespace AdaWeldSystem.UIDesign.MainWindow
         #endregion
     }
 }
+

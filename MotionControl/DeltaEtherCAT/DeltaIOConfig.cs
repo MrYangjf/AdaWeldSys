@@ -1,8 +1,6 @@
 namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
 {
     /// <summary>台达单路 IO 配置</summary>
-    /// <remarks>台达 IO 按 站点号+槽号+位号 三级寻址，位号 0~15，对应 <see cref="IMotion.MontionIO.IONo"/>；
-    /// 输入输出分两张表，与 IORegistry 分表对称，允许同名共存。</remarks>
     public class DeltaIOConfig
     {
         #region 公共变量

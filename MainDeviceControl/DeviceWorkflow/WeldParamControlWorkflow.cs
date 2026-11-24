@@ -9,7 +9,6 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
 {
 
     /// <summary>焊接工艺控制工作流（单例，无实体设备）。</summary>
-    /// <remarks>消费 RobotX 与焊缝特征，算功率/送丝/振镜/速度下发。</remarks>
     public class WeldParamControlWorkflow : DeviceWorkflowBase
     {
         #region 常量
@@ -35,8 +34,8 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         private string _failReason = "";
         private int _failStep;
 
-        /// <summary>XL 输出支路上次输出时刻（Environment.TickCount 毫秒；差值减法对回绕免疫）</summary>
-        private int _lastXlOutputTick;
+        /// <summary>XL 输出支路上次输出时的机器人 X</summary>
+        private double _lastXlOutputRobotX = double.NaN;
 
         #endregion
 
@@ -67,8 +66,8 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         /// <summary>模组配置文件名（不含扩展名），在本流程类别目录。</summary>
         protected override string ConfigFileName { get { return "WeldParamControlWorkflow"; } }
 
-        /// <summary>配置落 Workflow_XML 子目录。</summary>
-        protected override string ConfigRelativeDir { get { return @"Config\WeldParamControl\Workflow_XML"; } }
+        /// <summary>模组配置所属模块（全局配置目录下的模块层）。</summary>
+        protected override string ConfigModule { get { return "WeldParam"; } }
 
         #endregion
 
@@ -100,7 +99,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         }
 
         /// <summary>组装 XL 缓存命中的工艺参数输出（线激光宽度来源，</summary>
-        /// <remarks>机器人已到达的 XL 处参数）。</remarks>
+
         /// <param name="robotX">当拍机器人 X</param>
         /// <param name="laserPower">激光功率</param>
         /// <param name="feedSpeed">送丝速度</param>
@@ -121,19 +120,21 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             _output.Timestamp = DateTime.Now;
         }
 
-        /// <summary>XL 输出支路：按配置频率（默认 60Hz）节流输出工艺参数。</summary>
-        /// <remarks>手动宽度源恒定输出；线激光源按已到达 XL 跟随。
-        /// 下发经 SendToRobot，模拟态只更新 LastOutput。</remarks>
+        /// <summary>XL 输出支路：按「每段距离」节流输出工艺参数</summary>
         private void TickXlOutput()
         {
             var wp = WeldParamManager.Instance;
             var cfg = wp.AlgorithmsConfig;
             if (cfg == null) return;
 
-            int now = Environment.TickCount;
-            int intervalMs = (int)Math.Max(1.0, 1000.0 / cfg.ParamOutputHz);
-            if (now - _lastXlOutputTick < intervalMs) return;
-            _lastXlOutputTick = now;
+            // 按每段距离节流输出
+            double robotX = wp.CurrentRobotX;
+            if (!double.IsNaN(_lastXlOutputRobotX)
+                && Math.Abs(robotX - _lastXlOutputRobotX) < cfg.SegmentDistanceMm)
+            {
+                return;
+            }
+            _lastXlOutputRobotX = robotX;
 
             if (cfg.SeamWidthSource == SeamWidthSource.Manual)
             {
@@ -144,12 +145,12 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
             else
             {
                 // 线激光宽度：按机器人 X 取已到达 XL 的缓存
-                if (!wp.TryGetParamOutputAt(wp.CurrentRobotX, out double laserPower, out double feedSpeed,
+                if (!wp.TryGetParamOutputAt(robotX, out double laserPower, out double feedSpeed,
                                             out double robotSpeed, out double spotWidth, out double seamWidth))
                 {
                     return;
                 }
-                FillXlOutput(wp.CurrentRobotX, laserPower, feedSpeed, robotSpeed, spotWidth, seamWidth);
+                FillXlOutput(robotX, laserPower, feedSpeed, robotSpeed, spotWidth, seamWidth);
             }
 
             // 模拟态或通讯断开不发送，仅更新 LastOutput
@@ -164,17 +165,13 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         }
 
         /// <summary>计算振镜摆幅宽度（查表优先、公式兜底）。</summary>
-        /// <remarks>固定光斑模式：振镜不摆动，光斑恒定，返回 0。
-        /// 非固定模式：按焊缝宽度查表输出摆幅。
-        /// ①摆幅宽度表：公式初值入表，可用查表值。
-        /// ②无档位记录按公式兜底「系数 × 焊缝宽」。
-        /// 摆幅不参与 Y 向引导闭环，禁引入时间域低通。</remarks>
+
         /// <param name="seamWidthMm">采用的焊缝识别宽度（毫米）</param>
         /// <returns>摆幅宽度（毫米）</returns>
         private double CalcGalvoAmplitude(double seamWidthMm)
         {
             WeldParamManager manager = WeldParamManager.Instance;
-            WeldAlgorithmsConfig cfg = manager.AlgorithmsConfig;
+            WeldParamConfig cfg = manager.AlgorithmsConfig;
             if (cfg == null)
             {
                 return 0.0;
@@ -201,10 +198,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         }
 
         /// <summary>计算振镜摆幅频率（查表优先、公式兜底）。</summary>
-        /// <remarks>摆幅越大频率越低（2mm→500Hz、10mm→200Hz）。
-        /// ①摆幅频率表按焊缝宽度查，初值可核对。
-        /// ②无档位记录按基准公式反算。
-        /// 固定模式返回协议默认频率，由下发侧不使能。</remarks>
+
         /// <param name="seamWidthMm">采用的焊缝识别宽度（毫米）</param>
         /// <returns>摆幅频率（Hz）</returns>
         private int CalcGalvoFrequency(double seamWidthMm)
@@ -231,9 +225,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         }
 
         /// <summary>下发工艺参数至机器人（RSI 具名元素通道：5 个数值通</summary>
-        /// <remarks>注：连接本身由顶层 Comm（CommunicationManager）管控，此处只做数据下发。
-        /// RSI 为唯一通道，指令与参数全部数值化。文本协议已废止。
-        /// 通道对应：WeldPower(1) / WireSpeed(2) / CutWire(3) / WeldSpeed(4) / WeaveAmp(5)。 道）。</remarks>
+
         /// <param name="output">待下发的工艺参数</param>
         /// <returns>下发成功返回 true</returns>
         private bool SendToRobot(WeldParamAdaptControl output)
@@ -276,7 +268,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         }
 
         /// <summary>执行步 10：工艺参数计算。</summary>
-        /// <remarks>输入 RobotX 与焊缝特征，输出功率/送丝/速度/摆幅。</remarks>
+
         /// <returns>进入下发阶段返回 true，进入保持态或失败返回 false</returns>
         private bool DoCompute()
         {
@@ -304,7 +296,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         }
 
         /// <summary>执行步 20：下发工艺参数。</summary>
-        /// <remarks>下发至机器人，失败即转失败收尾。</remarks>
+
         /// <returns>下发成功返回 true</returns>
         private bool DoOutput()
         {
@@ -326,8 +318,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         }
 
         /// <summary>执行步 800：成功收尾（结果写 _output，订阅方读 LastOutput）。</summary>
-        /// <remarks>焊接中不得回落 Standby，否则击穿消费门禁。
-        /// 仅当不在焊接过程态才回落待机。</remarks>
+
         /// <returns>收尾完成返回 true</returns>
         private bool DoFinishOk()
         {
@@ -340,7 +331,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         }
 
         /// <summary>执行步 900：失败收尾三步走。</summary>
-        /// <remarks>置 Alarm 须经 SetWeldStatus，禁手工赋值 State。</remarks>
+
         /// <returns>收尾完成返回 true</returns>
         private bool DoFinishFail()
         {
@@ -355,7 +346,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         #region 公共方法
 
         /// <summary>载入工艺参数并进入待机（对应焊接过程态 Standby）。</summary>
-        /// <remarks>由主设备上电初始化或工艺参数切换时调用。</remarks>
+
         /// <returns>载入成功返回 true</returns>
         public bool LoadParameters()
         {
@@ -382,10 +373,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         }
 
         /// <summary>焊前预置：起焊前先输出一次工艺参数。</summary>
-        /// <remarks>归属主控焊前检查步骤，真实与模拟同入口。
-        /// 两种宽度源都须输出，线激光源用基准兜底。
-        /// 避免起焊瞬间参数为空引发事故。
-        /// 同步只跑一拍，不引入新线程。</remarks>
+
         /// <returns>预置成功返回 true</returns>
         public bool PreWork()
         {
@@ -473,7 +461,6 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         #region 常驻流程
 
         /// <summary>流程处理：以 RunStep 驱动，每个 case 由 bool 判定推进。</summary>
-        /// <remarks>StepIdle 内消费 _pendingCompute 触发变量；全部 case 无 Thread.Sleep / while 轮询。</remarks>
         public override void FlowProcess()
         {
             if (!IsEnable) return;
@@ -517,7 +504,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         }
 
         /// <summary>流程复位：清触发标记与失败计数，回到待机（线性</summary>
-        /// <remarks>阻塞链）。</remarks>
+
         /// <returns>复位成功返回 true</returns>
         public override bool ResetProcess()
         {
@@ -529,7 +516,6 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         }
 
         /// <summary>状态清理：标志位全复位 + 执行步归零 + 强制未复位</summary>
-        /// <remarks>态。</remarks>
         public override void ClearStatus()
         {
             IsAlarm = false;
@@ -540,14 +526,13 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         }
 
         /// <summary>清除步骤用时：防止暂停 / 停止期间的时间被计入</summary>
-        /// <remarks>步骤时长导致异常超时。</remarks>
         public override void ResetWorkTime()
         {
             ResetStepTime();
         }
 
         /// <summary>设备连接（阻塞）：无实体设备，载入工艺参数后置位</summary>
-        /// <remarks>即返回。</remarks>
+
         /// <returns>工艺参数就绪返回 true</returns>
         public override bool InitializeOn()
         {
@@ -572,7 +557,6 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         }
 
         /// <summary>设备日志：输出工艺参数差异化日志（功率 / 送丝 / 速</summary>
-        /// <remarks>度 / 摆幅）</remarks>
         public override void SubDeviceLog()
         {
             Log(string.Format("工艺控制 连接态 {0} 焊接过程态 {1} 相位 {2} 功率 {3:F1} 送丝 {4:F1} 速度 {5:F1} 摆幅 {6:F1} 缝宽 {7:F2} 光斑 {8:F2}",
@@ -594,9 +578,6 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         }
 
         /// <summary>焊接工作状态切换管控。</summary>
-        /// <remarks>整机级联迁移后由编排入口调用。
-        /// 历史双源判据已消解，WeldStatus 为唯一状态源。级联写入即已到位。
-        /// ErrorAborted 下输出停走由消费门禁承担（WeldStatus != Working），本流程无步号入口。</remarks>
         public override void WeldStatusTrans()
         {
             if (WeldStatus == SubDeviceWeldStatus.NoReset) return;
@@ -630,7 +611,7 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         #region 可观测性
 
         /// <summary>执行步号转中文名。</summary>
-        /// <remarks>新增步必须登记，否则该步不可观测。</remarks>
+
         /// <param name="step">执行步号</param>
         /// <returns>步号对应中文名；未登记的步返回「步骤 N」</returns>
         protected override string GetStepName(int step)
@@ -649,3 +630,4 @@ namespace AdaWeldSystem.MainDeviceControl.DeviceWorkflow
         #endregion
     }
 }
+

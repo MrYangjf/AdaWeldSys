@@ -5,6 +5,7 @@ using AdaWeldSystem.EmguALG.RealtimeMonitor.Playback;
 using AdaWeldSystem.EmguALG.RealtimeMonitor.WeldQuality;
 using AdaWeldSystem.EmguALG.RealtimeMonitor.WireFeedDistance;
 using AdaWeldSystem.FileOperate;
+using AdaWeldSystem.ConfigFileControl.Implementations;
 using Emgu.CV;
 using Emgu.CV.Structure;
 using System;
@@ -14,12 +15,7 @@ using AdaWeldSystem.Comm.SystemComm;
 
 namespace AdaWeldSystem.EmguALG.Manager
 {
-    /// <summary>
-    /// 算法业务中枢（单例），统一调度两个检测算法。
-    /// 持有强类型配置并持久化。
-    /// 提供同步检测、结果轮询与完成事件三种方式。
-    /// 输入源唯一：监控相机图像（Mat）不再接收点云输入。
-    /// </summary>
+    /// <summary>算法业务中枢</summary>
     public sealed class AlgorithmManager
     {
         #region 私有变量
@@ -44,7 +40,10 @@ namespace AdaWeldSystem.EmguALG.Manager
             new Lazy<PlaybackAlgorithm>(() => new PlaybackAlgorithm());
 
         private static readonly string _configFile =
-            Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Config", "EmguALG", "Algorithm_INI", "MonitorAlgorithm.ini");
+            ConfigFileManager.ModuleAbsolutePath(ConfigModule, "MonitorAlgorithm.ini");
+
+        /// <summary>视觉算法配置所属模块</summary>
+        private const string ConfigModule = "EmguALG";
 
         #endregion
 
@@ -68,13 +67,13 @@ namespace AdaWeldSystem.EmguALG.Manager
             get { return _qualityConfig; }
         }
 
-        /// <summary>线激光轮廓渲染算法（首次取用时创建；无独立可配置状态）</summary>
+        /// <summary>线激光轮廓渲染算法</summary>
         public ILineLaserContourAlgorithm LineLaserContour
         {
             get { return _lineLaserContour.Value; }
         }
 
-        /// <summary>监控相机回放算法（首次取用时创建；所有页面共用同一实例）</summary>
+        /// <summary>监控相机回放算法</summary>
         public PlaybackAlgorithm Playback
         {
             get { return _playback.Value; }
@@ -122,9 +121,7 @@ namespace AdaWeldSystem.EmguALG.Manager
 
         #region 公共函数
 
-        /// <summary>
-        /// 送丝距离检测（焊前对中）
-        /// </summary>
+        /// <summary>送丝距离检测（焊前对中）</summary>
         /// <param name="image">监控相机图像</param>
         /// <returns>检测结果</returns>
         public WireFeedResult DetectWireFeed(Mat image)
@@ -135,9 +132,7 @@ namespace AdaWeldSystem.EmguALG.Manager
             return result;
         }
 
-        /// <summary>
-        /// 焊接质量检测（焊中成形）
-        /// </summary>
+        /// <summary>焊接质量检测（焊中成形）</summary>
         /// <param name="image">监控相机图像</param>
         /// <returns>检测结果</returns>
         public WeldQualityResult DetectWeldQuality(Mat image)
@@ -148,9 +143,7 @@ namespace AdaWeldSystem.EmguALG.Manager
             return result;
         }
 
-        /// <summary>
-        /// 在帧上画光斑点十字标记（绿色，半长 20px，线宽 1；坐标非正或越界时不画）
-        /// </summary>
+        /// <summary>在帧上画光斑点十字标记</summary>
         /// <param name="frame">待标注帧（就地标注）</param>
         /// <param name="x">光斑点 X 坐标（像素）</param>
         /// <param name="y">光斑点 Y 坐标（像素）</param>
@@ -166,9 +159,7 @@ namespace AdaWeldSystem.EmguALG.Manager
             CvInvoke.Line(frame, new Point(x, y - half), new Point(x, y + half), color, 1);
         }
 
-        /// <summary>
-        /// 取最新送丝距离结果（UI 轮询入口）
-        /// </summary>
+        /// <summary>取最新送丝距离结果（UI 轮询入口）</summary>
         /// <param name="version">取出时对应的版本号</param>
         /// <returns>最新结果；尚无结果时返回 null</returns>
         public WireFeedResult GetLatestWireFeed(out int version)
@@ -176,9 +167,7 @@ namespace AdaWeldSystem.EmguALG.Manager
             return _wireFeedStore.GetLatest(out version);
         }
 
-        /// <summary>
-        /// 取最新焊接质量结果（UI 轮询入口）
-        /// </summary>
+        /// <summary>取最新焊接质量结果（UI 轮询入口）</summary>
         /// <param name="version">取出时对应的版本号</param>
         /// <returns>最新结果；尚无结果时返回 null</returns>
         public WeldQualityResult GetLatestQuality(out int version)
@@ -187,7 +176,6 @@ namespace AdaWeldSystem.EmguALG.Manager
         }
 
         /// <summary>将当前配置下发给两个算法（配置被外部修改后</summary>
-        /// <remarks>调用）</remarks>
         public void ApplyConfig()
         {
             var configurableWireFeed = _wireFeedAlgorithm as IConfigurableAlgorithm<WireFeedConfig>;
@@ -205,13 +193,12 @@ namespace AdaWeldSystem.EmguALG.Manager
         }
 
         /// <summary>从配置文件加载算法参数（须在应用启动、创建读</summary>
-        /// <remarks>取它的 UI 页面之前调用）</remarks>
         public void Load()
         {
             try
             {
                 if (!File.Exists(_configFile)) return;
-                INIFile ini = new INIFile(_configFile);
+                INIFile ini = ConfigFileManager.Instance.GetModuleIni(ConfigModule, "MonitorAlgorithm.ini").Raw;
                 _wireFeedConfig.ToleranceX = ini.ReadDouble("Alignment", "ToleranceX", _wireFeedConfig.ToleranceX);
                 _wireFeedConfig.ToleranceY = ini.ReadDouble("Alignment", "ToleranceY", _wireFeedConfig.ToleranceY);
                 // 毫米化与三级判定对中配置
@@ -238,15 +225,14 @@ namespace AdaWeldSystem.EmguALG.Manager
             }
         }
 
-        /// <summary>
-        /// 将当前算法参数持久化到配置文件
-        /// </summary>
+        /// <summary>将当前算法参数持久化到配置文件</summary>
         public void Save()
         {
             try
             {
                 Directory.CreateDirectory(Path.GetDirectoryName(_configFile));
-                INIFile ini = new INIFile(_configFile);
+                IniConfigFile file = ConfigFileManager.Instance.GetModuleIni(ConfigModule, "MonitorAlgorithm.ini");
+                INIFile ini = file.Raw;
                 ini.WriteDouble("Alignment", "ToleranceX", _wireFeedConfig.ToleranceX);
                 ini.WriteDouble("Alignment", "ToleranceY", _wireFeedConfig.ToleranceY);
                 // 毫米化与三级判定对中配置
@@ -261,7 +247,7 @@ namespace AdaWeldSystem.EmguALG.Manager
                 ini.WriteDouble("Alignment", "WIRE_FEED_COMP_GAIN", _wireFeedConfig.WireFeedCompGain);
                 ini.WriteBool("Alignment", "WIRE_ANOMALY_CUTWIRE", _wireFeedConfig.WireAnomalyCutWire);
                 ini.WriteDouble("Quality", "PassScore", _qualityConfig.PassScore);
-                ini.SaveToFile();
+                ConfigFileManager.SaveIni(file, "视觉算法参数", "配置变更");
             }
             catch
             {

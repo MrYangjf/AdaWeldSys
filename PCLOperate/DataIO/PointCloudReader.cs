@@ -7,14 +7,10 @@ using System.IO;
 
 namespace AdaWeldSystem.PCLOperate.DataIO
 {
-    /// <summary>
-    /// 点云文件读取器
-    /// </summary>
+    /// <summary>点云文件读取器</summary>
     public static class PointCloudReader
     {
-        /// <summary>
-        /// 递归遍历场景节点，提取顶点数据
-        /// </summary>
+        /// <summary>递归遍历场景节点，提取顶点数据</summary>
         /// <param name="data">数据。</param>
         private static void TraverseSceneNode(SceneNode node, PointCloudData data)
         {
@@ -72,9 +68,7 @@ namespace AdaWeldSystem.PCLOperate.DataIO
             return count;
         }
 
-        /// <summary>
-        /// 根据文件扩展名自动选择读取方法
-        /// </summary>
+        /// <summary>根据文件扩展名自动选择读取方法</summary>
         /// <param name="filePath">文件路径。</param>
         public static PointCloudData LoadFromFile(string filePath)
         {
@@ -105,9 +99,7 @@ namespace AdaWeldSystem.PCLOperate.DataIO
             return result;
         }
 
-        /// <summary>
-        /// 从TXT/XYZ文件加载点云
-        /// </summary>
+        /// <summary>从TXT/XYZ文件加载点云</summary>
         /// <param name="filePath">文件路径。</param>
         public static PointCloudData LoadFromTxt(string filePath, bool hasColor = false)
         {
@@ -148,9 +140,7 @@ namespace AdaWeldSystem.PCLOperate.DataIO
             return data;
         }
 
-        /// <summary>
-        /// 从PLY文件加载点云
-        /// </summary>
+        /// <summary>从PLY文件加载点云</summary>
         /// <param name="filePath">文件路径。</param>
         public static PointCloudData LoadFromPly(string filePath)
         {
@@ -265,9 +255,7 @@ namespace AdaWeldSystem.PCLOperate.DataIO
             return data;
         }
 
-        /// <summary>
-        /// 从OBJ文件加载点云
-        /// </summary>
+        /// <summary>从OBJ文件加载点云</summary>
         /// <param name="filePath">文件路径。</param>
         public static PointCloudData LoadFromObj(string filePath)
         {
@@ -311,7 +299,7 @@ namespace AdaWeldSystem.PCLOperate.DataIO
         }
 
         /// <summary>使用 HelixToolkit.SharpDX.Assimp 直接加载 PLY/OBJ 等文件为 HelixToolkitScene 返回的 Scene 可通过 PointCloudViewer.LoadScene() 直接显示</summary>
-        /// <remarks>到 Viewport3DX</remarks>
+
         /// <param name="filePath">文件路径（支持 PLY/OBJ/STL/FBX 等 Assimp 支持的格式）</param>
         /// <returns>HelixToolkitScene 对象（调用方负责使用后 Dispose）</returns>
         public static HelixToolkitScene LoadSceneFromFile(string filePath)
@@ -332,9 +320,7 @@ namespace AdaWeldSystem.PCLOperate.DataIO
             }
         }
 
-        /// <summary>
-        /// 使用 HelixToolkit.SharpDX.Assimp 从 PLY 文件加载点云
-        /// </summary>
+        /// <summary>使用 HelixToolkit.SharpDX.Assimp 从 PLY 文件加载点云</summary>
         /// <param name="filePath">文件路径。</param>
         public static PointCloudData LoadFromPlyWithAssimp(string filePath)
         {

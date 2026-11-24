@@ -3,16 +3,14 @@ using System.Collections.Generic;
 using System.Threading;
 using AdaWeldSystem.Comm.SystemComm;
 using AdaWeldSystem.FileOperate;
+using AdaWeldSystem.MotionControl;
 using AdaWeldSystem.WeldParamControl;
 using AdaWeldSystem.WeldParamControl.Abstractions;
+using LaserWeldHeadWorkflow = AdaWeldSystem.MainDeviceControl.DeviceWorkflow.LaserWeldHeadWorkflow;
 
 namespace AdaWeldSystem.WeldParamControl.Algorithms
 {
     /// <summary>宽度驱动的参数调整算法（工艺控制唯一）。</summary>
-    /// <remarks>
-    /// 消费宽度序列：平滑→判变→查表→维护输出。
-    /// 并承载 XL 缓存，供输出支路按拍取点。
-    /// 只计算与触发记录，落盘交给记录模块。</remarks>
     public class WeldParamAdjustmentAlgorithm : WeldAlgorithmBase
     {
         #region 常量
@@ -45,7 +43,7 @@ namespace AdaWeldSystem.WeldParamControl.Algorithms
         private readonly RobotWeldData _robotWeldData;
 
         /// <summary>算法运行配置（由 Manager 载入，本类只读消费）</summary>
-        private WeldAlgorithmsConfig _config;
+        private WeldParamConfig _config;
 
         /// <summary>输出缓存版本号，调整或复位时自增。</summary>
         private long _outputVersion;
@@ -59,7 +57,10 @@ namespace AdaWeldSystem.WeldParamControl.Algorithms
         /// <summary>宽度变化留痕：上次已记录的采用宽度（毫米）。</summary>
         private double _lastLoggedSeamWidth;
 
-        /// <summary>宽度变化累计次数（含复位归零；用于判定焊接中宽度是否反复跳变）。</summary>
+        /// <summary>复位后首帧是否已播种初始值（首帧不算突变）。</summary>
+        private bool _seamWidthSeeded;
+
+        /// <summary>宽度变化累计次数</summary>
         private int _seamWidthChangeCount;
 
         /// <summary>宽度变化日志上次输出时刻（限频）。</summary>
@@ -91,7 +92,7 @@ namespace AdaWeldSystem.WeldParamControl.Algorithms
         public override bool IsReady { get { return _lookup != null && _lookup.IsReady && _config != null; } }
 
         /// <summary>算法运行配置（只读引用，改值后须由 Manager 落盘）。</summary>
-        public WeldAlgorithmsConfig Config { get { return _config; } }
+        public WeldParamConfig Config { get { return _config; } }
 
         /// <summary>是否已触发调整，需宽度稳定后再调整。</summary>
         public bool Trigger;
@@ -130,30 +131,9 @@ namespace AdaWeldSystem.WeldParamControl.Algorithms
         /// <summary>焊缝宽度滑动平均计算器。</summary>
         public SeamCalData SeamCalData { get; private set; }
 
-        // 工艺输出参数：本算法统一管理，配置仍由 WeldAlgorithmsConfig 落盘。
+        // 工艺输出参数：本算法统一管理，配置仍由 WeldParamConfig 落盘。
         // 分区不变（③Adapt / ①System），INI/XML 键零改动。
         // 只把管理归属迁至算法层。
-
-        /// <summary>工艺输出·手动固定缝宽 mm（落盘走 WeldAlgorithmsConfig ③Adapt）。</summary>
-        public double ManualSeamWidthMm
-        {
-            get { return _config.ManualSeamWidthMm; }
-            set { _config.ManualSeamWidthMm = value; }
-        }
-
-        /// <summary>工艺输出·光斑宽度系数（③Adapt 落盘兼容）。</summary>
-        public double SpotWidthGain
-        {
-            get { return _config.SpotWidthGain; }
-            set { _config.SpotWidthGain = value; }
-        }
-
-        /// <summary>工艺输出·参数输出频率 Hz（③Adapt 落盘兼容）。</summary>
-        public int ParamOutputHz
-        {
-            get { return _config.ParamOutputHz; }
-            set { _config.ParamOutputHz = value; }
-        }
 
         /// <summary>工艺输出·前馈安全系数（①System 落盘兼容）。</summary>
         public double FeedforwardSafetyFactor
@@ -162,7 +142,7 @@ namespace AdaWeldSystem.WeldParamControl.Algorithms
             set { _config.FeedforwardSafetyFactor = value; }
         }
 
-        /// <summary>工艺输出·单调方向锁开关（①System 落盘兼容；唯一 UI 入口在工艺设置页自适应区）。</summary>
+        /// <summary>工艺输出·单调方向锁开关</summary>
         public bool EnableMonotonicConstraint
         {
             get { return _config.EnableMonotonicConstraint; }
@@ -224,7 +204,7 @@ namespace AdaWeldSystem.WeldParamControl.Algorithms
 
             _lookup = lookup;
             _robotWeldData = robotWeldData ?? new RobotWeldData();
-            _config = new WeldAlgorithmsConfig();
+            _config = new WeldParamConfig();
 
             ContourChart = new ChartVar();
             LaserPowerChart = new ChartVar();
@@ -233,6 +213,7 @@ namespace AdaWeldSystem.WeldParamControl.Algorithms
             RobotSpeedChart = new ChartVar();
             SeamCalData = new SeamCalData();
             _lastLoggedSeamWidth = 0.0;
+            _seamWidthSeeded = false;
             _seamWidthChangeCount = 0;
             _lastWidthLogTime = DateTime.Now;
         }
@@ -240,6 +221,18 @@ namespace AdaWeldSystem.WeldParamControl.Algorithms
         #endregion
 
         #region 私有函数
+
+        /// <summary>手动固定宽度（毫米）：取「振镜 GA 设置档」的摆宽。</summary>
+        private static double ManualFixedWidthMm()
+        {
+            WeldHeadConfig headCfg = MontionManager.Instance?.WeldHeadConfig;
+            if (headCfg == null) return 0.0;
+            WeldParamConfig cfg = WeldParamManager.Instance.AlgorithmsConfig;
+            WsgGalvoPattern pattern = cfg != null
+                ? LaserWeldHeadWorkflow.ResolveGalvoPattern(cfg.GalvoPattern)
+                : WsgGalvoPattern.Line;
+            return headCfg.GetGalvoShape(pattern).Width;
+        }
 
         /// <summary>统一日志出口。</summary>
         /// <param name="message">日志内容</param>
@@ -283,7 +276,7 @@ namespace AdaWeldSystem.WeldParamControl.Algorithms
         }
 
         /// <summary>将轮廓和参数数据存入 ChartVar（基于 RobotX 坐标），并触发过程帧</summary>
-        /// <remarks>记录请求。</remarks>
+
         /// <param name="robotX">当前机器人 X 坐标</param>
         /// <param name="contourPoints">轮廓点列表</param>
         private void StoreChartData(double robotX, List<System.Drawing.Point> contourPoints)
@@ -309,24 +302,22 @@ namespace AdaWeldSystem.WeldParamControl.Algorithms
         #region 公共函数
 
         /// <summary>载入算法运行配置（查找表由 Manager 单独维护，此处只接</summary>
-        /// <remarks>管运行参数）。</remarks>
-        /// <param name="config">配置对象，应为 <see cref="WeldAlgorithmsConfig"/></param>
+
+        /// <param name="config">配置对象，应为 <see cref="WeldParamConfig"/></param>
         public override void LoadConfig(object config)
         {
-            SetConfig(config as WeldAlgorithmsConfig);
+            SetConfig(config as WeldParamConfig);
         }
 
         /// <summary>更新运行配置，配置重新加载后调用。</summary>
         /// <param name="config">参数调整配置</param>
-        public void SetConfig(WeldAlgorithmsConfig config)
+        public void SetConfig(WeldParamConfig config)
         {
             if (config == null) return;
             _config = config;
         }
 
         /// <summary>复位运行期状态（保留查找表配置）。</summary>
-        /// <remarks>清零只在会话边界，管控尚未开始。
-        /// 起焊沿只清跟踪，避免宽度闪断。</remarks>
         public override void Reset()
         {
             // 复位是唯一降宽入口，须留痕可归因。
@@ -335,6 +326,7 @@ namespace AdaWeldSystem.WeldParamControl.Algorithms
             Trigger = false;
             CurrentSeamWidth = 0.0;
             _lastLoggedSeamWidth = 0.0;
+            _seamWidthSeeded = false;
             FeedSpeedOutput = 0.0;
             RobotSpeedOutput = 0.0;
             LaserPowerOutput = 0.0;
@@ -369,7 +361,7 @@ namespace AdaWeldSystem.WeldParamControl.Algorithms
         }
 
         /// <summary>自动调整参数主流程：每一帧数据都执行，内部判</summary>
-        /// <remarks>分段与阈值取自 <see cref="Config"/>，本方法不落盘。按宽度查表输出参数，并存图与触发记录。</remarks>
+
         /// <param name="autoParam">自动参数配置</param>
         /// <param name="robotX">当前机器人 X 坐标</param>
         /// <param name="contourPoints">轮廓点列表（可选）</param>
@@ -406,7 +398,9 @@ namespace AdaWeldSystem.WeldParamControl.Algorithms
             if (_config.SeamWidthSource == SeamWidthSource.Manual)
             {
                 // 手动固定宽度：直接查表，全程无变化。
-                CurrentSeamWidth = _config.ManualSeamWidthMm;
+                // 宽度取振镜档摆宽
+                // 图形未选中（振镜未启用 ⇒ 没有图形）时回退直线档。
+                CurrentSeamWidth = ManualFixedWidthMm();
 
                 if (_lookup.TryLookupWithSpot(CurrentSeamWidth, out double laserPower, out double feedSpeed,
                                               out double robotSpeed, out double spotWidth))
@@ -452,10 +446,17 @@ namespace AdaWeldSystem.WeldParamControl.Algorithms
 
             StoreChartData(robotX, contourPoints);
 
+            // 复位后首帧播种：首个有效宽度（>0）作为会话初始值，不算突变、不计变化次数。
+            // Laser 源首拍可能未成段、宽度仍为 0，此时不播种，等首个段均值产生再播种。
+            if (!_seamWidthSeeded && CurrentSeamWidth > 0.0)
+            {
+                _seamWidthSeeded = true;
+                _lastLoggedSeamWidth = CurrentSeamWidth;
+            }
             // 宽度变化留痕：手动源下宽度应全程恒定。
             // 任何变化都必须可归因（赋值/复位/源为 Laser）。
             // 限频 1s 防刷屏，变化次数单独累计。
-            if (Math.Abs(CurrentSeamWidth - _lastLoggedSeamWidth) > WidthChangeLogEpsilonMm)
+            else if (Math.Abs(CurrentSeamWidth - _lastLoggedSeamWidth) > WidthChangeLogEpsilonMm)
             {
                 _seamWidthChangeCount++;
                 DateTime now = DateTime.Now;
@@ -506,7 +507,7 @@ namespace AdaWeldSystem.WeldParamControl.Algorithms
         }
 
         /// <summary>喂入一帧测量时刻工艺参数进 XL 缓存（由 <see cref="ExecuteAdjustment"/> 在线激光</summary>
-        /// <remarks>源下自动调用，外部一般无需直调）。</remarks>
+
         /// <param name="measureRobotX">测量时刻机器人 X（毫米）</param>
         /// <param name="laserPower">激光功率</param>
         /// <param name="feedSpeed">送丝速度</param>
@@ -550,7 +551,7 @@ namespace AdaWeldSystem.WeldParamControl.Algorithms
         }
 
         /// <summary>按当拍机器人 X 取「已到达的最邻近 XL」的工艺参数（XL 输</summary>
-        /// <remarks>出支路每拍调用）。</remarks>
+
         /// <param name="robotXNow">当拍机器人 X（毫米）</param>
         /// <param name="laserPower">激光功率</param>
         /// <param name="feedSpeed">送丝速度</param>
@@ -643,3 +644,4 @@ namespace AdaWeldSystem.WeldParamControl.Algorithms
         #endregion
     }
 }
+

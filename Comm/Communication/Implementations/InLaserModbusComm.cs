@@ -9,7 +9,6 @@ using AdaWeldSystem.Comm.Communication.Abstractions;
 namespace AdaWeldSystem.Comm.Communication.Implementations
 {
     /// <summary>Modbus TCP 主站通讯类</summary>
-    /// <remarks>自实现协议（MBAP + PDU），无需第三方库；支持 FC03 读、FC06 写单个、FC16 写多个寄存器；独立实现不依赖 NetworkPortBase。</remarks>
     public class InLaserModbusComm : CommChannelBase
     {
         private TcpClient _tcpClient;
@@ -400,7 +399,6 @@ namespace AdaWeldSystem.Comm.Communication.Implementations
     }
 
     /// <summary>英莱相机 Modbus 寄存器映射与数据转换</summary>
-    /// <remarks>基于英莱 Modbus TCP 通讯协议文档；寄存器地址 0x00~0x28，单位 0.01mm（部分寄存器）。</remarks>
     public static class ILModbusData
     {
         private const string Tag = "ILModbusData";

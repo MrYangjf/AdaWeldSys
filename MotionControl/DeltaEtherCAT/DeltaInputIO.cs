@@ -5,7 +5,6 @@ using AdaWeldSystem.Comm.SystemComm;
 namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
 {
     /// <summary>台达数字输入</summary>
-    /// <remarks>低电平有效，状态值 0 表示有效；读取前检查总线与使能。</remarks>
     public class DeltaInputIO : InputIO
     {
         #region 私有变量

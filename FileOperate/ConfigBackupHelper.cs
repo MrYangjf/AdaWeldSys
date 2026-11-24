@@ -5,8 +5,6 @@ using AdaWeldSystem.Comm.SystemComm;
 namespace AdaWeldSystem.FileOperate
 {
     /// <summary>配置写前备份工具</summary>
-    /// <remarks>覆盖配置文件的动作，写前统一调用本类，
-    /// 备份到 <c>Config\_backup\&lt;yyyyMMdd_HHmmss&gt;\</c>，备份失败即中止写入，避免半截写坏。</remarks>
     public static class ConfigBackupHelper
     {
         private const string Tag = "配置备份";

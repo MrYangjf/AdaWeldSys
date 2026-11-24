@@ -6,8 +6,6 @@ using AdaWeldSystem.FileOperate;
 namespace AdaWeldSystem.MotionControl
 {
     /// <summary>气缸注册表</summary>
-    /// <remarks>按键名登记全部气缸。AttachAll 时把各气缸占用的 IO 逐个注册进控制器。
-    /// 免手工登记。</remarks>
     public class CylinderRegistry
     {
         #region 私有变量

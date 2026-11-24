@@ -10,8 +10,6 @@ using AdaWeldSystem.Comm.Communication.Abstractions;
 namespace AdaWeldSystem.Comm.Communication.Implementations
 {
     /// <summary>以太网标准通讯实现（服务端 + 客户端双模式）</summary>
-    /// <remarks>基于 STTech.BytesIO.Tcp，报文向 KUKA XML 交互靠齐：收发用预约定 XML 文档，UTF-8 传输；
-    /// 继承 CommChannelBase，经 Dispose 释放。</remarks>
     public class EthernetXmlComm : CommChannelBase
     {
         private readonly SstTcpServer _server;
@@ -171,7 +169,7 @@ namespace AdaWeldSystem.Comm.Communication.Implementations
         }
 
         /// <summary>解析收到的 XML 文档为元素字典（根节点下的一级具</summary>
-        /// <remarks>名元素）</remarks>
+
         /// <param name="xml">XML 文本</param>
         /// <returns>元素名与值的字典；解析失败返回 null</returns>
         public static Dictionary<string, string> ParseXmlDocument(string xml)
@@ -207,7 +205,6 @@ namespace AdaWeldSystem.Comm.Communication.Implementations
     }
 
     /// <summary>TCP 服务端封装（监听、连接管理、XML 文本接收）</summary>
-    /// <remarks>数据经通道事件与全局广播两路分发。</remarks>
     public class SstTcpServer : IDisposable
     {
         private const string Tag = "EthernetServer";

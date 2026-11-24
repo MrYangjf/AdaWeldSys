@@ -6,10 +6,7 @@ using System.Diagnostics;
 
 namespace AdaWeldSystem.EmguALG.RealtimeMonitor.WeldQuality
 {
-    /// <summary>
-    /// 焊接质量检测（焊中）：输出质量分与判定。
-    /// 纯算子在 ImageAlgorithm，本类封装与计时。
-    /// </summary>
+    /// <summary>焊接质量检测（焊中）</summary>
     public sealed class WeldQualityAlgorithm : IAlgorithm<WeldQualityResult>, IConfigurableAlgorithm<WeldQualityConfig>
     {
         #region 私有变量
@@ -40,9 +37,7 @@ namespace AdaWeldSystem.EmguALG.RealtimeMonitor.WeldQuality
 
         #region 构造函数
 
-        /// <summary>
-        /// 创建焊接质量检测算法并填入默认配置
-        /// </summary>
+        /// <summary>创建焊接质量检测算法并填入默认配置</summary>
         public WeldQualityAlgorithm()
         {
             _config = new WeldQualityConfig();
@@ -52,18 +47,14 @@ namespace AdaWeldSystem.EmguALG.RealtimeMonitor.WeldQuality
 
         #region 公共函数
 
-        /// <summary>
-        /// 注入配置
-        /// </summary>
+        /// <summary>注入配置</summary>
         /// <param name="config">新配置；为 null 时回落默认配置</param>
         public void SetConfig(WeldQualityConfig config)
         {
             _config = config ?? new WeldQualityConfig();
         }
 
-        /// <summary>
-        /// 执行焊接质量检测
-        /// </summary>
+        /// <summary>执行焊接质量检测</summary>
         /// <param name="input">监控相机图像</param>
         /// <returns>检测结果（含成功标志与耗时）</returns>
         public WeldQualityResult Execute(Mat input)

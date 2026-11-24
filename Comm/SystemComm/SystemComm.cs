@@ -18,7 +18,6 @@ namespace AdaWeldSystem.Comm.SystemComm
     }
 
     /// <summary>消息级别枚举</summary>
-    /// <remarks>Debug 级写入同一日志，输出链路中间值。</remarks>
     public enum MessageLevel
     {
         Info,
@@ -48,8 +47,6 @@ namespace AdaWeldSystem.Comm.SystemComm
     }
 
     /// <summary>全局通讯数据中心</summary>
-    /// <remarks>职责：事件、日志、通讯配置管理；
-    /// 权限/操作等级为遗留支持。</remarks>
     static class GlobalCommData
     {
         #region 1. 全局事件触发
@@ -60,9 +57,7 @@ namespace AdaWeldSystem.Comm.SystemComm
         /// <summary>通讯指令接收事件，Workflow 订阅以触发工作流步骤</summary>
         public static event EventHandler<string> CommunicationCommandReceived;
 
-        /// <summary>通讯日志查看事件，仅供通讯配置页订阅显示，不承载指令语义</summary>
-        /// <remarks>与 CommunicationCommandReceived 分离：后者有多个 Workflow 订阅会触发步骤，
-        /// 本事件只驱动界面日志框，避免重连过程日志被误当作通讯指令。</remarks>
+        /// <summary>通讯日志查看事件，仅供通讯配置页订阅显示，不</summary>
         public static event EventHandler<string> CommLogViewEvent;
 
         #endregion
@@ -83,7 +78,6 @@ namespace AdaWeldSystem.Comm.SystemComm
         public static Log TcpMessageLog;
 
         /// <summary>界面调试日志开关</summary>
-        /// <remarks>仅控制界面显示；文件端四级全量写入，不受本开关影响。</remarks>
         public static bool ShowDebugToUi
         {
             get { return _showDebugToUi; }
@@ -91,7 +85,7 @@ namespace AdaWeldSystem.Comm.SystemComm
         }
 
         /// <summary>同一秒内完全相同的 tag + 级别 + 文本只输出一次</summary>
-        /// <remarks>抑制重入回读刷屏；不同文本不合并</remarks>
+
         /// <param name="tag">日志标签</param>
         /// <param name="message">日志内容</param>
         /// <param name="level">日志级别</param>
@@ -117,11 +111,6 @@ namespace AdaWeldSystem.Comm.SystemComm
         /// <param name="message">消息内容</param>
         /// <param name="msgLevel">消息级别（决定界面颜色与文件级别）</param>
         /// <param name="msgType">消息类型</param>
-        /// <remarks>⚠️ 本方法可能在 <see cref="GlobalCommData"/> 静态构造期间被重入调用。
-        /// 构造期可能重入，参数与日志须空保护。
-        /// 同一秒同 tag 同级别同文本只输出一次。
-        /// 不同文本不合并；全项目唯一日志入口。
-        /// 界面与文件用同一时间戳格式。</remarks>
         public static void ShowLog(string TAG, string message, MessageLevel msgLevel = MessageLevel.Info, MessageType msgType = MessageType.Debug)
         {
             if (IsDuplicateWithinSecond(TAG, message, msgLevel)) return;
@@ -191,11 +180,9 @@ namespace AdaWeldSystem.Comm.SystemComm
             TcpMessageLog?.Debug(source + Thread.GetDomainID(), message);
         }
 
-        /// <summary>通讯过程日志：写通讯日志文件并推送到通讯页查看，不进系统日志</summary>
+        /// <summary>通讯过程日志</summary>
         /// <param name="source">日志来源标签</param>
         /// <param name="message">日志内容</param>
-        /// <remarks>用于重连等通讯过程：文件端始终全量记录，界面端仅通讯配置页打开时显示。
-        /// 不写 MachineLog、不触发 EventInfoHandler，主系统日志只保留结果。</remarks>
         public static void ShowCommLogForView(string source, string message)
         {
             TcpMessageLog?.Debug(source + Thread.GetDomainID(), message);
@@ -207,7 +194,6 @@ namespace AdaWeldSystem.Comm.SystemComm
         #region 3. 全局通讯配置管理
 
         /// <summary>通讯管理器（PLC、机器人、通用 TCP 持久化配置）</summary>
-        /// <remarks>内部实例化 Server/Client/Send/Receive XML 通讯结构，持有通用 TCP 实例 TcpIpComm。</remarks>
         public static CommunicationManager mCommunicationManager;
 
         /// <summary>界面是否已就绪（全部子页面实例化完成）。</summary>
@@ -223,23 +209,18 @@ namespace AdaWeldSystem.Comm.SystemComm
         }
 
         /// <summary>正常运行态标志，false 时禁查历史数据</summary>
-        /// <remarks>由 FormMain 在设备初始化结束后显式置位。
-        /// ⛔ 不得用 Visible、Created、IsHandleCreated 替代。
-        /// AntdUI 非当前 TabPage 恒为 Visible=true。否则启动期会误查历史数据（实测）。</remarks>
         public static bool IsAppRunning
         {
             get { return _isAppRunning; }
         }
 
         /// <summary>标记界面已就绪（由 FormMain 在子页面全部实例化后调用，</summary>
-        /// <remarks>仅一次）。</remarks>
         public static void MarkUiReady()
         {
             _isUiReady = true;
         }
 
         /// <summary>标记进入正常运行态，</summary>
-        /// <remarks>仅一次）。</remarks>
         public static void MarkAppRunning()
         {
             _isAppRunning = true;
@@ -247,7 +228,6 @@ namespace AdaWeldSystem.Comm.SystemComm
 
         /// <summary>广播通讯指令到 Workflow（各通讯实现收到有效指令后调</summary>
         /// <param name="message">消息内容。</param>
-        /// <remarks>用）</remarks>
         public static void BroadcastCommunicationCommand(string message)
         {
             CommunicationCommandReceived?.Invoke(null, message);
@@ -294,7 +274,7 @@ namespace AdaWeldSystem.Comm.SystemComm
 
         static GlobalCommData()
         {
-            // ⛔ 事件参数必须最先就绪：CommunicationManager 构造期间可能回写日志
+            // 事件参数须先于管理器构造就绪
             // 静态构造未到赋值处会空引用崩溃。
             _logArgs = new MessageArgs();
 
@@ -322,7 +302,6 @@ namespace AdaWeldSystem.Comm.SystemComm
         private static bool _uiConfigLoaded;
 
         /// <summary>一次性加载 AntdUI 全局 UI 配置（主题 + 文本渲染质量）</summary>
-        /// <remarks>须在 UI 线程（FormMain 构造时）调用；以 _uiConfigLoaded 守卫只执行一次。</remarks>
         public static void UIConfigSetting()
         {
             if (_uiConfigLoaded)
@@ -351,3 +330,4 @@ namespace AdaWeldSystem.Comm.SystemComm
         #endregion
     }
 }
+

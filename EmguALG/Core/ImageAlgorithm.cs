@@ -11,10 +11,7 @@ using AdaWeldSystem.EmguALG.RealtimeMonitor.WeldQuality;
 
 namespace AdaWeldSystem.EmguALG.Core
 {
-    /// <summary>
-    /// 图像算法统一入口，均须在此文件实现。
-    /// 分为预处理、边缘、形态学、特征、模板与辅助。
-    /// </summary>
+    /// <summary>图像算法统一入口，均须在此文件实现。 分为预处</summary>
     public static class ImageAlgorithm
     {
         #region 2. 预处理算法区
@@ -170,9 +167,7 @@ namespace AdaWeldSystem.EmguALG.Core
 
         #region 5. 特征提取算法区
 
-        /// <summary>
-        /// 查找图像中的所有轮廓
-        /// </summary>
+        /// <summary>查找图像中的所有轮廓</summary>
         public static VectorOfVectorOfPoint FindContours(Mat image, double binaryThreshold = 127, 
             ChainApproxMethod approxMethod = ChainApproxMethod.ChainApproxSimple)
         {
@@ -186,9 +181,7 @@ namespace AdaWeldSystem.EmguALG.Core
             return contours;
         }
 
-        /// <summary>
-        /// 在图像上绘制轮廓
-        /// </summary>
+        /// <summary>在图像上绘制轮廓</summary>
         public static Mat DrawContours(Mat image, VectorOfVectorOfPoint contours, int thickness = 2)
         {
             if (image == null || image.IsEmpty) throw new ArgumentException("输入图像无效");
@@ -207,9 +200,7 @@ namespace AdaWeldSystem.EmguALG.Core
             return result;
         }
 
-        /// <summary>
-        /// 提取骨架
-        /// </summary>
+        /// <summary>提取骨架</summary>
         public static Mat ExtractSkeleton(Mat image, double binaryThreshold = 127, int maxIter = 100)
         {
             if (image == null || image.IsEmpty) throw new ArgumentException("输入图像无效");
@@ -242,9 +233,7 @@ namespace AdaWeldSystem.EmguALG.Core
             return skeleton;
         }
 
-        /// <summary>
-        /// 计算焊缝宽度（轮廓水平方向最大跨度）
-        /// </summary>
+        /// <summary>计算焊缝宽度（轮廓水平方向最大跨度）</summary>
         /// <returns>计算结果。</returns>
         public static double CalculateSeamWidth(VectorOfPoint contour)
         {
@@ -253,9 +242,7 @@ namespace AdaWeldSystem.EmguALG.Core
             return Math.Min(minRect.Size.Width, minRect.Size.Height);
         }
 
-        /// <summary>
-        /// 计算焊缝截面积
-        /// </summary>
+        /// <summary>计算焊缝截面积</summary>
         /// <returns>计算结果。</returns>
         public static double CalculateSeamArea(VectorOfPoint contour)
         {
@@ -263,9 +250,7 @@ namespace AdaWeldSystem.EmguALG.Core
             return CvInvoke.ContourArea(contour);
         }
 
-        /// <summary>
-        /// 计算焊缝中心点
-        /// </summary>
+        /// <summary>计算焊缝中心点</summary>
         public static PointF CalculateWeldPoint(VectorOfPoint contour)
         {
             if (contour == null || contour.Size == 0) return PointF.Empty;
@@ -395,9 +380,7 @@ namespace AdaWeldSystem.EmguALG.Core
             DrawTextOnImage(image, text, origin, new MCvScalar(0, 0, 255));
         }
 
-        /// <summary>
-        /// 在默认范围内绘制点云数据（兼容旧版AlgorithmLibrary）
-        /// </summary>
+        /// <summary>在默认范围内绘制点云数据（兼容旧版AlgorithmLibrary）</summary>
         public static Mat DrawPointsDefaultRange(List<PointF> points)
         {
             if (points == null || points.Count == 0)
@@ -438,9 +421,7 @@ namespace AdaWeldSystem.EmguALG.Core
             return image;
         }
 
-        /// <summary>
-        /// 在图像上绘制水平边界线（兼容旧版AlgorithmLibrary）
-        /// </summary>
+        /// <summary>在图像上绘制水平边界线（兼容旧版AlgorithmLibrary）</summary>
         public static void DrawHorizontalBoundsDefaultRange(Mat image, float upperBound, float lowerBound)
         {
             if (image == null || image.IsEmpty) return;
@@ -461,7 +442,6 @@ namespace AdaWeldSystem.EmguALG.Core
         #region 8. 监控相机算法区（焊前对中 / 焊中质量检测）
 
         /// <summary>生成叠加绘制用的彩色 Mat（输入为灰度时转为 BGR，便于</summary>
-        /// <remarks>彩色标注）</remarks>
         private static Mat PrepareOverlayMat(Mat image)
         {
             if (image.NumberOfChannels == 1)
@@ -580,7 +560,7 @@ namespace AdaWeldSystem.EmguALG.Core
         }
 
         /// <summary>焊中焊接质量检测 输入 2D 图，识别焊道并检测缺陷（</summary>
-        /// <remarks>气孔/裂纹），输出缺陷数与质量分</remarks>
+
         /// <param name="config">配置对象。</param>
         public static WeldQualityResult DetectWeldQuality(Mat image, WeldQualityConfig config)
         {

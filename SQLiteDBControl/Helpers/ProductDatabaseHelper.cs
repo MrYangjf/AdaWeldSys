@@ -5,10 +5,7 @@ using AdaWeldSystem.SQLiteDBControl.ISQLiteHelper;
 
 namespace AdaWeldSystem.SQLiteDBControl.Helpers
 {
-    /// <summary>
-    /// 产品数据库 Helper。
-    /// 负责产品检测数据按日期分表存储和查询。
-    /// </summary>
+    /// <summary>产品数据库 Helper。 负责产品检测数据按日期分表存储</summary>
     public class ProductDatabaseHelper : DatabaseHelperBase
     {
         /// <summary>产品表列契约：SN 产品码、Time 起焊时间、Status 状态、Result 结果、Info 原因。</summary>
@@ -17,19 +14,13 @@ namespace AdaWeldSystem.SQLiteDBControl.Helpers
         private string _currentTableName;
         private DataTable _currentTable;
 
-        /// <summary>
-        /// 当前选中的表名
-        /// </summary>
+        /// <summary>当前选中的表名</summary>
         public string CurrentTableName => _currentTableName;
 
-        /// <summary>
-        /// 当前选中的数据表
-        /// </summary>
+        /// <summary>当前选中的数据表</summary>
         public DataTable CurrentTable => _currentTable;
 
-        /// <summary>
-        /// 构造函数，初始化产品数据库
-        /// </summary>
+        /// <summary>构造函数，初始化产品数据库</summary>
         public ProductDatabaseHelper() : base("Product.db")
         {
             // 初始化当天数据表（如果不存在）
@@ -38,7 +29,7 @@ namespace AdaWeldSystem.SQLiteDBControl.Helpers
         }
 
         /// <summary>校验并修正数据表结构：表不存在则建表；已存在</summary>
-        /// <remarks>仅作用于当天表（跨天自动新建）；历史日期表原样保留，不做破坏性重建。 但列集与现行契约不一致（历史 InspectionType 列）则重建。</remarks>
+
         /// <param name="tableName">目标表名</param>
         private void EnsureTableSchema(string tableName)
         {
@@ -69,9 +60,7 @@ namespace AdaWeldSystem.SQLiteDBControl.Helpers
             }
         }
 
-        /// <summary>
-        /// 根据日期生成表名
-        /// </summary>
+        /// <summary>根据日期生成表名</summary>
         /// <param name="date">日期</param>
         /// <returns>表名（格式：TyyyyMMdd）</returns>
         private static string GetTableNameByDate(DateTime date)
@@ -80,7 +69,6 @@ namespace AdaWeldSystem.SQLiteDBControl.Helpers
         }
 
         /// <summary>建一张与产品记录列契约一致、零行的表（区间合</summary>
-        /// <remarks>并的累加目标）。</remarks>
         private DataTable CreateEmptyProductTable()
         {
             DataTable table = new DataTable();
@@ -92,7 +80,7 @@ namespace AdaWeldSystem.SQLiteDBControl.Helpers
         }
 
         /// <summary>把单日表的数据行按业务列名克隆进合并表（按</summary>
-        /// <remarks>名取列，容忍单日表多出的 AUTOID 列）。</remarks>
+
         /// <param name="target">目标位置(mm)。</param>
         private static void AppendRows(DataTable target, DataTable day)
         {
@@ -110,9 +98,7 @@ namespace AdaWeldSystem.SQLiteDBControl.Helpers
             }
         }
 
-        /// <summary>
-        /// 切换到指定日期的数据表
-        /// </summary>
+        /// <summary>切换到指定日期的数据表</summary>
         /// <param name="date">目标日期</param>
         public void SelectTable(DateTime date)
         {
@@ -127,9 +113,6 @@ namespace AdaWeldSystem.SQLiteDBControl.Helpers
         /// 合并后记录表，列同 <see cref="SelectTable"/> 单日表。
         /// 无记录时返回空表，不返回 null。
         /// </returns>
-        /// <remarks>按日分表，逐日读取后按列序合并。
-        /// 缺表日期跳过；单日查表异常只记日志并跳过。
-        /// 不向界面抛错。区间为闭区间，起止颠倒时自动交换。</remarks>
         public DataTable SelectTables(DateTime start, DateTime end)
         {
             if (start.Date > end.Date)
@@ -169,7 +152,7 @@ namespace AdaWeldSystem.SQLiteDBControl.Helpers
         }
 
         /// <summary>添加一条生产记录（焊毕一次性写入：产品码 + 起焊</summary>
-        /// <remarks>时间 + 记录状态 + 结果 + 异常原因）</remarks>
+
         /// <param name="sn">产品码（空缺时由调用方以 TEST + 时间后缀填充）</param>
         /// <param name="startTime">焊接开始时间</param>
         /// <param name="status">记录状态（模拟 / 正常生产）</param>
@@ -191,15 +174,12 @@ namespace AdaWeldSystem.SQLiteDBControl.Helpers
         }
 
         /// <summary>确保当天数据表存在（跨天时自动创建新表；列契</summary>
-        /// <remarks>约不符时重建当天表）</remarks>
         public void EnsureTodayTableExists()
         {
             EnsureTableSchema(GetTableNameByDate(DateTime.Now));
         }
 
-        /// <summary>
-        /// 获取指定日期的产品数据
-        /// </summary>
+        /// <summary>获取指定日期的产品数据</summary>
         /// <param name="date">目标日期</param>
         /// <returns>产品数据表</returns>
         public DataTable GetProductDataByDate(DateTime date)
@@ -208,9 +188,7 @@ namespace AdaWeldSystem.SQLiteDBControl.Helpers
             return Database.Select(tableName);
         }
 
-        /// <summary>
-        /// 获取当天产品数据
-        /// </summary>
+        /// <summary>获取当天产品数据</summary>
         /// <returns>产品数据表</returns>
         public DataTable GetTodayProductData()
         {
@@ -218,9 +196,7 @@ namespace AdaWeldSystem.SQLiteDBControl.Helpers
             return Database.Select(GetTableNameByDate(DateTime.Now));
         }
 
-        /// <summary>
-        /// 删除N天前的历史数据表
-        /// </summary>
+        /// <summary>删除N天前的历史数据表</summary>
         /// <param name="keepDays">保留天数</param>
         public void CleanOldData(int keepDays)
         {
@@ -232,9 +208,7 @@ namespace AdaWeldSystem.SQLiteDBControl.Helpers
             Database.DropDateTable(keepDays);
         }
 
-        /// <summary>
-        /// 检查指定日期的表是否存在
-        /// </summary>
+        /// <summary>检查指定日期的表是否存在</summary>
         /// <param name="date">目标日期</param>
         /// <returns>存在返回true，不存在返回false</returns>
         public bool IsTableExist(DateTime date)
@@ -242,9 +216,7 @@ namespace AdaWeldSystem.SQLiteDBControl.Helpers
             return Database.IsExistTable(GetTableNameByDate(date));
         }
 
-        /// <summary>
-        /// 获取产品数据表中的记录数量
-        /// </summary>
+        /// <summary>获取产品数据表中的记录数量</summary>
         /// <param name="date">目标日期</param>
         /// <returns>记录数量</returns>
         public int GetRecordCount(DateTime date)

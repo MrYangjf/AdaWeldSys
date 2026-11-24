@@ -6,8 +6,6 @@ using AdaWeldSystem.MotionControl.DeltaEtherCAT.Native;
 namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
 {
     /// <summary>台达 EtherCAT 从站设备通道（SDO / PDO 封装）</summary>
-    /// <remarks>封装对象字典读写并做定标换算（整型 ↔ 工程值）；
-    /// 只做通道与换算，不含业务语义。</remarks>
     public class DeltaSlaveDevice
     {
         #region 私有变量
@@ -112,8 +110,6 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
         /// <summary>描述 SDO 传输结果</summary>
         /// <param name="result">传输结果</param>
         /// <returns>可读原因</returns>
-        /// <remarks>⛔ 0x1305（=4869）属台达 DLL 自身返回码段，不是 SDO 中止码。
-        /// 不能据此判定对象不存在。三态互斥：API 返回码 / 驱动器中止码 / 轮询超时</remarks>
         public static string Describe(SdoResult result)
         {
             if (result.Ok) return "成功";
@@ -135,12 +131,12 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
         }
 
         /// <summary>SDO 读取原始字节</summary>
-        /// <remarks>阻塞式：发起后轮询完成，再取中止码</remarks>
+
         /// <param name="index">对象字典索引</param>
         /// <param name="subIndex">对象字典子索引（**对象子索引**，不是轴号）</param>
         /// <param name="size">读取字节数</param>
         /// <param name="buffer">接收缓冲区（至少 size 字节）</param>
-        /// <returns>三态结果；⛔ Ok = false 时 buffer 内容不可信，调用方不得当成 0</returns>
+        /// <returns>三态结果，失败时缓冲无效</returns>
         public SdoResult ReadSdo(ushort index, ushort subIndex, ushort size, byte[] buffer)
         {
             SdoResult result = new SdoResult();
@@ -159,7 +155,7 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
                 if (ret != DeltaErrorCode.NO_ERROR)
                 {
                     result.ApiReturn = ret;
-                    // 邮箱忙：请求多半没发出 → 退避重试，⛔ 非对象不存在
+                    // 邮箱忙则退避重试
                     if (ret == 0x1304 || ret == 0x1305) continue;
                     return result;
                 }
@@ -200,7 +196,7 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
         }
 
         /// <summary>SDO 快速写入原始字节</summary>
-        /// <remarks>阻塞直至完成，邮箱忙退避重试</remarks>
+
         /// <param name="index">对象字典索引</param>
         /// <param name="subIndex">对象字典子索引（**对象子索引**，不是轴号）</param>
         /// <param name="size">写入字节数</param>
@@ -441,3 +437,4 @@ namespace AdaWeldSystem.MotionControl.DeltaEtherCAT
         #endregion
     }
 }
+

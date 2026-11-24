@@ -2,10 +2,7 @@ using System;
 
 namespace AdaWeldSystem.EmguALG.Core
 {
-    /// <summary>
-    /// 算法结果基类：各领域结果均派生自此。
-    /// 携带统一的成功标志、耗时与错误信息；具体领域结果追加业务字段。
-    /// </summary>
+    /// <summary>算法结果基类</summary>
     public class AlgorithmResult
     {
         /// <summary>是否成功完成</summary>
